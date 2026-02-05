@@ -25,16 +25,21 @@ import (
 var newDocsService = googleapi.NewDocs
 
 type DocsCmd struct {
-	Export  DocsExportCmd  `cmd:"" name:"export" help:"Export a Google Doc (pdf|docx|txt)"`
-	Info    DocsInfoCmd    `cmd:"" name:"info" help:"Get Google Doc metadata"`
-	Create  DocsCreateCmd  `cmd:"" name:"create" help:"Create a Google Doc"`
-	Copy    DocsCopyCmd    `cmd:"" name:"copy" help:"Copy a Google Doc"`
-	Cat     DocsCatCmd     `cmd:"" name:"cat" help:"Print a Google Doc as plain text"`
-	Write   DocsWriteCmd   `cmd:"" name:"write" help:"Write content to a Google Doc"`
-	Insert  DocsInsertCmd  `cmd:"" name:"insert" help:"Insert text into a Google Doc"`
-	Replace DocsReplaceCmd `cmd:"" name:"replace" help:"Replace text in a Google Doc"`
-	Update  DocsUpdateCmd  `cmd:"" name:"update" help:"Batch update a Google Doc (Docs API)"`
-	Tabs    DocsTabsCmd    `cmd:"" name:"tabs" help:"Manage document tabs"`
+	Export      DocsExportCmd      `cmd:"" name:"export" help:"Export a Google Doc (pdf|docx|txt)"`
+	Info        DocsInfoCmd        `cmd:"" name:"info" help:"Get Google Doc metadata"`
+	Create      DocsCreateCmd      `cmd:"" name:"create" help:"Create a Google Doc"`
+	Copy        DocsCopyCmd        `cmd:"" name:"copy" help:"Copy a Google Doc"`
+	Cat         DocsCatCmd         `cmd:"" name:"cat" help:"Print a Google Doc as plain text"`
+	Write       DocsWriteCmd       `cmd:"" name:"write" help:"Write content to a Google Doc"`
+	Insert      DocsInsertCmd      `cmd:"" name:"insert" help:"Insert text into a Google Doc"`
+	Replace     DocsReplaceCmd     `cmd:"" name:"replace" help:"Replace text in a Google Doc"`
+	Update      DocsUpdateCmd      `cmd:"" name:"update" help:"Batch update a Google Doc (Docs API)"`
+	Tabs        DocsTabsCmd        `cmd:"" name:"tabs" help:"Manage document tabs"`
+	DeleteRange DocsDeleteRangeCmd `cmd:"" name:"delete-range" help:"Delete a content range from a Google Doc"`
+	Format      DocsFormatCmd      `cmd:"" name:"format" help:"Format text in a Google Doc"`
+	InsertTable DocsInsertTableCmd `cmd:"" name:"insert-table" help:"Insert a table into a Google Doc"`
+	InsertImage DocsInsertImageCmd `cmd:"" name:"insert-image" help:"Insert an image into a Google Doc"`
+	Bullets     DocsBulletsCmd     `cmd:"" name:"bullets" help:"Add bullet points in a Google Doc"`
 }
 
 type DocsExportCmd struct {
