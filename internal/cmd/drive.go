@@ -88,11 +88,13 @@ func (c *DriveLsCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	q := buildDriveListQuery(folderID, c.Query)
 
+	// Include files from shared drives, not just personal "My Drive"
 	resp, err := svc.Files.List().
 		Q(q).
 		PageSize(c.Max).
 		PageToken(c.Page).
 		OrderBy("modifiedTime desc").
+		Corpora("allDrives").
 		SupportsAllDrives(true).
 		IncludeItemsFromAllDrives(true).
 		Fields("nextPageToken, files(id, name, mimeType, size, modifiedTime, parents, webViewLink)").
@@ -159,6 +161,7 @@ func (c *DriveSearchCmd) Run(ctx context.Context, flags *RootFlags) error {
 		PageSize(c.Max).
 		PageToken(c.Page).
 		OrderBy("modifiedTime desc").
+		Corpora("allDrives").
 		SupportsAllDrives(true).
 		IncludeItemsFromAllDrives(true).
 		Fields("nextPageToken, files(id, name, mimeType, size, modifiedTime, parents, webViewLink)").
