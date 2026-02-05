@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/encoding/ianaindex"
@@ -443,12 +444,18 @@ func decodePartBody(p *gmail.MessagePart) (string, error) {
 		return "", err
 	}
 
+	contentType := strings.TrimSpace(headerValue(p, "Content-Type"))
+	charsetLabel := charsetLabelFromContentType(contentType)
+
 	decoded := raw
 	if cte := strings.TrimSpace(headerValue(p, "Content-Transfer-Encoding")); cte != "" {
 		decoded = decodeTransferEncoding(decoded, cte)
+		if isQuotedPrintableEncoding(cte) && shouldSkipQuotedPrintable(raw, decoded, charsetLabel) {
+			decoded = raw
+		}
 	}
 
-	if contentType := strings.TrimSpace(headerValue(p, "Content-Type")); contentType != "" {
+	if contentType != "" {
 		decoded = decodeBodyCharset(decoded, contentType)
 	}
 
@@ -470,6 +477,37 @@ func decodeTransferEncoding(data []byte, encoding string) []byte {
 		}
 	}
 	return data
+}
+
+func isQuotedPrintableEncoding(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	if idx := strings.Index(value, ";"); idx != -1 {
+		value = value[:idx]
+	}
+	return strings.EqualFold(strings.TrimSpace(value), "quoted-printable")
+}
+
+// shouldSkipQuotedPrintable returns true when QP decoding should be reverted.
+// Gmail API sometimes returns body data already decoded from QP. Applying QP
+// decode again corrupts '=' characters in URLs. We detect this by checking if
+// raw was valid UTF-8 but decoded became invalid (indicating the QP decoder
+// treated literal '=' chars as escape sequences and produced invalid bytes).
+func shouldSkipQuotedPrintable(raw, decoded []byte, charsetLabel string) bool {
+	if !isUTF8Charset(charsetLabel) {
+		return false
+	}
+	if !utf8.Valid(raw) {
+		return false
+	}
+	return !utf8.Valid(decoded)
+}
+
+func isUTF8Charset(label string) bool {
+	label = strings.ToLower(strings.TrimSpace(label))
+	return label == "" || label == "utf-8" || label == "us-ascii"
 }
 
 func decodeBodyCharset(data []byte, contentType string) []byte {

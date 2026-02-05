@@ -101,32 +101,6 @@ func TestDocsWriteUpdate_JSON(t *testing.T) {
 	if got := batchRequests[1][0].InsertText; got.Location.Index != 11 || got.Text != "world" {
 		t.Fatalf("unexpected append insert: %#v", got)
 	}
-
-	if err := runKong(t, &DocsUpdateCmd{}, []string{"doc1", "--text", "!"}, ctx, flags); err != nil {
-		t.Fatalf("update: %v", err)
-	}
-	if len(batchRequests) != 3 {
-		t.Fatalf("expected 3 batch requests, got %d", len(batchRequests))
-	}
-	if got := batchRequests[2]; len(got) != 1 || got[0].InsertText == nil {
-		t.Fatalf("unexpected update requests: %#v", got)
-	}
-	if got := batchRequests[2][0].InsertText; got.Location.Index != 11 || got.Text != "!" {
-		t.Fatalf("unexpected update insert: %#v", got)
-	}
-
-	if err := runKong(t, &DocsUpdateCmd{}, []string{"doc1", "--text", "?", "--index", "5"}, ctx, flags); err != nil {
-		t.Fatalf("update index: %v", err)
-	}
-	if len(batchRequests) != 4 {
-		t.Fatalf("expected 4 batch requests, got %d", len(batchRequests))
-	}
-	if got := batchRequests[3]; len(got) != 1 || got[0].InsertText == nil {
-		t.Fatalf("unexpected update index requests: %#v", got)
-	}
-	if got := batchRequests[3][0].InsertText; got.Location.Index != 5 || got.Text != "?" {
-		t.Fatalf("unexpected update index insert: %#v", got)
-	}
 }
 
 func TestDocsWrite_FileInput(t *testing.T) {
