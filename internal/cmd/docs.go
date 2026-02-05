@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/alecthomas/kong"
 	"google.golang.org/api/docs/v1"
 	"google.golang.org/api/drive/v3"
 	gapi "google.golang.org/api/googleapi"
@@ -29,6 +30,7 @@ type DocsCmd struct {
 	Create  DocsCreateCmd  `cmd:"" name:"create" help:"Create a Google Doc"`
 	Copy    DocsCopyCmd    `cmd:"" name:"copy" help:"Copy a Google Doc"`
 	Cat     DocsCatCmd     `cmd:"" name:"cat" help:"Print a Google Doc as plain text"`
+	Write   DocsWriteCmd   `cmd:"" name:"write" help:"Write content to a Google Doc"`
 	Insert  DocsInsertCmd  `cmd:"" name:"insert" help:"Insert text into a Google Doc"`
 	Replace DocsReplaceCmd `cmd:"" name:"replace" help:"Replace text in a Google Doc"`
 	Update  DocsUpdateCmd  `cmd:"" name:"update" help:"Batch update a Google Doc (Docs API)"`
@@ -214,6 +216,116 @@ func (c *DocsCopyCmd) Run(ctx context.Context, flags *RootFlags) error {
 		ExpectedMime: "application/vnd.google-apps.document",
 		KindLabel:    "Google Doc",
 	}, c.DocID, c.Title, c.Parent)
+}
+
+type DocsWriteCmd struct {
+	DocID  string `arg:"" name:"docId" help:"Doc ID"`
+	Text   string `name:"text" help:"Text to write"`
+	File   string `name:"file" help:"Text file path ('-' for stdin)"`
+	Append bool   `name:"append" help:"Append instead of replacing the document body"`
+}
+
+func (c *DocsWriteCmd) Run(ctx context.Context, kctx *kong.Context, flags *RootFlags) error {
+	u := ui.FromContext(ctx)
+	account, err := requireAccount(flags)
+	if err != nil {
+		return err
+	}
+
+	id := strings.TrimSpace(c.DocID)
+	if id == "" {
+		return usage("empty docId")
+	}
+
+	text, provided, err := resolveTextInput(c.Text, c.File, kctx, "text", "file")
+	if err != nil {
+		return err
+	}
+	if !provided {
+		return usage("required: --text or --file")
+	}
+	if text == "" {
+		return usage("empty text")
+	}
+
+	svc, err := newDocsService(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	doc, err := svc.Documents.Get(id).
+		Fields("documentId,body/content(startIndex,endIndex)").
+		Context(ctx).
+		Do()
+	if err != nil {
+		if isDocsNotFound(err) {
+			return fmt.Errorf("doc not found or not a Google Doc (id=%s)", id)
+		}
+		return err
+	}
+	if doc == nil {
+		return errors.New("doc not found")
+	}
+
+	endIndex := docsDocumentEndIndex(doc)
+	insertIndex := int64(1)
+	if c.Append {
+		insertIndex = docsAppendIndex(endIndex)
+	}
+
+	reqs := []*docs.Request{}
+	if !c.Append {
+		deleteEnd := endIndex - 1
+		if deleteEnd > 1 {
+			reqs = append(reqs, &docs.Request{
+				DeleteContentRange: &docs.DeleteContentRangeRequest{
+					Range: &docs.Range{
+						StartIndex: 1,
+						EndIndex:   deleteEnd,
+					},
+				},
+			})
+		}
+	}
+
+	reqs = append(reqs, &docs.Request{
+		InsertText: &docs.InsertTextRequest{
+			Location: &docs.Location{Index: insertIndex},
+			Text:     text,
+		},
+	})
+
+	resp, err := svc.Documents.BatchUpdate(id, &docs.BatchUpdateDocumentRequest{Requests: reqs}).
+		Context(ctx).
+		Do()
+	if err != nil {
+		if isDocsNotFound(err) {
+			return fmt.Errorf("doc not found or not a Google Doc (id=%s)", id)
+		}
+		return err
+	}
+
+	if outfmt.IsJSON(ctx) {
+		payload := map[string]any{
+			"documentId": resp.DocumentId,
+			"requests":   len(reqs),
+			"append":     c.Append,
+			"index":      insertIndex,
+		}
+		if resp.WriteControl != nil {
+			payload["writeControl"] = resp.WriteControl
+		}
+		return outfmt.WriteJSON(os.Stdout, payload)
+	}
+
+	u.Out().Printf("id\t%s", resp.DocumentId)
+	u.Out().Printf("requests\t%d", len(reqs))
+	u.Out().Printf("append\t%t", c.Append)
+	u.Out().Printf("index\t%d", insertIndex)
+	if resp.WriteControl != nil && resp.WriteControl.RequiredRevisionId != "" {
+		u.Out().Printf("revision\t%s", resp.WriteControl.RequiredRevisionId)
+	}
+	return nil
 }
 
 type DocsCatCmd struct {
@@ -543,6 +655,60 @@ func appendLimited(buf *bytes.Buffer, maxBytes int64, s string) bool {
 	}
 	_, _ = buf.WriteString(s)
 	return true
+}
+
+func resolveTextInput(text, file string, kctx *kong.Context, textFlag, fileFlag string) (string, bool, error) {
+	file = strings.TrimSpace(file)
+	textProvided := text != "" || flagProvided(kctx, textFlag)
+	fileProvided := file != "" || flagProvided(kctx, fileFlag)
+	if textProvided && fileProvided {
+		return "", true, usage(fmt.Sprintf("use only one of --%s or --%s", textFlag, fileFlag))
+	}
+	if fileProvided {
+		b, err := readTextInput(file)
+		if err != nil {
+			return "", true, err
+		}
+		return string(b), true, nil
+	}
+	if textProvided {
+		return text, true, nil
+	}
+	return text, false, nil
+}
+
+func readTextInput(path string) ([]byte, error) {
+	if path == "-" {
+		return io.ReadAll(os.Stdin)
+	}
+	expanded, err := config.ExpandPath(path)
+	if err != nil {
+		return nil, err
+	}
+	return os.ReadFile(expanded) //nolint:gosec // user-provided path
+}
+
+func docsDocumentEndIndex(doc *docs.Document) int64 {
+	if doc == nil || doc.Body == nil {
+		return 1
+	}
+	end := int64(1)
+	for _, el := range doc.Body.Content {
+		if el == nil {
+			continue
+		}
+		if el.EndIndex > end {
+			end = el.EndIndex
+		}
+	}
+	return end
+}
+
+func docsAppendIndex(endIndex int64) int64 {
+	if endIndex > 1 {
+		return endIndex - 1
+	}
+	return 1
 }
 
 func isDocsNotFound(err error) bool {
