@@ -57,6 +57,7 @@ type CLI struct {
 	People     PeopleCmd             `cmd:"" help:"Google People"`
 	Keep       KeepCmd               `cmd:"" help:"Google Keep (Workspace only)"`
 	Sheets     SheetsCmd             `cmd:"" help:"Google Sheets"`
+	Youtube    YoutubeCmd            `cmd:"" aliases:"yt" help:"YouTube"`
 	Config     ConfigCmd             `cmd:"" help:"Manage configuration"`
 	VersionCmd VersionCmd            `cmd:"" name:"version" help:"Print version"`
 	Completion CompletionCmd         `cmd:"" help:"Generate shell completion scripts"`
@@ -201,7 +202,7 @@ func newParser(description string) (*kong.Kong, *CLI, error) {
 }
 
 func baseDescription() string {
-	return "Google CLI for Gmail/Calendar/Chat/Classroom/Drive/Contacts/Tasks/Sheets/Docs/Slides/People"
+	return "Google CLI for Gmail/Calendar/Chat/Classroom/Drive/Contacts/Tasks/Sheets/Docs/Slides/People/YouTube"
 }
 
 func helpDescription() string {
