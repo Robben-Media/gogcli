@@ -7,13 +7,15 @@ import (
 	"time"
 
 	"google.golang.org/api/calendar/v3"
+
+	"github.com/steipete/gogcli/internal/cli"
 )
 
 // TimeRangeFlags provides common time range options for calendar commands.
 // Embed this struct in commands that need time range support.
 type TimeRangeFlags struct {
-	From      string `name:"from" help:"Start time (RFC3339, date, or relative: today, tomorrow, monday)"`
-	To        string `name:"to" help:"End time (RFC3339, date, or relative)"`
+	From      string `name:"from" help:"Start time (RFC3339, date, or relative: today, monday, 2h ago, 30m)"`
+	To        string `name:"to" help:"End time (RFC3339, date, or relative: tomorrow, next fri, 2h ago, 30m)"`
 	Today     bool   `name:"today" help:"Today only"`
 	Tomorrow  bool   `name:"tomorrow" help:"Tomorrow only"`
 	Week      bool   `name:"week" help:"This week (uses --week-start, default Mon)"`
@@ -106,17 +108,17 @@ func ResolveTimeRangeWithDefaults(ctx context.Context, svc *calendar.Service, fl
 	// Handle convenience flags first
 	switch {
 	case flags.Today:
-		from = startOfDay(now)
+		from = cli.StartOfDay(now)
 		to = endOfDay(now)
 	case flags.Tomorrow:
 		tomorrow := now.AddDate(0, 0, 1)
-		from = startOfDay(tomorrow)
+		from = cli.StartOfDay(tomorrow)
 		to = endOfDay(tomorrow)
 	case flags.Week:
 		from = startOfWeek(now, weekStart)
 		to = endOfWeek(now, weekStart)
 	case flags.Days > 0:
-		from = startOfDay(now)
+		from = cli.StartOfDay(now)
 		to = endOfDay(now.AddDate(0, 0, flags.Days-1))
 	default:
 		// Parse --from and --to, or use defaults
@@ -153,103 +155,18 @@ func ResolveTimeRangeWithDefaults(ctx context.Context, svc *calendar.Service, fl
 // - RFC3339: 2026-01-05T14:00:00-08:00
 // - ISO 8601 with numeric timezone: 2026-01-05T14:00:00-0800 (no colon)
 // - Date only: 2026-01-05 (interpreted as start of day in user's timezone)
-// - Relative: today, tomorrow, monday, next tuesday
+// - Relative: today, tomorrow, monday, next tuesday, 2h ago, 30m
 func parseTimeExpr(expr string, now time.Time, loc *time.Location) (time.Time, error) {
-	expr = strings.TrimSpace(expr)
-
-	// Try RFC3339 first (before lowercasing)
-	if t, err := time.Parse(time.RFC3339, expr); err == nil {
-		return t, nil
+	if loc != nil && now.Location() != loc {
+		now = now.In(loc)
 	}
 
-	// Try ISO 8601 with numeric timezone without colon (e.g., -0800)
-	// This is what macOS `date +%Y-%m-%dT%H:%M:%S%z` produces
-	if t, err := time.Parse("2006-01-02T15:04:05-0700", expr); err == nil {
-		return t, nil
+	parsed, err := cli.ParseRelativeTime(expr, now)
+	if err == nil {
+		return parsed, nil
 	}
 
-	// Now lowercase for relative expressions
-	exprLower := strings.ToLower(expr)
-
-	// Try relative expressions
-	switch exprLower {
-	case "now":
-		return now, nil
-	case "today":
-		return startOfDay(now), nil
-	case "tomorrow":
-		return startOfDay(now.AddDate(0, 0, 1)), nil
-	case "yesterday":
-		return startOfDay(now.AddDate(0, 0, -1)), nil
-	}
-
-	// Try day of week (this week or next)
-	if t, ok := parseWeekday(exprLower, now); ok {
-		return t, nil
-	}
-
-	// Try date only (YYYY-MM-DD)
-	if t, err := time.ParseInLocation("2006-01-02", expr, loc); err == nil {
-		return t, nil
-	}
-
-	// Try date with time but no timezone
-	if t, err := time.ParseInLocation("2006-01-02T15:04:05", expr, loc); err == nil {
-		return t, nil
-	}
-	if t, err := time.ParseInLocation("2006-01-02 15:04", expr, loc); err == nil {
-		return t, nil
-	}
-
-	return time.Time{}, fmt.Errorf("cannot parse %q as time (try: 2026-01-05, today, tomorrow, monday)", expr)
-}
-
-// parseWeekday parses weekday expressions like "monday", "next tuesday"
-func parseWeekday(expr string, now time.Time) (time.Time, bool) {
-	expr = strings.TrimSpace(expr)
-	next := false
-	if strings.HasPrefix(expr, "next ") {
-		next = true
-		expr = strings.TrimPrefix(expr, "next ")
-	}
-
-	weekdays := map[string]time.Weekday{
-		"sunday":    time.Sunday,
-		"sun":       time.Sunday,
-		"monday":    time.Monday,
-		"mon":       time.Monday,
-		"tuesday":   time.Tuesday,
-		"tue":       time.Tuesday,
-		"wednesday": time.Wednesday,
-		"wed":       time.Wednesday,
-		"thursday":  time.Thursday,
-		"thu":       time.Thursday,
-		"friday":    time.Friday,
-		"fri":       time.Friday,
-		"saturday":  time.Saturday,
-		"sat":       time.Saturday,
-	}
-
-	targetDay, ok := weekdays[expr]
-	if !ok {
-		return time.Time{}, false
-	}
-
-	currentDay := now.Weekday()
-	daysUntil := int(targetDay) - int(currentDay)
-	if daysUntil < 0 || (daysUntil == 0 && next) {
-		daysUntil += 7 // Next week
-	}
-
-	if daysUntil == 0 {
-		return startOfDay(now), true
-	}
-	return startOfDay(now.AddDate(0, 0, daysUntil)), true
-}
-
-// startOfDay returns the start of the day (00:00:00) in the given time's location.
-func startOfDay(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+	return time.Time{}, fmt.Errorf("cannot parse %q as time (try: 2026-01-05, today, tomorrow, monday, 2h ago, 30m)", expr)
 }
 
 // endOfDay returns the end of the day (23:59:59.999) in the given time's location.
@@ -265,7 +182,7 @@ func startOfWeek(t time.Time, weekStart time.Weekday) time.Time {
 	if daysBack < 0 {
 		daysBack += 7
 	}
-	return startOfDay(t.AddDate(0, 0, -daysBack))
+	return cli.StartOfDay(t.AddDate(0, 0, -daysBack))
 }
 
 // endOfWeek returns the end of the week for the given time.
