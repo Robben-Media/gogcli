@@ -10,19 +10,24 @@ import (
 type Service string
 
 const (
-	ServiceGmail     Service = "gmail"
-	ServiceCalendar  Service = "calendar"
-	ServiceChat      Service = "chat"
-	ServiceClassroom Service = "classroom"
-	ServiceDrive     Service = "drive"
-	ServiceDocs      Service = "docs"
-	ServiceContacts  Service = "contacts"
-	ServiceTasks     Service = "tasks"
-	ServicePeople    Service = "people"
-	ServiceSheets    Service = "sheets"
-	ServiceGroups    Service = "groups"
-	ServiceKeep      Service = "keep"
-	ServiceYoutube   Service = "youtube"
+	ServiceGmail           Service = "gmail"
+	ServiceCalendar        Service = "calendar"
+	ServiceChat            Service = "chat"
+	ServiceClassroom       Service = "classroom"
+	ServiceDrive           Service = "drive"
+	ServiceDocs            Service = "docs"
+	ServiceContacts        Service = "contacts"
+	ServiceTasks           Service = "tasks"
+	ServicePeople          Service = "people"
+	ServiceSheets          Service = "sheets"
+	ServiceGroups          Service = "groups"
+	ServiceKeep            Service = "keep"
+	ServiceYoutube         Service = "youtube"
+	ServiceBigquery        Service = "bigquery"
+	ServiceAnalytics       Service = "analytics"
+	ServiceSearchConsole   Service = "searchconsole"
+	ServiceTagManager      Service = "tagmanager"
+	ServiceBusinessProfile Service = "businessprofile"
 )
 
 const (
@@ -79,6 +84,11 @@ var serviceOrder = []Service{
 	ServiceGroups,
 	ServiceKeep,
 	ServiceYoutube,
+	ServiceBigquery,
+	ServiceAnalytics,
+	ServiceSearchConsole,
+	ServiceTagManager,
+	ServiceBusinessProfile,
 }
 
 var serviceInfoByService = map[Service]serviceInfo{
@@ -185,6 +195,37 @@ var serviceInfoByService = map[Service]serviceInfo{
 		scopes: []string{"https://www.googleapis.com/auth/youtube.readonly"},
 		user:   true,
 		apis:   []string{"YouTube Data API v3"},
+	},
+	ServiceBigquery: {
+		scopes: []string{
+			"https://www.googleapis.com/auth/bigquery",
+			"https://www.googleapis.com/auth/bigquery.readonly",
+		},
+		user: true,
+		apis: []string{"BigQuery API"},
+	},
+	ServiceAnalytics: {
+		scopes: []string{"https://www.googleapis.com/auth/analytics.readonly"},
+		user:   true,
+		apis:   []string{"Analytics Data API", "Analytics Admin API"},
+	},
+	ServiceSearchConsole: {
+		scopes: []string{
+			"https://www.googleapis.com/auth/webmasters.readonly",
+			"https://www.googleapis.com/auth/webmasters",
+		},
+		user: true,
+		apis: []string{"Search Console API"},
+	},
+	ServiceTagManager: {
+		scopes: []string{"https://www.googleapis.com/auth/tagmanager.readonly"},
+		user:   true,
+		apis:   []string{"Tag Manager API v2"},
+	},
+	ServiceBusinessProfile: {
+		scopes: []string{"https://www.googleapis.com/auth/business.manage"},
+		user:   true,
+		apis:   []string{"Business Information API", "Business Account Management API"},
 	},
 }
 
@@ -487,6 +528,24 @@ func scopesForServiceWithOptions(service Service, opts ScopeOptions) ([]string, 
 	case ServiceKeep:
 		return Scopes(service)
 	case ServiceYoutube:
+		return Scopes(service)
+	case ServiceBigquery:
+		if opts.Readonly {
+			return []string{"https://www.googleapis.com/auth/bigquery.readonly"}, nil
+		}
+
+		return Scopes(service)
+	case ServiceAnalytics:
+		return Scopes(service)
+	case ServiceSearchConsole:
+		if opts.Readonly {
+			return []string{"https://www.googleapis.com/auth/webmasters.readonly"}, nil
+		}
+
+		return Scopes(service)
+	case ServiceTagManager:
+		return Scopes(service)
+	case ServiceBusinessProfile:
 		return Scopes(service)
 	default:
 		return nil, errUnknownService
