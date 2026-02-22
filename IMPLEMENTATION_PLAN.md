@@ -42,7 +42,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog docs create --help` works
 
 ### Task 2: Google Keep — Notes CRUD
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/keep-gaps.md
 - **Description**: Add `gog keep notes create` (text notes and list notes via mutually exclusive flags) and `gog keep notes delete` (with confirmDestructive). Both require `requireWorkspaceAccount()`.
@@ -53,7 +53,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog keep notes create --help`, `gog keep notes delete --help`
 
 ### Task 3: Google Keep — Permissions batch operations
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/keep-gaps.md
 - **Description**: Add `gog keep permissions batch-create` (share note with multiple members) and `gog keep permissions batch-delete` (remove sharing, with confirmDestructive). Both require Workspace accounts.
@@ -124,7 +124,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog analytics audience-exports list --help`
 
 ### Task 9: Sheets — All 8 gap methods
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/sheets-gaps.md
 - **Description**: Add developer metadata commands (`gog sheets metadata get/search`), spreadsheet filter operations (`gog sheets get-by-filter`), sheet copy (`gog sheets copy-to`), and values operations (`gog sheets values batch-clear`, `batch-clear-by-filter`, `batch-get-by-filter`, `batch-update-by-filter`). DataFilter methods accept `--filters-json` with `@filepath` support.
