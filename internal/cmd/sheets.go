@@ -17,6 +17,8 @@ import (
 
 var newSheetsService = googleapi.NewSheets
 
+const userEnteredValueInput = "USER_ENTERED"
+
 // cleanRange removes shell escape sequences from range arguments.
 // Some shells escape ! to \! (bash history expansion), which breaks Google Sheets API calls.
 func cleanRange(r string) string {
@@ -24,18 +26,25 @@ func cleanRange(r string) string {
 }
 
 type SheetsCmd struct {
-	Get         SheetsGetCmd         `cmd:"" name:"get" help:"Get values from a range"`
-	Update      SheetsUpdateCmd      `cmd:"" name:"update" help:"Update values in a range"`
-	Append      SheetsAppendCmd      `cmd:"" name:"append" help:"Append values to a range"`
-	Clear       SheetsClearCmd       `cmd:"" name:"clear" help:"Clear values in a range"`
-	Format      SheetsFormatCmd      `cmd:"" name:"format" help:"Apply cell formatting to a range"`
-	Metadata    SheetsMetadataCmd    `cmd:"" name:"metadata" help:"Get spreadsheet metadata"`
-	Create      SheetsCreateCmd      `cmd:"" name:"create" help:"Create a new spreadsheet"`
-	Copy        SheetsCopyCmd        `cmd:"" name:"copy" help:"Copy a Google Sheet"`
-	Export      SheetsExportCmd      `cmd:"" name:"export" help:"Export a Google Sheet (pdf|xlsx|csv) via Drive"`
-	BatchGet    SheetsBatchGetCmd    `cmd:"" name:"batch-get" help:"Get values from multiple ranges"`
-	BatchUpdate SheetsBatchUpdateCmd `cmd:"" name:"batch-update" help:"Update values in multiple ranges"`
-	Sheet       SheetsSheetCmd       `cmd:"" name:"sheet" help:"Manage sheet tabs (add, delete, update)"`
+	Get                 SheetsGetCmd                       `cmd:"" name:"get" help:"Get values from a range"`
+	Update              SheetsUpdateCmd                    `cmd:"" name:"update" help:"Update values in a range"`
+	Append              SheetsAppendCmd                    `cmd:"" name:"append" help:"Append values to a range"`
+	Clear               SheetsClearCmd                     `cmd:"" name:"clear" help:"Clear values in a range"`
+	Format              SheetsFormatCmd                    `cmd:"" name:"format" help:"Apply cell formatting to a range"`
+	Metadata            SheetsMetadataCmd                  `cmd:"" name:"metadata" help:"Get spreadsheet metadata"`
+	Create              SheetsCreateCmd                    `cmd:"" name:"create" help:"Create a new spreadsheet"`
+	Copy                SheetsCopyCmd                      `cmd:"" name:"copy" help:"Copy a Google Sheet"`
+	Export              SheetsExportCmd                    `cmd:"" name:"export" help:"Export a Google Sheet (pdf|xlsx|csv) via Drive"`
+	BatchGet            SheetsBatchGetCmd                  `cmd:"" name:"batch-get" help:"Get values from multiple ranges"`
+	BatchUpdate         SheetsBatchUpdateCmd               `cmd:"" name:"batch-update" help:"Update values in multiple ranges"`
+	BatchClear          SheetsValuesBatchClearCmd          `cmd:"" name:"batch-clear" help:"Clear values from multiple ranges"`
+	BatchGetByFilter    SheetsValuesBatchGetByFilterCmd    `cmd:"" name:"batch-get-by-filter" help:"Get values by data filter"`
+	BatchUpdateByFilter SheetsValuesBatchUpdateByFilterCmd `cmd:"" name:"batch-update-by-filter" help:"Update values by data filter"`
+	BatchClearByFilter  SheetsValuesBatchClearByFilterCmd  `cmd:"" name:"batch-clear-by-filter" help:"Clear values by data filter"`
+	Sheet               SheetsSheetCmd                     `cmd:"" name:"sheet" help:"Manage sheet tabs (add, delete, update)"`
+	DeveloperMetadata   SheetsDeveloperMetadataCmd         `cmd:"" name:"dev-metadata" help:"Manage developer metadata"`
+	GetByFilter         SheetsGetByFilterCmd               `cmd:"" name:"get-by-filter" help:"Get spreadsheet data by data filter"`
+	CopyTo              SheetsCopyToCmd                    `cmd:"" name:"copy-to" help:"Copy a sheet to another spreadsheet"`
 }
 
 type SheetsExportCmd struct {
@@ -193,7 +202,7 @@ func (c *SheetsUpdateCmd) Run(ctx context.Context, flags *RootFlags) error {
 	call := svc.Spreadsheets.Values.Update(spreadsheetID, rangeSpec, vr)
 	valueInputOption := strings.TrimSpace(c.ValueInput)
 	if valueInputOption == "" {
-		valueInputOption = "USER_ENTERED"
+		valueInputOption = userEnteredValueInput
 	}
 	call = call.ValueInputOption(valueInputOption)
 
@@ -284,7 +293,7 @@ func (c *SheetsAppendCmd) Run(ctx context.Context, flags *RootFlags) error {
 	call := svc.Spreadsheets.Values.Append(spreadsheetID, rangeSpec, vr)
 	valueInputOption := strings.TrimSpace(c.ValueInput)
 	if valueInputOption == "" {
-		valueInputOption = "USER_ENTERED"
+		valueInputOption = userEnteredValueInput
 	}
 	call = call.ValueInputOption(valueInputOption)
 	if strings.TrimSpace(c.Insert) != "" {
