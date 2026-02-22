@@ -75,15 +75,16 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog tasks tasklists get --help`
 
 ### Task 5: Google Tasks — Task move and update
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/tasks-gaps.md
-- **Description**: Add `gog tasks move` (POST with query params for parent/previous positioning) and `gog tasks update` (full PUT replace, contrast with existing `tasks patch`). Check for naming conflicts with existing TasksCmd struct.
+- **Description**: Add `gog tasks move` (POST with query params for parent/previous positioning) and `gog tasks replace` (full PUT replace, contrast with existing `tasks update` which uses PATCH). Added `patch` alias to `update` for clarity.
 - **Files**:
   - `internal/cmd/tasks_edit.go` — create
   - `internal/cmd/tasks_edit_test.go` — create
+  - `internal/cmd/tasks.go` — modified (added Move, Replace, updated help text, added patch alias)
 - **Methods**: tasks.move, tasks.update (2)
-- **Verification**: `make ci` passes, `gog tasks move --help`, `gog tasks update --help`
+- **Verification**: `make ci` passes, `gog tasks move --help`, `gog tasks replace --help`
 
 ### Task 6: Search Console — Sitemaps and URL inspection
 - **Status**: pending

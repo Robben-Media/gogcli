@@ -45,5 +45,17 @@
   - Commands available: `gog tasks lists get/delete/patch/update`
   - Aliases: delete (rm, del), update (replace)
 
+### Task 5: Google Tasks — Task move and update ✅ COMPLETED
+- Date: 2025-02-22
+- Changes:
+  - Created `internal/cmd/tasks_edit.go` with `TasksMoveCmd` and `TasksReplaceCmd`
+  - Created `internal/cmd/tasks_edit_test.go` with comprehensive tests
+  - Updated `internal/cmd/tasks.go` to register new commands and add `patch` alias to `update`
+  - `tasks move`: Moves tasks within a list using POST with `--parent` and `--previous` flags
+  - `tasks replace`: Full PUT replace with required `--title` flag, supports `--notes`, `--status`, `--due`
+  - Existing `tasks update` now has alias `patch` to clarify its partial-update behavior
+  - All tests pass (10 new test cases)
+  - Commands available: `gog tasks move`, `gog tasks replace`
+
 ## Next Steps
-- Continue with Task 5: Google Tasks — Task move and update
+- Continue with Task 6: Search Console — Sitemaps and URL inspection
