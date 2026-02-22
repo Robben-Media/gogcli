@@ -178,7 +178,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog contacts batch-create --help`
 
 ### Task 13: People — Photo management
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/people-gaps.md
 - **Description**: Add `gog contacts delete-photo` (confirmDestructive) and `gog contacts update-photo` (reads image file, base64-encodes, sends as photoBytes).

@@ -60,5 +60,26 @@
 - Learnings: Use different variable names to avoid shadow warnings in nested error handling
 ---
 
+## Task 13 - People — Photo management
+### Completed: People — Photo management
+- Date: 2026-02-22
+- Methods implemented: 2 (people.deleteContactPhoto, people.updateContactPhoto)
+- Files created/modified:
+  - Created `internal/cmd/people_photo.go` with ContactsPhotoCmd and 2 subcommands
+  - Created `internal/cmd/people_photo_test.go` with comprehensive tests
+  - Modified `internal/cmd/contacts.go` to add Photo subcommand
+- Tests added: 12 test cases across 3 test functions
+- Commands:
+  - `gog contacts photo delete` - delete a contact's photo (requires --force or confirmation)
+  - `gog contacts photo update` - update a contact's photo from file or stdin
+- Features:
+  - Image file input via `--file` or `-f` flag
+  - `-` for stdin support
+  - Base64 encoding of image bytes for API
+  - confirmDestructive for photo delete
+  - Normalization of resource names (adds "people/" prefix if needed)
+- Learnings: Use `io.ReadAll(os.Stdin)` instead of `os.Stdin.ReadAll()` - os.File doesn't have ReadAll method
+---
+
 ## Next Steps
-- Continue with Task 13: People — Photo management
+- Continue with Task 14: Gmail — Labels management
