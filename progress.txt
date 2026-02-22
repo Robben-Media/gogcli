@@ -74,88 +74,23 @@ Total methods implemented: 33 methods across 9 tasks.
 
 ---
 
-## Task 6 - 2026-02-22
-### Completed: Search Console — Sitemaps and URL inspection
-- Methods implemented: 6
-  - `sitemaps.get` - Get sitemap details
-  - `sitemaps.delete` - Delete sitemap from Search Console (with confirmation)
-  - `sites.get` - Get a site's details
-  - `sites.add` - Add a site to Search Console
-  - `sites.delete` - Remove a site from Search Console (with confirmation)
-  - `urlTestingTools.mobileFriendlyTest.run` - Test if a URL is mobile-friendly
-- Files created/modified:
-  - `internal/cmd/searchconsole.go` — restructured sites/sitemaps to use subcommand pattern
-  - `internal/cmd/searchconsole_sitemaps.go` — created (get/delete commands)
-  - `internal/cmd/searchconsole_sites.go` — created (get/add/delete + mobile-friendly-test)
-  - `internal/cmd/searchconsole_test.go` — updated tests for new command structure
-  - `internal/cmd/searchconsole_more_test.go` — created (9 new tests)
-- Tests added: 9 new test functions
-- Key changes:
-  - Restructured command hierarchy: `sites list` instead of `sites`, `sitemaps list` instead of `sitemaps`
-  - Added `mobile-friendly-test` command with JSON and text output
-  - Delete commands use `confirmDestructive()` with `--force` flag support
+## Phase 2: Core APIs (145 methods, 18 tasks)
 
----
+### Task 10: People — Contact groups CRUD ✅ COMPLETED
+- Commit: cf94de7
+- Date: 2025-02-22
+- Changes:
+  - Created `internal/cmd/contacts_groups.go` with ContactGroupsCmd struct
+  - Implemented 6 methods: list, get, batch-get, create, update, delete
+  - Delete supports `--delete-contacts` flag to also delete contacts in the group
+  - Added comprehensive tests in `internal/cmd/contacts_groups_test.go`
 
-## Task 7 - 2025-02-22
-### Completed: Analytics Data — Report operations
-- Methods implemented: 4
-  - `properties.runPivotReport` - Run a pivot report with pivoted dimensions
-  - `properties.batchRunReports` - Run up to 5 reports in a single batch request
-  - `properties.batchRunPivotReports` - Run up to 5 pivot reports in a single batch
-  - `properties.checkCompatibility` - Check if dimension/metric combinations are compatible
-- Files created/modified:
-  - `internal/cmd/analytics_reports.go` — created (4 new command structs)
-  - `internal/cmd/analytics_reports_test.go` — created (13 new tests)
-  - `internal/cmd/analytics.go` — modified (added 4 new commands to AnalyticsCmd)
-- Tests added: 13 new test functions
-- Key features:
-  - `pivot-report`: Requires `--pivots-json` with pivot definitions; supports `--filter-json`, `--keep-empty`, `--currency-code`
-  - `batch-reports`: Accepts `--requests-json` with array of up to 5 report requests
-  - `batch-pivot-reports`: Accepts `--requests-json` with array of up to 5 pivot report requests
-  - `check-compatibility`: Validates dimension/metric combinations; returns COMPATIBLE/INCOMPATIBLE status
-  - All JSON flags support `@filepath` syntax for reading from file or `-` for stdin
-  - Helper function `readJSONFromFlag` created for reusable `@filepath` parsing
-
----
-
-## Task 8 - 2025-02-22
-### Completed: Analytics Data — Audience exports
-- Methods implemented: 4
-  - `properties.audienceExports.create` - Create a new audience export (returns long-running operation)
-  - `properties.audienceExports.get` - Get an audience export by name
-  - `properties.audienceExports.list` - List audience exports for a property
-  - `properties.audienceExports.query` - Query rows from a completed audience export
-- Files created/modified:
-  - `internal/cmd/analytics_audience.go` — created (4 new command structs)
-  - `internal/cmd/analytics_audience_test.go` — created (10 new tests)
-  - `internal/cmd/analytics.go` — modified (added AudienceExportsCmd)
-- Tests added: 10 new test functions
-- Key features:
-  - `create`: Returns operation name and done status; export runs asynchronously
-  - `get`: Shows export metadata including state, row count, creation time
-  - `list`: Pagination with --max and --page flags
-  - `query`: Retrieves rows from ACTIVE exports; shows dimension values
-  - Audience export states: CREATING, ACTIVE, FAILED
----
-
-## Task 9 - 2025-02-22
-### Completed: Sheets — All 8 gap methods
-- Methods implemented: 8
-  - `spreadsheets.developerMetadata.get` - Get a developer metadata entry by ID
-  - `spreadsheets.developerMetadata.search` - Search developer metadata
-  - `spreadsheets.getByDataFilter` - Get spreadsheet data by data filter
-  - `spreadsheets.sheets.copyTo` - Copy a sheet to another spreadsheet
-  - `spreadsheets.values.batchClear` - Clear values from multiple ranges
-  - `spreadsheets.values.batchClearByDataFilter` - Clear values by data filter
-  - `spreadsheets.values.batchGetByDataFilter` - Get values by data filter
-  - `spreadsheets.values.batchUpdateByDataFilter` - Update values by data filter
-- Files created/modified:
-  - `internal/cmd/sheets_gaps.go` — created (8 new command structs)
-  - `internal/cmd/sheets.go` — modified (added new commands to SheetsCmd, added userEnteredValueInput constant)
-- Key features:
-  - Developer metadata commands under `gog sheets dev-metadata get/search`
-  - `copy-to` copies a sheet tab to another spreadsheet
-  - Batch-clear commands use `confirmDestructive()` with `--force` flag
-  - All data filter commands support `@filepath` syntax for JSON input
-  - Added `userEnteredValueInput` constant to reduce string duplication
+### Task 11: People — Contact group members modify ✅ COMPLETED
+- Date: 2025-02-22
+- Changes:
+  - Created `internal/cmd/people_group_members.go` with ContactGroupMembersCmd struct
+  - Implemented `gog contacts groups members modify` with `--add` and `--remove` flags
+  - Normalizes member resource names (adds "people/" prefix if needed)
+  - Added tests in `internal/cmd/people_group_members_test.go`
+- Methods implemented: contactGroups.members.modify (1)
+- Files created: people_group_members.go, people_group_members_test.go

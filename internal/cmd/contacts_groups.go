@@ -21,6 +21,7 @@ type ContactGroupsCmd struct {
 	Create   ContactGroupsCreateCmd   `cmd:"" name:"create" help:"Create a contact group" aliases:"add,new"`
 	Update   ContactGroupsUpdateCmd   `cmd:"" name:"update" help:"Update a contact group"`
 	Delete   ContactGroupsDeleteCmd   `cmd:"" name:"delete" help:"Delete a contact group" aliases:"rm,del"`
+	Members  ContactGroupMembersCmd   `cmd:"" name:"members" help:"Manage contact group members"`
 }
 
 const groupsReadMask = "metadata,groupType,memberCount,name"

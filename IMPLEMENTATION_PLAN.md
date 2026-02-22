@@ -145,7 +145,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 > Branch: `phase/2-core-apis` | PR → build branch
 
 ### Task 10: People — Contact groups CRUD
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/people-gaps.md
 - **Description**: Add `gog contacts groups batch-get/create/delete/get/list/update`. Delete requires confirmDestructive. List supports pagination.
@@ -156,7 +156,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog contacts groups list --help`
 
 ### Task 11: People — Contact group members modify
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/people-gaps.md
 - **Description**: Add `gog contacts groups members modify` with `--add` and `--remove` flags for member resource names. At least one must be provided.
