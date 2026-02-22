@@ -42,7 +42,7 @@ func listCalendarEvents(ctx context.Context, svc *calendar.Service, calendarID, 
 	}
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{
-			"events":        wrapEventsWithDays(resp.Items),
+			"events":        wrapEventsWithCalendar(calendarID, resp.Items),
 			"nextPageToken": resp.NextPageToken,
 		})
 	}
@@ -75,12 +75,29 @@ func listCalendarEvents(ctx context.Context, svc *calendar.Service, calendarID, 
 
 type eventWithCalendar struct {
 	*calendar.Event
-	CalendarID     string
+	CalendarID     string `json:"calendarId"`
 	StartDayOfWeek string `json:"startDayOfWeek,omitempty"`
 	EndDayOfWeek   string `json:"endDayOfWeek,omitempty"`
 	Timezone       string `json:"timezone,omitempty"`
+	EventTimezone  string `json:"eventTimezone,omitempty"`
 	StartLocal     string `json:"startLocal,omitempty"`
 	EndLocal       string `json:"endLocal,omitempty"`
+}
+
+func (e *eventWithCalendar) MarshalJSON() ([]byte, error) {
+	if e == nil {
+		return []byte("null"), nil
+	}
+	extras := map[string]any{
+		"calendarId":     e.CalendarID,
+		"startDayOfWeek": e.StartDayOfWeek,
+		"endDayOfWeek":   e.EndDayOfWeek,
+		"timezone":       e.Timezone,
+		"eventTimezone":  e.EventTimezone,
+		"startLocal":     e.StartLocal,
+		"endLocal":       e.EndLocal,
+	}
+	return marshalWrappedEventJSON(e.Event, extras)
 }
 
 func listAllCalendarsEvents(ctx context.Context, svc *calendar.Service, from, to string, maxResults int64, page, query, privatePropFilter, sharedPropFilter, fields string, showWeekday bool) error {
@@ -118,6 +135,7 @@ func listCalendarIDsEvents(ctx context.Context, svc *calendar.Service, calendarI
 	u := ui.FromContext(ctx)
 
 	all := []*eventWithCalendar{}
+	seen := make(map[string]struct{})
 	for _, calID := range calendarIDs {
 		calID = strings.TrimSpace(calID)
 		if calID == "" {
@@ -148,19 +166,14 @@ func listCalendarIDsEvents(ctx context.Context, svc *calendar.Service, calendarI
 			continue
 		}
 		for _, e := range events.Items {
-			startDay, endDay := eventDaysOfWeek(e)
-			evTimezone := eventTimezone(e)
-			startLocal := formatEventLocal(e.Start, nil)
-			endLocal := formatEventLocal(e.End, nil)
-			all = append(all, &eventWithCalendar{
-				Event:          e,
-				CalendarID:     calID,
-				StartDayOfWeek: startDay,
-				EndDayOfWeek:   endDay,
-				Timezone:       evTimezone,
-				StartLocal:     startLocal,
-				EndLocal:       endLocal,
-			})
+			key := eventCrossCalendarDedupeKey(e)
+			if key != "" {
+				if _, ok := seen[key]; ok {
+					continue
+				}
+				seen[key] = struct{}{}
+			}
+			all = append(all, wrapEventWithCalendar(calID, e))
 		}
 	}
 
@@ -291,6 +304,59 @@ func appendUniqueCalendarID(out *[]string, seen map[string]struct{}, id string) 
 	}
 	seen[id] = struct{}{}
 	*out = append(*out, id)
+}
+
+func wrapEventsWithCalendar(calendarID string, events []*calendar.Event) []*eventWithCalendar {
+	if len(events) == 0 {
+		return []*eventWithCalendar{}
+	}
+	out := make([]*eventWithCalendar, 0, len(events))
+	for _, event := range events {
+		out = append(out, wrapEventWithCalendar(calendarID, event))
+	}
+	return out
+}
+
+func wrapEventWithCalendar(calendarID string, event *calendar.Event) *eventWithCalendar {
+	wrapped := wrapEventWithDaysWithTimezone(event, "", nil)
+	if wrapped == nil {
+		return nil
+	}
+	return &eventWithCalendar{
+		Event:          wrapped.Event,
+		CalendarID:     calendarID,
+		StartDayOfWeek: wrapped.StartDayOfWeek,
+		EndDayOfWeek:   wrapped.EndDayOfWeek,
+		Timezone:       wrapped.Timezone,
+		EventTimezone:  wrapped.EventTimezone,
+		StartLocal:     wrapped.StartLocal,
+		EndLocal:       wrapped.EndLocal,
+	}
+}
+
+func eventCrossCalendarDedupeKey(event *calendar.Event) string {
+	if event == nil {
+		return ""
+	}
+	uid := strings.TrimSpace(event.ICalUID)
+	if uid == "" {
+		return ""
+	}
+	start := ""
+	if event.Start != nil {
+		start = strings.TrimSpace(event.Start.DateTime)
+		if start == "" {
+			start = strings.TrimSpace(event.Start.Date)
+		}
+	}
+	end := ""
+	if event.End != nil {
+		end = strings.TrimSpace(event.End.DateTime)
+		if end == "" {
+			end = strings.TrimSpace(event.End.Date)
+		}
+	}
+	return uid + "|" + start + "|" + end
 }
 
 func isDigits(value string) bool {

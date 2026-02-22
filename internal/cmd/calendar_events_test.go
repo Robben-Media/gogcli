@@ -66,6 +66,9 @@ func TestListCalendarEvents_JSON(t *testing.T) {
 	if len(parsed.Events) != 1 || parsed.Next != "next" {
 		t.Fatalf("unexpected json: %#v", parsed)
 	}
+	if got := parsed.Events[0]["calendarId"]; got != "cal1" {
+		t.Fatalf("expected calendarId cal1, got %#v", got)
+	}
 }
 
 func TestCalendarEventsCmd_DefaultsToPrimary(t *testing.T) {
@@ -210,6 +213,11 @@ func TestCalendarEventsCmd_CalendarsFlag(t *testing.T) {
 	}
 	if len(parsed.Events) != 2 {
 		t.Fatalf("unexpected events: %#v", parsed.Events)
+	}
+	for _, ev := range parsed.Events {
+		if _, ok := ev["calendarId"]; !ok {
+			t.Fatalf("expected calendarId in event payload: %#v", ev)
+		}
 	}
 
 	mu.Lock()

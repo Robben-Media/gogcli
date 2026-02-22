@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -15,6 +16,21 @@ type eventWithDays struct {
 	EventTimezone  string `json:"eventTimezone,omitempty"`
 	StartLocal     string `json:"startLocal,omitempty"`
 	EndLocal       string `json:"endLocal,omitempty"`
+}
+
+func (e *eventWithDays) MarshalJSON() ([]byte, error) {
+	if e == nil {
+		return []byte("null"), nil
+	}
+	extras := map[string]any{
+		"startDayOfWeek": e.StartDayOfWeek,
+		"endDayOfWeek":   e.EndDayOfWeek,
+		"timezone":       e.Timezone,
+		"eventTimezone":  e.EventTimezone,
+		"startLocal":     e.StartLocal,
+		"endLocal":       e.EndLocal,
+	}
+	return marshalWrappedEventJSON(e.Event, extras)
 }
 
 func wrapEventsWithDays(events []*calendar.Event) []*eventWithDays {
@@ -129,6 +145,33 @@ func loadEventLocation(tz string) (*time.Location, bool) {
 		return nil, false
 	}
 	return loc, true
+}
+
+func marshalWrappedEventJSON(event *calendar.Event, extras map[string]any) ([]byte, error) {
+	payload := map[string]any{}
+	if event != nil {
+		raw, err := event.MarshalJSON()
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			return nil, err
+		}
+	}
+	for k, v := range extras {
+		switch vv := v.(type) {
+		case string:
+			if strings.TrimSpace(vv) == "" {
+				continue
+			}
+			payload[k] = vv
+		default:
+			if v != nil {
+				payload[k] = v
+			}
+		}
+	}
+	return json.Marshal(payload)
 }
 
 // resolveEventTimezone resolves the timezone and location for an event.
