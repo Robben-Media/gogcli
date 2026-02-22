@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Docs: `gog docs create` now uses Docs API `documents.create`, returns full document metadata (including `revisionId`), and still supports `--parent` via Drive move.
+- APIs: add Google BigQuery, Analytics (GA4), Search Console, Tag Manager, YouTube Data API v3, and Business Profile command groups.
+- Gmail: add `gog gmail trash` and `gog gmail labels delete`.
+- Sheets: add batch operations (`batch-get`, `batch-update`) and sheet tab management commands.
+- Docs: add content editing commands (`write`, `insert`, `replace`, `update`, `delete-range`, `format`, `insert-table`, `insert-image`, `bullets`, `tabs`).
+
+### Fixed
+
+- Calendar: fix recurrence rules with BYDAY parameter (e.g., `BYDAY=MO,TU,WE,TH,FR`). (#120)
+- Docs: improve create-with-parent failure errors to include created document ID and target parent when move fails.
+
 ## 0.9.0 - 2026-01-22
 
 ### Highlights

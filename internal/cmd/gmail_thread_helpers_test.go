@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"golang.org/x/text/encoding/japanese"
 	"google.golang.org/api/gmail/v1"
 )
 
@@ -153,6 +154,41 @@ func TestFindPartBody_DecodesQuotedPrintable(t *testing.T) {
 	}
 }
 
+func TestFindPartBody_SkipsQuotedPrintableWhenAlreadyDecoded(t *testing.T) {
+	body := "https://example.com/auth?token_hash=abc123&type=magiclink"
+	encoded := base64.RawURLEncoding.EncodeToString([]byte(body))
+	part := &gmail.MessagePart{
+		MimeType: "text/plain",
+		Headers: []*gmail.MessagePartHeader{
+			{Name: "Content-Transfer-Encoding", Value: "quoted-printable"},
+			{Name: "Content-Type", Value: "text/plain; charset=utf-8"},
+		},
+		Body: &gmail.MessagePartBody{Data: encoded},
+	}
+	got := findPartBody(part, "text/plain")
+	if got != body {
+		t.Fatalf("unexpected decoded body: %q", got)
+	}
+}
+
+func TestFindPartBody_DecodesQuotedPrintableEquals(t *testing.T) {
+	// In QP encoding, = is encoded as =3D, so "a=b" becomes "a=3Db"
+	qp := "a=3Db"
+	encoded := base64.RawURLEncoding.EncodeToString([]byte(qp))
+	part := &gmail.MessagePart{
+		MimeType: "text/plain",
+		Headers: []*gmail.MessagePartHeader{
+			{Name: "Content-Transfer-Encoding", Value: "quoted-printable"},
+			{Name: "Content-Type", Value: "text/plain; charset=utf-8"},
+		},
+		Body: &gmail.MessagePartBody{Data: encoded},
+	}
+	got := findPartBody(part, "text/plain")
+	if got != "a=b" {
+		t.Fatalf("unexpected decoded body: %q, want %q", got, "a=b")
+	}
+}
+
 func TestFindPartBody_DecodesBase64Transfer(t *testing.T) {
 	inner := base64.StdEncoding.EncodeToString([]byte("plain body"))
 	encoded := base64.RawURLEncoding.EncodeToString([]byte(inner))
@@ -183,6 +219,63 @@ func TestDecodeBodyCharset_ISO88591(t *testing.T) {
 	got := decodeBodyCharset(input, "text/plain; charset=iso-8859-1")
 	if string(got) != "café" {
 		t.Fatalf("unexpected decoded charset: %q", string(got))
+	}
+}
+
+func TestDecodeBodyCharset_ISO2022JP(t *testing.T) {
+	source := "\u65e5\u672c\u8a9e\u30c6\u30b9\u30c8"
+	encoded, err := japanese.ISO2022JP.NewEncoder().Bytes([]byte(source))
+	if err != nil {
+		t.Fatalf("encode iso-2022-jp: %v", err)
+	}
+	got := decodeBodyCharset(encoded, "text/plain; charset=iso-2022-jp")
+	if string(got) != source {
+		t.Fatalf("unexpected decoded charset: %q", string(got))
+	}
+}
+
+func TestDecodeBodyCharset_ISO2022JP_MixedASCIIAndJapanese(t *testing.T) {
+	// Test mixed ASCII and Japanese text (e.g., "Hello こんにちは World")
+	source := "Hello \u3053\u3093\u306b\u3061\u306f World"
+	encoded, err := japanese.ISO2022JP.NewEncoder().Bytes([]byte(source))
+	if err != nil {
+		t.Fatalf("encode iso-2022-jp: %v", err)
+	}
+	got := decodeBodyCharset(encoded, "text/plain; charset=iso-2022-jp")
+	if string(got) != source {
+		t.Fatalf("unexpected decoded charset: expected %q, got %q", source, string(got))
+	}
+}
+
+func TestDecodeBodyCharset_ISO2022JP_EmptyContent(t *testing.T) {
+	// Test empty content with ISO-2022-JP charset header
+	got := decodeBodyCharset([]byte{}, "text/plain; charset=iso-2022-jp")
+	if len(got) != 0 {
+		t.Fatalf("expected empty result for empty input, got %q", string(got))
+	}
+}
+
+func TestDecodeBodyCharset_ISO2022JP_MalformedSequence(t *testing.T) {
+	// Test malformed ISO-2022-JP sequences - should gracefully return original data
+	// ISO-2022-JP uses escape sequences like ESC $ B for switching to JIS X 0208
+	// This creates an invalid sequence: starts escape but doesn't complete properly
+	malformed := []byte{0x1b, 0x24, 0x42, 0xff, 0xfe, 0x1b, 0x28, 0x42} // ESC $ B + invalid bytes + ESC ( B
+	got := decodeBodyCharset(malformed, "text/plain; charset=iso-2022-jp")
+	// The decoder should either return the original malformed data or a decoded version
+	// (graceful degradation means it shouldn't panic or error)
+	if got == nil {
+		t.Fatalf("expected non-nil result for malformed input")
+	}
+}
+
+func TestDecodeBodyCharset_ISO2022JP_TruncatedEscapeSequence(t *testing.T) {
+	// Test truncated escape sequence - incomplete ISO-2022-JP escape
+	// ESC $ without the final byte is incomplete
+	truncated := []byte{0x1b, 0x24}
+	got := decodeBodyCharset(truncated, "text/plain; charset=iso-2022-jp")
+	// Should gracefully handle and return something (original or partial decode)
+	if got == nil {
+		t.Fatalf("expected non-nil result for truncated escape sequence")
 	}
 }
 

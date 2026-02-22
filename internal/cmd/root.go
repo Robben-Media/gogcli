@@ -21,6 +21,8 @@ import (
 const (
 	colorAuto  = "auto"
 	colorNever = "never"
+	boolTrue   = "true"
+	boolFalse  = "false"
 )
 
 type RootFlags struct {
@@ -40,25 +42,31 @@ type CLI struct {
 
 	Version kong.VersionFlag `help:"Print version and exit"`
 
-	Auth       AuthCmd               `cmd:"" help:"Auth and credentials"`
-	Groups     GroupsCmd             `cmd:"" help:"Google Groups"`
-	Drive      DriveCmd              `cmd:"" help:"Google Drive"`
-	Docs       DocsCmd               `cmd:"" help:"Google Docs (export via Drive)"`
-	Slides     SlidesCmd             `cmd:"" help:"Google Slides"`
-	Calendar   CalendarCmd           `cmd:"" help:"Google Calendar"`
-	Classroom  ClassroomCmd          `cmd:"" help:"Google Classroom"`
-	Time       TimeCmd               `cmd:"" help:"Local time utilities"`
-	Gmail      GmailCmd              `cmd:"" aliases:"mail,email" help:"Gmail"`
-	Chat       ChatCmd               `cmd:"" help:"Google Chat"`
-	Contacts   ContactsCmd           `cmd:"" help:"Google Contacts"`
-	Tasks      TasksCmd              `cmd:"" help:"Google Tasks"`
-	People     PeopleCmd             `cmd:"" help:"Google People"`
-	Keep       KeepCmd               `cmd:"" help:"Google Keep (Workspace only)"`
-	Sheets     SheetsCmd             `cmd:"" help:"Google Sheets"`
-	Config     ConfigCmd             `cmd:"" help:"Manage configuration"`
-	VersionCmd VersionCmd            `cmd:"" name:"version" help:"Print version"`
-	Completion CompletionCmd         `cmd:"" help:"Generate shell completion scripts"`
-	Complete   CompletionInternalCmd `cmd:"" name:"__complete" hidden:"" help:"Internal completion helper"`
+	Auth            AuthCmd               `cmd:"" help:"Auth and credentials"`
+	Groups          GroupsCmd             `cmd:"" help:"Google Groups"`
+	Drive           DriveCmd              `cmd:"" help:"Google Drive"`
+	Docs            DocsCmd               `cmd:"" help:"Google Docs (export via Drive)"`
+	Slides          SlidesCmd             `cmd:"" help:"Google Slides"`
+	Calendar        CalendarCmd           `cmd:"" help:"Google Calendar"`
+	Classroom       ClassroomCmd          `cmd:"" help:"Google Classroom"`
+	Time            TimeCmd               `cmd:"" help:"Local time utilities"`
+	Gmail           GmailCmd              `cmd:"" aliases:"mail,email" help:"Gmail"`
+	Chat            ChatCmd               `cmd:"" help:"Google Chat"`
+	Contacts        ContactsCmd           `cmd:"" help:"Google Contacts"`
+	Tasks           TasksCmd              `cmd:"" help:"Google Tasks"`
+	People          PeopleCmd             `cmd:"" help:"Google People"`
+	Keep            KeepCmd               `cmd:"" help:"Google Keep (Workspace only)"`
+	Sheets          SheetsCmd             `cmd:"" help:"Google Sheets"`
+	Youtube         YoutubeCmd            `cmd:"" aliases:"yt" help:"YouTube"`
+	Bigquery        BigqueryCmd           `cmd:"" aliases:"bq" help:"Google BigQuery"`
+	Analytics       AnalyticsCmd          `cmd:"" aliases:"ga,ga4" help:"Google Analytics (GA4)"`
+	SearchConsole   SearchConsoleCmd      `cmd:"" aliases:"gsc,sc" help:"Google Search Console"`
+	TagManager      TagManagerCmd         `cmd:"" aliases:"gtm" help:"Google Tag Manager"`
+	BusinessProfile BusinessProfileCmd    `cmd:"" aliases:"gbp,business" help:"Google Business Profile"`
+	Config          ConfigCmd             `cmd:"" help:"Manage configuration"`
+	VersionCmd      VersionCmd            `cmd:"" name:"version" help:"Print version"`
+	Completion      CompletionCmd         `cmd:"" help:"Generate shell completion scripts"`
+	Complete        CompletionInternalCmd `cmd:"" name:"__complete" hidden:"" help:"Internal completion helper"`
 }
 
 type exitPanic struct{ code int }
@@ -163,9 +171,9 @@ func envOr(key, fallback string) string {
 
 func boolString(v bool) string {
 	if v {
-		return "true"
+		return boolTrue
 	}
-	return "false"
+	return boolFalse
 }
 
 func newParser(description string) (*kong.Kong, *CLI, error) {
@@ -199,7 +207,7 @@ func newParser(description string) (*kong.Kong, *CLI, error) {
 }
 
 func baseDescription() string {
-	return "Google CLI for Gmail/Calendar/Chat/Classroom/Drive/Contacts/Tasks/Sheets/Docs/Slides/People"
+	return "Google CLI for Gmail/Calendar/Chat/Classroom/Drive/Contacts/Tasks/Sheets/Docs/Slides/People/YouTube/BigQuery/Analytics/SearchConsole/TagManager/BusinessProfile"
 }
 
 func helpDescription() string {

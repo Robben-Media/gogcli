@@ -485,6 +485,7 @@ type AuthAddCmd struct {
 	ServicesCSV  string `name:"services" help:"Services to authorize: user|all or comma-separated ${auth_services} (Keep uses service account: gog auth service-account set)" default:"user"`
 	Readonly     bool   `name:"readonly" help:"Use read-only scopes where available (still includes OIDC identity scopes)"`
 	DriveScope   string `name:"drive-scope" help:"Drive scope mode: full|readonly|file" enum:"full,readonly,file" default:"full"`
+	GmailScope   string `name:"gmail-scope" help:"Gmail scope mode: full|readonly" enum:"full,readonly" default:"full"`
 }
 
 func (c *AuthAddCmd) Run(ctx context.Context) error {
@@ -507,9 +508,16 @@ func (c *AuthAddCmd) Run(ctx context.Context) error {
 	if c.Readonly && c.DriveScope == strFile {
 		return usage("cannot combine --readonly with --drive-scope=file (file is write-capable)")
 	}
+	driveScope := strings.ToLower(strings.TrimSpace(c.DriveScope))
+	gmailScope := strings.ToLower(strings.TrimSpace(c.GmailScope))
+	disableIncludeGrantedScopes := c.Readonly ||
+		driveScope == "readonly" ||
+		driveScope == strFile ||
+		gmailScope == "readonly"
 	scopes, err := googleauth.ScopesForManageWithOptions(services, googleauth.ScopeOptions{
 		Readonly:   c.Readonly,
 		DriveScope: googleauth.DriveScopeMode(c.DriveScope),
+		GmailScope: googleauth.GmailScopeMode(c.GmailScope),
 	})
 	if err != nil {
 		return err
@@ -521,11 +529,12 @@ func (c *AuthAddCmd) Run(ctx context.Context) error {
 	}
 
 	refreshToken, err := authorizeGoogle(ctx, googleauth.AuthorizeOptions{
-		Services:     services,
-		Scopes:       scopes,
-		Manual:       c.Manual,
-		ForceConsent: c.ForceConsent,
-		Client:       client,
+		Services:                    services,
+		Scopes:                      scopes,
+		Manual:                      c.Manual,
+		ForceConsent:                c.ForceConsent,
+		DisableIncludeGrantedScopes: disableIncludeGrantedScopes,
+		Client:                      client,
 	})
 	if err != nil {
 		return err

@@ -10,18 +10,24 @@ import (
 type Service string
 
 const (
-	ServiceGmail     Service = "gmail"
-	ServiceCalendar  Service = "calendar"
-	ServiceChat      Service = "chat"
-	ServiceClassroom Service = "classroom"
-	ServiceDrive     Service = "drive"
-	ServiceDocs      Service = "docs"
-	ServiceContacts  Service = "contacts"
-	ServiceTasks     Service = "tasks"
-	ServicePeople    Service = "people"
-	ServiceSheets    Service = "sheets"
-	ServiceGroups    Service = "groups"
-	ServiceKeep      Service = "keep"
+	ServiceGmail           Service = "gmail"
+	ServiceCalendar        Service = "calendar"
+	ServiceChat            Service = "chat"
+	ServiceClassroom       Service = "classroom"
+	ServiceDrive           Service = "drive"
+	ServiceDocs            Service = "docs"
+	ServiceContacts        Service = "contacts"
+	ServiceTasks           Service = "tasks"
+	ServicePeople          Service = "people"
+	ServiceSheets          Service = "sheets"
+	ServiceGroups          Service = "groups"
+	ServiceKeep            Service = "keep"
+	ServiceYoutube         Service = "youtube"
+	ServiceBigquery        Service = "bigquery"
+	ServiceAnalytics       Service = "analytics"
+	ServiceSearchConsole   Service = "searchconsole"
+	ServiceTagManager      Service = "tagmanager"
+	ServiceBusinessProfile Service = "businessprofile"
 )
 
 const (
@@ -33,6 +39,7 @@ const (
 var (
 	errUnknownService    = errors.New("unknown service")
 	errInvalidDriveScope = errors.New("invalid drive scope")
+	errInvalidGmailScope = errors.New("invalid gmail scope")
 )
 
 type DriveScopeMode string
@@ -43,9 +50,17 @@ const (
 	DriveScopeFile     DriveScopeMode = "file"
 )
 
+type GmailScopeMode string
+
+const (
+	GmailScopeFull     GmailScopeMode = "full"
+	GmailScopeReadonly GmailScopeMode = "readonly"
+)
+
 type ScopeOptions struct {
 	Readonly   bool
 	DriveScope DriveScopeMode
+	GmailScope GmailScopeMode
 }
 
 type serviceInfo struct {
@@ -68,6 +83,12 @@ var serviceOrder = []Service{
 	ServicePeople,
 	ServiceGroups,
 	ServiceKeep,
+	ServiceYoutube,
+	ServiceBigquery,
+	ServiceAnalytics,
+	ServiceSearchConsole,
+	ServiceTagManager,
+	ServiceBusinessProfile,
 }
 
 var serviceInfoByService = map[Service]serviceInfo{
@@ -169,6 +190,42 @@ var serviceInfoByService = map[Service]serviceInfo{
 		user:   false,
 		apis:   []string{"Keep API"},
 		note:   "Workspace only; service account (domain-wide delegation)",
+	},
+	ServiceYoutube: {
+		scopes: []string{"https://www.googleapis.com/auth/youtube.readonly"},
+		user:   true,
+		apis:   []string{"YouTube Data API v3"},
+	},
+	ServiceBigquery: {
+		scopes: []string{
+			"https://www.googleapis.com/auth/bigquery",
+			"https://www.googleapis.com/auth/bigquery.readonly",
+		},
+		user: true,
+		apis: []string{"BigQuery API"},
+	},
+	ServiceAnalytics: {
+		scopes: []string{"https://www.googleapis.com/auth/analytics.readonly"},
+		user:   true,
+		apis:   []string{"Analytics Data API", "Analytics Admin API"},
+	},
+	ServiceSearchConsole: {
+		scopes: []string{
+			"https://www.googleapis.com/auth/webmasters.readonly",
+			"https://www.googleapis.com/auth/webmasters",
+		},
+		user: true,
+		apis: []string{"Search Console API"},
+	},
+	ServiceTagManager: {
+		scopes: []string{"https://www.googleapis.com/auth/tagmanager.readonly"},
+		user:   true,
+		apis:   []string{"Tag Manager API v2"},
+	},
+	ServiceBusinessProfile: {
+		scopes: []string{"https://www.googleapis.com/auth/business.manage"},
+		user:   true,
+		apis:   []string{"Business Information API", "Business Account Management API"},
 	},
 }
 
@@ -367,6 +424,13 @@ func scopesForServiceWithOptions(service Service, opts ScopeOptions) ([]string, 
 		return nil, fmt.Errorf("%w %q (expected full|readonly|file)", errInvalidDriveScope, opts.DriveScope)
 	}
 
+	gmailScope := strings.TrimSpace(string(opts.GmailScope))
+	switch gmailScope {
+	case "", string(GmailScopeFull), string(GmailScopeReadonly):
+	default:
+		return nil, fmt.Errorf("%w %q (expected full|readonly)", errInvalidGmailScope, opts.GmailScope)
+	}
+
 	driveScopeValue := func() string {
 		if opts.Readonly {
 			return "https://www.googleapis.com/auth/drive.readonly"
@@ -384,7 +448,7 @@ func scopesForServiceWithOptions(service Service, opts ScopeOptions) ([]string, 
 
 	switch service {
 	case ServiceGmail:
-		if opts.Readonly {
+		if opts.Readonly || opts.GmailScope == GmailScopeReadonly {
 			return []string{"https://www.googleapis.com/auth/gmail.readonly"}, nil
 		}
 
@@ -462,6 +526,26 @@ func scopesForServiceWithOptions(service Service, opts ScopeOptions) ([]string, 
 	case ServiceGroups:
 		return Scopes(service)
 	case ServiceKeep:
+		return Scopes(service)
+	case ServiceYoutube:
+		return Scopes(service)
+	case ServiceBigquery:
+		if opts.Readonly {
+			return []string{"https://www.googleapis.com/auth/bigquery.readonly"}, nil
+		}
+
+		return Scopes(service)
+	case ServiceAnalytics:
+		return Scopes(service)
+	case ServiceSearchConsole:
+		if opts.Readonly {
+			return []string{"https://www.googleapis.com/auth/webmasters.readonly"}, nil
+		}
+
+		return Scopes(service)
+	case ServiceTagManager:
+		return Scopes(service)
+	case ServiceBusinessProfile:
 		return Scopes(service)
 	default:
 		return nil, errUnknownService

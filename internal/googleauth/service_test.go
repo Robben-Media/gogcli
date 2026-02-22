@@ -62,7 +62,7 @@ func TestExtractCodeAndState_Errors(t *testing.T) {
 
 func TestAllServices(t *testing.T) {
 	svcs := AllServices()
-	if len(svcs) != 12 {
+	if len(svcs) != 18 {
 		t.Fatalf("unexpected: %v", svcs)
 	}
 	seen := make(map[Service]bool)
@@ -71,7 +71,7 @@ func TestAllServices(t *testing.T) {
 		seen[s] = true
 	}
 
-	for _, want := range []Service{ServiceGmail, ServiceCalendar, ServiceChat, ServiceClassroom, ServiceDrive, ServiceDocs, ServiceContacts, ServiceTasks, ServicePeople, ServiceSheets, ServiceGroups, ServiceKeep} {
+	for _, want := range []Service{ServiceGmail, ServiceCalendar, ServiceChat, ServiceClassroom, ServiceDrive, ServiceDocs, ServiceContacts, ServiceTasks, ServicePeople, ServiceSheets, ServiceGroups, ServiceKeep, ServiceYoutube, ServiceBigquery, ServiceAnalytics, ServiceSearchConsole, ServiceTagManager, ServiceBusinessProfile} {
 		if !seen[want] {
 			t.Fatalf("missing %q", want)
 		}
@@ -80,7 +80,7 @@ func TestAllServices(t *testing.T) {
 
 func TestUserServices(t *testing.T) {
 	svcs := UserServices()
-	if len(svcs) != 10 {
+	if len(svcs) != 16 {
 		t.Fatalf("unexpected: %v", svcs)
 	}
 
@@ -101,7 +101,7 @@ func TestUserServices(t *testing.T) {
 }
 
 func TestUserServiceCSV(t *testing.T) {
-	want := "gmail,calendar,chat,classroom,drive,docs,contacts,tasks,sheets,people"
+	want := "gmail,calendar,chat,classroom,drive,docs,contacts,tasks,sheets,people,youtube,bigquery,analytics,searchconsole,tagmanager,businessprofile"
 	if got := UserServiceCSV(); got != want {
 		t.Fatalf("unexpected user services csv: %q", got)
 	}
@@ -260,6 +260,33 @@ func TestScopesForManageWithOptions_Readonly(t *testing.T) {
 		if containsScope(scopes, nw) {
 			t.Fatalf("unexpected %q in %v", nw, scopes)
 		}
+	}
+}
+
+func TestScopesForManageWithOptions_GmailScopeReadonly(t *testing.T) {
+	scopes, err := ScopesForManageWithOptions([]Service{ServiceGmail, ServiceDrive}, ScopeOptions{
+		GmailScope: GmailScopeReadonly,
+	})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	if !containsScope(scopes, "https://www.googleapis.com/auth/gmail.readonly") {
+		t.Fatalf("missing gmail.readonly in %v", scopes)
+	}
+
+	for _, nw := range []string{
+		"https://www.googleapis.com/auth/gmail.modify",
+		"https://www.googleapis.com/auth/gmail.settings.basic",
+		"https://www.googleapis.com/auth/gmail.settings.sharing",
+	} {
+		if containsScope(scopes, nw) {
+			t.Fatalf("unexpected %q in %v", nw, scopes)
+		}
+	}
+
+	if !containsScope(scopes, "https://www.googleapis.com/auth/drive") {
+		t.Fatalf("missing drive in %v", scopes)
 	}
 }
 

@@ -33,6 +33,20 @@ func TestExecute_DocsSlidesSheets_CopyCreateInfoCat_JSON(t *testing.T) {
 		path := r.URL.Path
 		drivePath := strings.TrimPrefix(path, "/drive/v3")
 		switch {
+		case path == "/v1/documents" && r.Method == http.MethodPost:
+			// Docs API documents.create
+			atomic.AddInt32(&createCalls, 1)
+			var req map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			title, _ := req["title"].(string)
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"documentId": "doc-created",
+				"title":      title,
+				"revisionId": "rev1",
+				"body":       map[string]any{"content": []any{}},
+			})
+			return
 		case r.Method == http.MethodGet && strings.HasPrefix(path, "/v1/documents/"):
 			id := strings.TrimPrefix(path, "/v1/documents/")
 			w.Header().Set("Content-Type", "application/json")

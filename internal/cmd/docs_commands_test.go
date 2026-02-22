@@ -39,6 +39,16 @@ func TestDocsCreateCopyCat_JSON(t *testing.T) {
 		path := r.URL.Path
 		drivePath := strings.TrimPrefix(path, "/drive/v3")
 		switch {
+		case path == "/v1/documents" && r.Method == http.MethodPost:
+			// Docs API documents.create
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"documentId": "doc1",
+				"title":      "Doc",
+				"revisionId": "rev1",
+				"body":       map[string]any{"content": []any{}},
+			})
+			return
 		case strings.HasPrefix(path, "/v1/documents/") && r.Method == http.MethodGet:
 			id := strings.TrimPrefix(path, "/v1/documents/")
 			w.Header().Set("Content-Type", "application/json")
@@ -67,15 +77,6 @@ func TestDocsCreateCopyCat_JSON(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"id":       "doc1",
 				"mimeType": "application/vnd.google-apps.document",
-			})
-			return
-		case drivePath == "/files" && r.Method == http.MethodPost:
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":          "doc1",
-				"name":        "Doc",
-				"mimeType":    "application/vnd.google-apps.document",
-				"webViewLink": "http://example.com/doc1",
 			})
 			return
 		case strings.Contains(drivePath, "/files/doc1/copy") && r.Method == http.MethodPost:
@@ -122,12 +123,16 @@ func TestDocsCreateCopyCat_JSON(t *testing.T) {
 	ctx := ui.WithUI(context.Background(), u)
 	ctx = outfmt.WithMode(ctx, outfmt.Mode{JSON: true})
 
-	_ = captureStdout(t, func() {
+	out := captureStdout(t, func() {
 		cmd := &DocsCreateCmd{}
 		if err := runKong(t, cmd, []string{"Doc"}, ctx, flags); err != nil {
 			t.Fatalf("create: %v", err)
 		}
 	})
+	// Verify documents.create returns document resource
+	if !strings.Contains(out, "doc1") || !strings.Contains(out, "rev1") {
+		t.Fatalf("expected doc1 and rev1 in create output, got: %q", out)
+	}
 
 	_ = captureStdout(t, func() {
 		cmd := &DocsCopyCmd{}
@@ -136,7 +141,7 @@ func TestDocsCreateCopyCat_JSON(t *testing.T) {
 		}
 	})
 
-	out := captureStdout(t, func() {
+	out = captureStdout(t, func() {
 		cmd := &DocsCatCmd{}
 		if err := runKong(t, cmd, []string{"doc1"}, ctx, flags); err != nil {
 			t.Fatalf("cat: %v", err)
@@ -168,6 +173,16 @@ func TestDocsCreateCopyCat_Text(t *testing.T) {
 		path := r.URL.Path
 		drivePath := strings.TrimPrefix(path, "/drive/v3")
 		switch {
+		case path == "/v1/documents" && r.Method == http.MethodPost:
+			// Docs API documents.create
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"documentId": "doc1",
+				"title":      "Doc",
+				"revisionId": "rev1",
+				"body":       map[string]any{"content": []any{}},
+			})
+			return
 		case strings.HasPrefix(path, "/v1/documents/") && r.Method == http.MethodGet:
 			id := strings.TrimPrefix(path, "/v1/documents/")
 			w.Header().Set("Content-Type", "application/json")
@@ -196,15 +211,6 @@ func TestDocsCreateCopyCat_Text(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"id":       "doc1",
 				"mimeType": "application/vnd.google-apps.document",
-			})
-			return
-		case drivePath == "/files" && r.Method == http.MethodPost:
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":          "doc1",
-				"name":        "Doc",
-				"mimeType":    "application/vnd.google-apps.document",
-				"webViewLink": "http://example.com/doc1",
 			})
 			return
 		case strings.Contains(drivePath, "/files/doc1/copy") && r.Method == http.MethodPost:

@@ -626,6 +626,8 @@ gog calendar events <calendarId> --from today --to friday   # Relative dates
 gog calendar events <calendarId> --from today --to friday --weekday   # Include weekday columns
 gog calendar events <calendarId> --from 2025-01-01T00:00:00Z --to 2025-01-08T00:00:00Z
 gog calendar events --all             # Fetch events from all calendars
+gog calendar events --calendars 1,3   # Fetch events from calendar indices (see gog calendar calendars)
+gog calendar events --cal Work --cal Personal  # Fetch events from calendars by name/ID
 gog calendar event <calendarId> <eventId>
 gog calendar get <calendarId> <eventId>                     # Alias for event
 gog calendar search "meeting" --today
@@ -765,6 +767,7 @@ gog drive copy <fileId> "Copy Name"
 
 # Upload and download
 gog drive upload ./path/to/file --parent <folderId>
+gog drive upload ./path/to/report.docx --convert
 gog drive download <fileId> --out ./downloaded.bin
 gog drive download <fileId> --format pdf --out ./exported.pdf
 gog drive download <fileId> --format docx --out ./doc.docx
@@ -792,10 +795,18 @@ gog drive drives --max 100
 ```bash
 # Docs
 gog docs info <docId>
+gog docs info <docId> --tab <tabId>
 gog docs cat <docId> --max-bytes 10000
+gog docs cat <docId> --tab <tabId>
 gog docs create "My Doc"
 gog docs copy <docId> "My Doc Copy"
 gog docs export <docId> --format pdf --out ./doc.pdf
+gog docs insert <docId> --text "Hello" --index 1
+gog docs replace <docId> --match "foo" --replace "bar"
+gog docs tabs list <docId>
+gog docs tabs add <docId> "New Tab"
+gog docs tabs delete <docId> <tabId>
+gog docs update <docId> --requests-json '[{"insertText":{"text":"Hi","location":{"index":1}}}]'
 
 # Slides
 gog slides info <presentationId>

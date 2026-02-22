@@ -23,12 +23,13 @@ import (
 )
 
 type AuthorizeOptions struct {
-	Services     []Service
-	Scopes       []string
-	Manual       bool
-	ForceConsent bool
-	Timeout      time.Duration
-	Client       string
+	Services                    []Service
+	Scopes                      []string
+	Manual                      bool
+	ForceConsent                bool
+	DisableIncludeGrantedScopes bool
+	Timeout                     time.Duration
+	Client                      string
 }
 
 // postSuccessDisplaySeconds is the number of seconds the success page remains
@@ -93,7 +94,7 @@ func Authorize(ctx context.Context, opts AuthorizeOptions) (string, error) {
 			RedirectURL:  redirectURI,
 			Scopes:       opts.Scopes,
 		}
-		authURL := cfg.AuthCodeURL(state, authURLParams(opts.ForceConsent)...)
+		authURL := cfg.AuthCodeURL(state, authURLParams(opts.ForceConsent, !opts.DisableIncludeGrantedScopes)...)
 
 		fmt.Fprintln(os.Stderr, "Visit this URL to authorize:")
 		fmt.Fprintln(os.Stderr, authURL)
@@ -229,7 +230,7 @@ func Authorize(ctx context.Context, opts AuthorizeOptions) (string, error) {
 		}
 	}()
 
-	authURL := cfg.AuthCodeURL(state, authURLParams(opts.ForceConsent)...)
+	authURL := cfg.AuthCodeURL(state, authURLParams(opts.ForceConsent, !opts.DisableIncludeGrantedScopes)...)
 
 	fmt.Fprintln(os.Stderr, "Opening browser for authorization…")
 	fmt.Fprintln(os.Stderr, "If the browser doesn't open, visit this URL:")
@@ -270,11 +271,12 @@ func Authorize(ctx context.Context, opts AuthorizeOptions) (string, error) {
 	}
 }
 
-func authURLParams(forceConsent bool) []oauth2.AuthCodeOption {
-	opts := []oauth2.AuthCodeOption{
-		oauth2.AccessTypeOffline,
-		oauth2.SetAuthURLParam("include_granted_scopes", "true"),
+func authURLParams(forceConsent bool, includeGrantedScopes bool) []oauth2.AuthCodeOption {
+	opts := []oauth2.AuthCodeOption{oauth2.AccessTypeOffline}
+	if includeGrantedScopes {
+		opts = append(opts, oauth2.SetAuthURLParam("include_granted_scopes", "true"))
 	}
+
 	if forceConsent {
 		opts = append(opts, oauth2.SetAuthURLParam("prompt", "consent"))
 	}

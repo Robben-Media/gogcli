@@ -14,8 +14,10 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/net/html/charset"
+	"golang.org/x/text/encoding/ianaindex"
 	"google.golang.org/api/gmail/v1"
 
 	"github.com/steipete/gogcli/internal/config"
@@ -442,12 +444,18 @@ func decodePartBody(p *gmail.MessagePart) (string, error) {
 		return "", err
 	}
 
+	contentType := strings.TrimSpace(headerValue(p, "Content-Type"))
+	charsetLabel := charsetLabelFromContentType(contentType)
+
 	decoded := raw
 	if cte := strings.TrimSpace(headerValue(p, "Content-Transfer-Encoding")); cte != "" {
 		decoded = decodeTransferEncoding(decoded, cte)
+		if isQuotedPrintableEncoding(cte) && shouldSkipQuotedPrintable(raw, decoded, charsetLabel) {
+			decoded = raw
+		}
 	}
 
-	if contentType := strings.TrimSpace(headerValue(p, "Content-Type")); contentType != "" {
+	if contentType != "" {
 		decoded = decodeBodyCharset(decoded, contentType)
 	}
 
@@ -471,24 +479,101 @@ func decodeTransferEncoding(data []byte, encoding string) []byte {
 	return data
 }
 
+func isQuotedPrintableEncoding(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	if idx := strings.Index(value, ";"); idx != -1 {
+		value = value[:idx]
+	}
+	return strings.EqualFold(strings.TrimSpace(value), "quoted-printable")
+}
+
+// shouldSkipQuotedPrintable returns true when QP decoding should be reverted.
+// Gmail API sometimes returns body data already decoded from QP. Applying QP
+// decode again corrupts '=' characters in URLs. We detect this by checking if
+// raw was valid UTF-8 but decoded became invalid (indicating the QP decoder
+// treated literal '=' chars as escape sequences and produced invalid bytes).
+func shouldSkipQuotedPrintable(raw, decoded []byte, charsetLabel string) bool {
+	if !isUTF8Charset(charsetLabel) {
+		return false
+	}
+	if !utf8.Valid(raw) {
+		return false
+	}
+	return !utf8.Valid(decoded)
+}
+
+func isUTF8Charset(label string) bool {
+	label = strings.ToLower(strings.TrimSpace(label))
+	return label == "" || label == "utf-8" || label == "us-ascii"
+}
+
 func decodeBodyCharset(data []byte, contentType string) []byte {
-	_, params, err := mime.ParseMediaType(contentType)
-	if err != nil {
+	charsetLabel := charsetLabelFromContentType(contentType)
+	normalized := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(charsetLabel), "_", "-"))
+	if charsetLabel == "" || normalized == "utf-8" || normalized == "utf8" {
 		return data
 	}
-	charsetLabel := strings.TrimSpace(params["charset"])
-	if charsetLabel == "" || strings.EqualFold(charsetLabel, "utf-8") {
-		return data
+	if decoded, ok := decodeWithCharsetLabel(data, charsetLabel); ok {
+		return decoded
+	}
+	return data
+}
+
+func charsetLabelFromContentType(contentType string) string {
+	_, params, err := mime.ParseMediaType(contentType)
+	if err == nil {
+		if label := strings.TrimSpace(params["charset"]); label != "" {
+			return label
+		}
+	}
+	lower := strings.ToLower(contentType)
+	idx := strings.Index(lower, "charset=")
+	if idx == -1 {
+		return ""
+	}
+	label := contentType[idx+len("charset="):]
+	label = strings.TrimLeft(label, " \t")
+	if cut := strings.IndexAny(label, "; \t"); cut != -1 {
+		label = label[:cut]
+	}
+	return strings.Trim(label, "\"'")
+}
+
+func decodeWithCharsetLabel(data []byte, charsetLabel string) ([]byte, bool) {
+	label := strings.TrimSpace(charsetLabel)
+	if label == "" {
+		return nil, false
+	}
+	if decoded, ok := decodeWithEncodingIndex(data, label); ok {
+		return decoded, true
+	}
+	if strings.Contains(label, "_") {
+		alt := strings.ReplaceAll(label, "_", "-")
+		if decoded, ok := decodeWithEncodingIndex(data, alt); ok {
+			return decoded, true
+		}
+	}
+	return nil, false
+}
+
+func decodeWithEncodingIndex(data []byte, charsetLabel string) ([]byte, bool) {
+	if enc, err := ianaindex.MIME.Encoding(charsetLabel); err == nil && enc != nil {
+		if decoded, err := enc.NewDecoder().Bytes(data); err == nil {
+			return decoded, true
+		}
 	}
 	reader, err := charset.NewReaderLabel(charsetLabel, bytes.NewReader(data))
 	if err != nil {
-		return data
+		return nil, false
 	}
 	decoded, err := io.ReadAll(reader)
 	if err != nil {
-		return data
+		return nil, false
 	}
-	return decoded
+	return decoded, true
 }
 
 func looksLikeBase64(data []byte) bool {

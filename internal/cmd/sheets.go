@@ -24,15 +24,18 @@ func cleanRange(r string) string {
 }
 
 type SheetsCmd struct {
-	Get      SheetsGetCmd      `cmd:"" name:"get" help:"Get values from a range"`
-	Update   SheetsUpdateCmd   `cmd:"" name:"update" help:"Update values in a range"`
-	Append   SheetsAppendCmd   `cmd:"" name:"append" help:"Append values to a range"`
-	Clear    SheetsClearCmd    `cmd:"" name:"clear" help:"Clear values in a range"`
-	Format   SheetsFormatCmd   `cmd:"" name:"format" help:"Apply cell formatting to a range"`
-	Metadata SheetsMetadataCmd `cmd:"" name:"metadata" help:"Get spreadsheet metadata"`
-	Create   SheetsCreateCmd   `cmd:"" name:"create" help:"Create a new spreadsheet"`
-	Copy     SheetsCopyCmd     `cmd:"" name:"copy" help:"Copy a Google Sheet"`
-	Export   SheetsExportCmd   `cmd:"" name:"export" help:"Export a Google Sheet (pdf|xlsx|csv) via Drive"`
+	Get         SheetsGetCmd         `cmd:"" name:"get" help:"Get values from a range"`
+	Update      SheetsUpdateCmd      `cmd:"" name:"update" help:"Update values in a range"`
+	Append      SheetsAppendCmd      `cmd:"" name:"append" help:"Append values to a range"`
+	Clear       SheetsClearCmd       `cmd:"" name:"clear" help:"Clear values in a range"`
+	Format      SheetsFormatCmd      `cmd:"" name:"format" help:"Apply cell formatting to a range"`
+	Metadata    SheetsMetadataCmd    `cmd:"" name:"metadata" help:"Get spreadsheet metadata"`
+	Create      SheetsCreateCmd      `cmd:"" name:"create" help:"Create a new spreadsheet"`
+	Copy        SheetsCopyCmd        `cmd:"" name:"copy" help:"Copy a Google Sheet"`
+	Export      SheetsExportCmd      `cmd:"" name:"export" help:"Export a Google Sheet (pdf|xlsx|csv) via Drive"`
+	BatchGet    SheetsBatchGetCmd    `cmd:"" name:"batch-get" help:"Get values from multiple ranges"`
+	BatchUpdate SheetsBatchUpdateCmd `cmd:"" name:"batch-update" help:"Update values in multiple ranges"`
+	Sheet       SheetsSheetCmd       `cmd:"" name:"sheet" help:"Manage sheet tabs (add, delete, update)"`
 }
 
 type SheetsExportCmd struct {
