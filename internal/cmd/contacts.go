@@ -19,6 +19,7 @@ type ContactsCmd struct {
 	Create    ContactsCreateCmd    `cmd:"" name:"create" help:"Create a contact"`
 	Update    ContactsUpdateCmd    `cmd:"" name:"update" help:"Update a contact"`
 	Delete    ContactsDeleteCmd    `cmd:"" name:"delete" help:"Delete a contact"`
+	Batch     ContactsBatchCmd     `cmd:"" name:"batch" help:"Batch operations on contacts"`
 	Directory ContactsDirectoryCmd `cmd:"" name:"directory" help:"Directory contacts"`
 	Other     ContactsOtherCmd     `cmd:"" name:"other" help:"Other contacts"`
 	Groups    ContactGroupsCmd     `cmd:"" name:"groups" help:"Manage contact groups"`

@@ -12,68 +12,6 @@
   - Added comprehensive tests in `internal/cmd/docs_create_test.go`
   - Updated existing tests in `docs_commands_test.go` and `execute_docs_slides_sheets_more_test.go`
 
-### Task 2: Google Keep — Notes CRUD ✅ COMPLETED
-- Date: 2025-02-22
-- Changes:
-  - Created `internal/cmd/keep_notes_edit.go` with `KeepNotesCreateCmd` and `KeepNotesDeleteCmd`
-  - Created `internal/cmd/keep_notes_edit_test.go` with comprehensive tests
-  - Updated `internal/cmd/keep.go` to register new commands under `KeepNotesCmd` parent
-  - `notes create`: Creates text or list notes with `--body`, `--body-from-file`, or `--list-items` flags
-  - `notes delete`: Deletes notes with confirmation (uses global `--force` flag)
-  - Supports `--checked` flag for marking list items as completed
-
-### Task 3: Google Keep — Permissions batch operations ✅ COMPLETED
-- Date: 2025-02-22
-- Changes:
-  - Created `internal/cmd/keep_permissions.go` with `KeepPermissionsBatchCreateCmd` and `KeepPermissionsBatchDeleteCmd`
-  - Created `internal/cmd/keep_permissions_test.go` with comprehensive tests
-  - Updated `internal/cmd/keep.go` to register `KeepPermissionsCmd` parent
-  - `permissions batch-create`: Shares notes with multiple users (only WRITER role supported)
-  - `permissions batch-delete`: Removes sharing with confirmation (uses global `--force` flag)
-  - Supports short permission names (auto-converts to full format)
-
-### Task 4: Google Tasks — Task list management ✅ COMPLETED
-- Date: 2025-02-22
-- Changes:
-  - Created `internal/cmd/tasks_tasklists_edit.go` with 4 commands:
-    - `TasksListsGetCmd`: Retrieves a single task list by ID
-    - `TasksListsDeleteCmd`: Permanently deletes task list with all tasks (confirmDestructive)
-    - `TasksListsPatchCmd`: Partial update with flagProvided for updateMask
-    - `TasksListsUpdateCmd`: Full replace (PUT semantics)
-  - Created `internal/cmd/tasks_tasklists_edit_test.go` with comprehensive tests
-  - Updated `internal/cmd/tasks_lists.go` to register new commands under `TasksListsCmd` parent
-  - Commands available: `gog tasks lists get/delete/patch/update`
-  - Aliases: delete (rm, del), update (replace)
-
-### Task 5: Google Tasks — Task move and update ✅ COMPLETED
-- Date: 2025-02-22
-- Changes:
-  - Created `internal/cmd/tasks_edit.go` with `TasksMoveCmd` and `TasksReplaceCmd`
-  - Created `internal/cmd/tasks_edit_test.go` with comprehensive tests
-  - Updated `internal/cmd/tasks.go` to register new commands and add `patch` alias to `update`
-  - `tasks move`: Moves tasks within a list using POST with `--parent` and `--previous` flags
-  - `tasks replace`: Full PUT replace with required `--title` flag, supports `--notes`, `--status`, `--due`
-  - Existing `tasks update` now has alias `patch` to clarify its partial-update behavior
-  - All tests pass (10 new test cases)
-  - Commands available: `gog tasks move`, `gog tasks replace`
-
-## Completed Tasks Summary
-
-All Phase 1 tasks (Tasks 1-9) are now COMPLETED:
-- Task 1: Google Docs — documents.create
-- Task 2: Google Keep — Notes CRUD (notes.create, notes.delete)
-- Task 3: Google Keep — Permissions batch operations
-- Task 4: Google Tasks — Task list management
-- Task 5: Google Tasks — Task move and update
-- Task 6: Search Console — Sitemaps and URL inspection
-- Task 7: Analytics Data — Report operations
-- Task 8: Analytics Data — Audience exports
-- Task 9: Sheets — All 8 gap methods
-
-Total methods implemented: 33 methods across 9 tasks.
-
----
-
 ## Phase 2: Core APIs (145 methods, 18 tasks)
 
 ### Task 10: People — Contact groups CRUD ✅ COMPLETED
@@ -94,3 +32,33 @@ Total methods implemented: 33 methods across 9 tasks.
   - Added tests in `internal/cmd/people_group_members_test.go`
 - Methods implemented: contactGroups.members.modify (1)
 - Files created: people_group_members.go, people_group_members_test.go
+- Commit: 9ef02a3
+
+## Phase 2 PR
+- URL: https://github.com/Robben-Media/gogcli/pull/4
+
+## Task 12 - People — Batch contact operations
+### Completed: People — Batch contact operations
+- Date: 2026-02-22
+- Methods implemented: 4 (people.batchCreateContacts, .batchDeleteContacts, .batchUpdateContacts, .getBatchGet)
+- Files created/modified:
+  - Created `internal/cmd/people_batch.go` with ContactsBatchCmd and 4 subcommands
+  - Created `internal/cmd/people_batch_test.go` with comprehensive tests
+  - Modified `internal/cmd/contacts.go` to add Batch subcommand
+- Tests added: 19 test cases across 4 test functions
+- Commands:
+  - `gog contacts batch create` - create multiple contacts from JSON
+  - `gog contacts batch delete` - delete multiple contacts (requires --force or confirmation)
+  - `gog contacts batch update` - update multiple contacts from JSON map
+  - `gog contacts batch get` - retrieve multiple contacts by resource names
+- Features:
+  - JSON input via `--contacts-json` or `--contacts-file` flags
+  - `@filepath` and `-` (stdin) support for file input
+  - Automatic normalization of resource names (adds "people/" prefix if needed)
+  - confirmDestructive for batch delete
+  - Proper read-mask and update-mask defaults
+- Learnings: Use different variable names to avoid shadow warnings in nested error handling
+---
+
+## Next Steps
+- Continue with Task 13: People — Photo management

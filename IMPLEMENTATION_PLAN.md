@@ -167,7 +167,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog contacts groups members modify --help`
 
 ### Task 12: People — Batch contact operations
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/people-gaps.md
 - **Description**: Add `gog contacts batch-create`, `batch-delete` (confirmDestructive), `batch-update`, and `batch-get`. Batch create/update accept `--contacts-json` with `@filepath` support.
