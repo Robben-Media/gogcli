@@ -170,41 +170,61 @@ func (c *DocsCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("empty title")
 	}
 
-	svc, err := newDriveService(ctx, account)
+	// Use Docs API documents.create method
+	docSvc, err := newDocsService(ctx, account)
 	if err != nil {
 		return err
 	}
 
-	f := &drive.File{
-		Name:     title,
-		MimeType: "application/vnd.google-apps.document",
-	}
-	parent := strings.TrimSpace(c.Parent)
-	if parent != "" {
-		f.Parents = []string{parent}
-	}
-
-	created, err := svc.Files.Create(f).
-		SupportsAllDrives(true).
-		Fields("id, name, mimeType, webViewLink").
-		Context(ctx).
-		Do()
+	doc, err := docSvc.Documents.Create(&docs.Document{Title: title}).Context(ctx).Do()
 	if err != nil {
 		return err
 	}
-	if created == nil {
+	if doc == nil {
 		return errors.New("create failed")
 	}
 
-	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{strFile: created})
+	// If parent folder specified, move the file via Drive API
+	parent := strings.TrimSpace(c.Parent)
+	if parent != "" {
+		driveSvc, err := newDriveService(ctx, account)
+		if err != nil {
+			return err
+		}
+		_, err = driveSvc.Files.Update(doc.DocumentId, &drive.File{}).
+			AddParents(parent).
+			SupportsAllDrives(true).
+			Fields("id").
+			Context(ctx).
+			Do()
+		if err != nil {
+			return err
+		}
 	}
 
-	u.Out().Printf("id\t%s", created.Id)
-	u.Out().Printf("name\t%s", created.Name)
-	u.Out().Printf("mime\t%s", created.MimeType)
-	if created.WebViewLink != "" {
-		u.Out().Printf("link\t%s", created.WebViewLink)
+	if outfmt.IsJSON(ctx) {
+		file := map[string]any{
+			"id":       doc.DocumentId,
+			"name":     doc.Title,
+			"mimeType": driveMimeGoogleDoc,
+		}
+		if link := docsWebViewLink(doc.DocumentId, ""); link != "" {
+			file["webViewLink"] = link
+		}
+		return outfmt.WriteJSON(os.Stdout, map[string]any{
+			strFile:    file,
+			"document": doc,
+		})
+	}
+
+	u.Out().Printf("id\t%s", doc.DocumentId)
+	u.Out().Printf("name\t%s", doc.Title)
+	u.Out().Printf("mime\t%s", driveMimeGoogleDoc)
+	if link := docsWebViewLink(doc.DocumentId, ""); link != "" {
+		u.Out().Printf("link\t%s", link)
+	}
+	if doc.RevisionId != "" {
+		u.Out().Printf("revision\t%s", doc.RevisionId)
 	}
 	return nil
 }
