@@ -100,15 +100,16 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog gsc sitemaps list --help`
 
 ### Task 7: Analytics Data — Report operations
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/analyticsdata-gaps.md
-- **Description**: Add report commands: `gog analytics data run-report`, `gog analytics data run-realtime-report`, `gog analytics data run-pivot-report`, `gog analytics data batch-run-reports`, `gog analytics data batch-run-pivot-reports`. These accept complex JSON request bodies via `--request-json` flag.
+- **Description**: Add report commands: `gog analytics pivot-report`, `gog analytics batch-reports`, `gog analytics batch-pivot-reports`, `gog analytics check-compatibility`. These accept complex JSON request bodies via `--pivots-json`, `--requests-json`, or `--filter-json` flags. All support `@filepath` syntax for reading JSON from files.
 - **Files**:
-  - `internal/cmd/analyticsdata_reports.go` — create
-  - `internal/cmd/analyticsdata_reports_test.go` — create
-- **Methods**: properties.runReport, properties.runRealtimeReport, properties.runPivotReport, properties.batchRunReports, properties.batchRunPivotReports (5)
-- **Verification**: `make ci` passes, `gog analytics data run-report --help`
+  - `internal/cmd/analytics_reports.go` — created
+  - `internal/cmd/analytics_reports_test.go` — created
+  - `internal/cmd/analytics.go` — modified (added new commands to AnalyticsCmd struct)
+- **Methods**: properties.runPivotReport, properties.batchRunReports, properties.batchRunPivotReports, properties.checkCompatibility (4)
+- **Verification**: `make ci` passes, `gog analytics pivot-report --help`, `gog analytics batch-reports --help`
 
 ### Task 8: Analytics Data — Audience exports
 - **Status**: pending

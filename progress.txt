@@ -58,7 +58,7 @@
   - Commands available: `gog tasks move`, `gog tasks replace`
 
 ## Next Steps
-- Continue with Task 7: Analytics Data — Report operations
+- Continue with Task 8: Analytics Data — Audience exports
 
 ---
 
@@ -82,4 +82,26 @@
   - Restructured command hierarchy: `sites list` instead of `sites`, `sitemaps list` instead of `sitemaps`
   - Added `mobile-friendly-test` command with JSON and text output
   - Delete commands use `confirmDestructive()` with `--force` flag support
+
+---
+
+## Task 7 - 2025-02-22
+### Completed: Analytics Data — Report operations
+- Methods implemented: 4
+  - `properties.runPivotReport` - Run a pivot report with pivoted dimensions
+  - `properties.batchRunReports` - Run up to 5 reports in a single batch request
+  - `properties.batchRunPivotReports` - Run up to 5 pivot reports in a single batch
+  - `properties.checkCompatibility` - Check if dimension/metric combinations are compatible
+- Files created/modified:
+  - `internal/cmd/analytics_reports.go` — created (4 new command structs)
+  - `internal/cmd/analytics_reports_test.go` — created (13 new tests)
+  - `internal/cmd/analytics.go` — modified (added 4 new commands to AnalyticsCmd)
+- Tests added: 13 new test functions
+- Key features:
+  - `pivot-report`: Requires `--pivots-json` with pivot definitions; supports `--filter-json`, `--keep-empty`, `--currency-code`
+  - `batch-reports`: Accepts `--requests-json` with array of up to 5 report requests
+  - `batch-pivot-reports`: Accepts `--requests-json` with array of up to 5 pivot report requests
+  - `check-compatibility`: Validates dimension/metric combinations; returns COMPATIBLE/INCOMPATIBLE status
+  - All JSON flags support `@filepath` syntax for reading from file or `-` for stdin
+  - Helper function `readJSONFromFlag` created for reusable `@filepath` parsing
 ---
