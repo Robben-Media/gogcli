@@ -26,6 +26,13 @@ type KeepCmd struct {
 	Get        KeepGetCmd        `cmd:"" name:"get" help:"Get a note"`
 	Search     KeepSearchCmd     `cmd:"" name:"search" help:"Search notes by text (client-side)"`
 	Attachment KeepAttachmentCmd `cmd:"" name:"attachment" help:"Download an attachment"`
+	Notes      KeepNotesCmd      `cmd:"" name:"notes" help:"Create or delete notes"`
+}
+
+// KeepNotesCmd contains subcommands for note creation and deletion.
+type KeepNotesCmd struct {
+	Create KeepNotesCreateCmd `cmd:"" name:"create" help:"Create a new note (text or list)"`
+	Delete KeepNotesDeleteCmd `cmd:"" name:"delete" help:"Delete a note"`
 }
 
 type KeepListCmd struct {
