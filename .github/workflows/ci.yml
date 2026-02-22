@@ -5,8 +5,8 @@ on:
   pull_request:
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  lint:
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -17,13 +17,26 @@ jobs:
         run: make tools
       - name: Format check
         run: make fmt-check
-      - name: Test
-        run: go test ./...
       - name: Lint
         run: make lint
 
+  test:
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install tools
+        run: make tools
+      - name: Test
+        run: go test ./...
+
   worker:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    needs: lint
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -43,7 +56,8 @@ jobs:
         run: pnpm -C internal/tracking/worker test
 
   darwin-cgo-build:
-    runs-on: macos-latest
+    runs-on: blacksmith-4vcpu-macos-sonoma
+    needs: lint
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
