@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/alecthomas/kong"
 	"google.golang.org/api/gmail/v1"
 
 	"github.com/steipete/gogcli/internal/outfmt"
@@ -17,6 +18,8 @@ type GmailLabelsCmd struct {
 	Get    GmailLabelsGetCmd    `cmd:"" name:"get" help:"Get label details (including counts)"`
 	Create GmailLabelsCreateCmd `cmd:"" name:"create" help:"Create a new label"`
 	Delete GmailLabelsDeleteCmd `cmd:"" name:"delete" help:"Delete a label"`
+	Patch  GmailLabelsPatchCmd  `cmd:"" name:"patch" help:"Patch a label (partial update)"`
+	Update GmailLabelsUpdateCmd `cmd:"" name:"update" help:"Update a label (full replace)"`
 	Modify GmailLabelsModifyCmd `cmd:"" name:"modify" help:"Modify labels on threads"`
 }
 
@@ -269,6 +272,158 @@ func (c *GmailLabelsDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	u.Err().Printf("Label %q deleted", raw)
+	return nil
+}
+
+// GmailLabelsPatchCmd performs a partial update of a label.
+// Only fields explicitly provided via flags are updated.
+type GmailLabelsPatchCmd struct {
+	Label                 string `arg:"" name:"labelIdOrName" help:"Label ID or name to patch"`
+	Name                  string `name:"name" help:"New label name"`
+	LabelListVisibility   string `name:"label-list-visibility" help:"Visibility in label list (labelShow, labelHide, labelShowIfUnread)"`
+	MessageListVisibility string `name:"message-list-visibility" help:"Visibility in message list (show, hide)"`
+}
+
+func (c *GmailLabelsPatchCmd) Run(ctx context.Context, kctx *kong.Context, flags *RootFlags) error {
+	u := ui.FromContext(ctx)
+	account, err := requireAccount(flags)
+	if err != nil {
+		return err
+	}
+	raw := strings.TrimSpace(c.Label)
+	if raw == "" {
+		return usage("empty label")
+	}
+
+	// Build label with only provided fields - check this BEFORE making any API calls
+	label := &gmail.Label{}
+	hasUpdates := false
+
+	if flagProvided(kctx, "name") {
+		label.Name = strings.TrimSpace(c.Name)
+		hasUpdates = true
+	}
+	if flagProvided(kctx, "label-list-visibility") {
+		// Validate visibility values
+		validLabelVis := map[string]bool{"labelShow": true, "labelHide": true, "labelShowIfUnread": true}
+		if !validLabelVis[c.LabelListVisibility] {
+			return usage("invalid --label-list-visibility: must be labelShow, labelHide, or labelShowIfUnread")
+		}
+		label.LabelListVisibility = c.LabelListVisibility
+		hasUpdates = true
+	}
+	if flagProvided(kctx, "message-list-visibility") {
+		// Validate visibility values
+		validMsgVis := map[string]bool{"show": true, "hide": true}
+		if !validMsgVis[c.MessageListVisibility] {
+			return usage("invalid --message-list-visibility: must be show or hide")
+		}
+		label.MessageListVisibility = c.MessageListVisibility
+		hasUpdates = true
+	}
+
+	if !hasUpdates {
+		return usage("no updates provided; use --name, --label-list-visibility, or --message-list-visibility")
+	}
+
+	svc, err := newGmailService(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	// Resolve name to ID if needed
+	idMap, err := fetchLabelNameToID(svc)
+	if err != nil {
+		return err
+	}
+	id := raw
+	if v, ok := idMap[strings.ToLower(raw)]; ok {
+		id = v
+	}
+
+	updated, err := svc.Users.Labels.Patch("me", id, label).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("patch label: %w", err)
+	}
+
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(os.Stdout, map[string]any{"label": updated})
+	}
+
+	u.Out().Printf("id\t%s", updated.Id)
+	u.Out().Printf("name\t%s", updated.Name)
+	if updated.LabelListVisibility != "" {
+		u.Out().Printf("label_list_visibility\t%s", updated.LabelListVisibility)
+	}
+	if updated.MessageListVisibility != "" {
+		u.Out().Printf("message_list_visibility\t%s", updated.MessageListVisibility)
+	}
+	return nil
+}
+
+// GmailLabelsUpdateCmd performs a full replacement of a label.
+// All fields are updated to the provided values (or cleared if not provided).
+type GmailLabelsUpdateCmd struct {
+	Label                 string `arg:"" name:"labelIdOrName" help:"Label ID or name to update"`
+	Name                  string `name:"name" required:"" help:"Label name"`
+	LabelListVisibility   string `name:"label-list-visibility" help:"Visibility in label list (labelShow, labelHide, labelShowIfUnread)" enum:"labelShow,labelHide,labelShowIfUnread" default:"labelShow"`
+	MessageListVisibility string `name:"message-list-visibility" help:"Visibility in message list (show, hide)" enum:"show,hide" default:"show"`
+}
+
+func (c *GmailLabelsUpdateCmd) Run(ctx context.Context, flags *RootFlags) error {
+	u := ui.FromContext(ctx)
+	account, err := requireAccount(flags)
+	if err != nil {
+		return err
+	}
+	raw := strings.TrimSpace(c.Label)
+	if raw == "" {
+		return usage("empty label")
+	}
+
+	name := strings.TrimSpace(c.Name)
+	if name == "" {
+		return usage("label name is required")
+	}
+
+	svc, err := newGmailService(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	// Resolve name to ID if needed
+	idMap, err := fetchLabelNameToID(svc)
+	if err != nil {
+		return err
+	}
+	id := raw
+	if v, ok := idMap[strings.ToLower(raw)]; ok {
+		id = v
+	}
+
+	label := &gmail.Label{
+		Name:                  name,
+		LabelListVisibility:   c.LabelListVisibility,
+		MessageListVisibility: c.MessageListVisibility,
+	}
+
+	updated, err := svc.Users.Labels.Update("me", id, label).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("update label: %w", err)
+	}
+
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(os.Stdout, map[string]any{"label": updated})
+	}
+
+	u.Out().Printf("id\t%s", updated.Id)
+	u.Out().Printf("name\t%s", updated.Name)
+	if updated.LabelListVisibility != "" {
+		u.Out().Printf("label_list_visibility\t%s", updated.LabelListVisibility)
+	}
+	if updated.MessageListVisibility != "" {
+		u.Out().Printf("message_list_visibility\t%s", updated.MessageListVisibility)
+	}
 	return nil
 }
 

@@ -81,5 +81,27 @@
 - Learnings: Use `io.ReadAll(os.Stdin)` instead of `os.Stdin.ReadAll()` - os.File doesn't have ReadAll method
 ---
 
+## Task 14 - Gmail — Labels management
+### Completed: Gmail — Labels management
+- Date: 2026-02-22
+- Methods implemented: 2 (labels.patch, labels.update)
+- Files created/modified:
+  - Modified `internal/cmd/gmail_labels.go` to add GmailLabelsPatchCmd and GmailLabelsUpdateCmd
+  - Created `internal/cmd/gmail_labels_edit_test.go` with comprehensive tests
+- Tests added: 18 test cases across multiple test functions
+- Commands:
+  - `gog gmail labels patch` - partial update of a label (only provided fields updated)
+  - `gog gmail labels update` - full replacement of a label (all fields updated)
+- Features:
+  - Patch uses `flagProvided()` pattern to only send explicitly-set fields
+  - Visibility validation (labelListVisibility, messageListVisibility)
+  - Name-to-ID resolution for label argument
+  - JSON and text output formats
+- Learnings: 
+  - Kong enum constraints require either required flag or default value
+  - Validate input BEFORE making API calls (e.g., check for updates before resolving label name)
+  - Reorder validation to avoid unnecessary API calls
+---
+
 ## Next Steps
-- Continue with Task 14: Gmail — Labels management
+- Continue with Task 15: Gmail — Threads and history

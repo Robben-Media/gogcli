@@ -189,7 +189,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog contacts update-photo --help`
 
 ### Task 14: Gmail — Labels management
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/gmail-gaps.md
 - **Description**: Add `gog gmail labels create/delete/patch/update`. Delete requires confirmDestructive. Patch uses flagProvided. Update is full replace.
