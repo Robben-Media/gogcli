@@ -58,7 +58,7 @@
   - Commands available: `gog tasks move`, `gog tasks replace`
 
 ## Next Steps
-- Continue with Task 8: Analytics Data — Audience exports
+- Continue with Task 9: Sheets — All 8 gap methods
 
 ---
 
@@ -104,4 +104,25 @@
   - `check-compatibility`: Validates dimension/metric combinations; returns COMPATIBLE/INCOMPATIBLE status
   - All JSON flags support `@filepath` syntax for reading from file or `-` for stdin
   - Helper function `readJSONFromFlag` created for reusable `@filepath` parsing
+
+---
+
+## Task 8 - 2025-02-22
+### Completed: Analytics Data — Audience exports
+- Methods implemented: 4
+  - `properties.audienceExports.create` - Create a new audience export (returns long-running operation)
+  - `properties.audienceExports.get` - Get an audience export by name
+  - `properties.audienceExports.list` - List audience exports for a property
+  - `properties.audienceExports.query` - Query rows from a completed audience export
+- Files created/modified:
+  - `internal/cmd/analytics_audience.go` — created (4 new command structs)
+  - `internal/cmd/analytics_audience_test.go` — created (10 new tests)
+  - `internal/cmd/analytics.go` — modified (added AudienceExportsCmd)
+- Tests added: 10 new test functions
+- Key features:
+  - `create`: Returns operation name and done status; export runs asynchronously
+  - `get`: Shows export metadata including state, row count, creation time
+  - `list`: Pagination with --max and --page flags
+  - `query`: Retrieves rows from ACTIVE exports; shows dimension values
+  - Audience export states: CREATING, ACTIVE, FAILED
 ---

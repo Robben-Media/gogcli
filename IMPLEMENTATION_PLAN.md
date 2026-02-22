@@ -112,15 +112,16 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog analytics pivot-report --help`, `gog analytics batch-reports --help`
 
 ### Task 8: Analytics Data — Audience exports
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/analyticsdata-gaps.md
-- **Description**: Add audience export commands: `gog analytics data audience-exports create/get/list/query`. Create returns an operation; query returns exported user data.
+- **Description**: Add audience export commands: `gog analytics audience-exports create/get/list/query`. Create returns a long-running operation; query returns exported user data.
 - **Files**:
-  - `internal/cmd/analyticsdata_audience.go` — create
-  - `internal/cmd/analyticsdata_audience_test.go` — create
-- **Methods**: properties.audienceExports.create, .get, .list, .query (3 — verify exact count from spec)
-- **Verification**: `make ci` passes, `gog analytics data audience-exports list --help`
+  - `internal/cmd/analytics_audience.go` — created
+  - `internal/cmd/analytics_audience_test.go` — created
+  - `internal/cmd/analytics.go` — modified (added AudienceExports command)
+- **Methods**: properties.audienceExports.create, .get, .list, .query (4)
+- **Verification**: `make ci` passes, `gog analytics audience-exports list --help`
 
 ### Task 9: Sheets — All 8 gap methods
 - **Status**: pending
