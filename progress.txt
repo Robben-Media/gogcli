@@ -58,4 +58,28 @@
   - Commands available: `gog tasks move`, `gog tasks replace`
 
 ## Next Steps
-- Continue with Task 6: Search Console — Sitemaps and URL inspection
+- Continue with Task 7: Analytics Data — Report operations
+
+---
+
+## Task 6 - 2026-02-22
+### Completed: Search Console — Sitemaps and URL inspection
+- Methods implemented: 6
+  - `sitemaps.get` - Get sitemap details
+  - `sitemaps.delete` - Delete sitemap from Search Console (with confirmation)
+  - `sites.get` - Get a site's details
+  - `sites.add` - Add a site to Search Console
+  - `sites.delete` - Remove a site from Search Console (with confirmation)
+  - `urlTestingTools.mobileFriendlyTest.run` - Test if a URL is mobile-friendly
+- Files created/modified:
+  - `internal/cmd/searchconsole.go` — restructured sites/sitemaps to use subcommand pattern
+  - `internal/cmd/searchconsole_sitemaps.go` — created (get/delete commands)
+  - `internal/cmd/searchconsole_sites.go` — created (get/add/delete + mobile-friendly-test)
+  - `internal/cmd/searchconsole_test.go` — updated tests for new command structure
+  - `internal/cmd/searchconsole_more_test.go` — created (9 new tests)
+- Tests added: 9 new test functions
+- Key changes:
+  - Restructured command hierarchy: `sites list` instead of `sites`, `sitemaps list` instead of `sitemaps`
+  - Added `mobile-friendly-test` command with JSON and text output
+  - Delete commands use `confirmDestructive()` with `--force` flag support
+---

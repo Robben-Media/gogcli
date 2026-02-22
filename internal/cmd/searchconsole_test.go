@@ -49,7 +49,7 @@ func TestExecute_SearchConsoleSites_JSON(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "search-console", "sites"}); err != nil {
+			if err := Execute([]string{"--json", "--account", "a@b.com", "search-console", "sites", "list"}); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
 		})
@@ -198,7 +198,7 @@ func TestExecute_SearchConsoleSitemaps_JSON(t *testing.T) {
 		_ = captureStderr(t, func() {
 			if err := Execute([]string{
 				"--json", "--account", "a@b.com",
-				"search-console", "sitemaps",
+				"search-console", "sitemaps", "list",
 				"--site-url", "https://example.com/",
 			}); err != nil {
 				t.Fatalf("Execute: %v", err)

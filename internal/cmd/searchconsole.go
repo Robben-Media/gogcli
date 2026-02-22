@@ -16,18 +16,34 @@ import (
 var newSearchConsoleService = googleapi.NewSearchConsole
 
 type SearchConsoleCmd struct {
-	Sites         SearchConsoleSitesCmd         `cmd:"" name:"sites" group:"Read" help:"List Search Console sites"`
-	Query         SearchConsoleQueryCmd         `cmd:"" name:"query" group:"Read" help:"Query search analytics data"`
-	Sitemaps      SearchConsoleSitemapsCmd      `cmd:"" name:"sitemaps" group:"Read" help:"List sitemaps for a site"`
-	SubmitSitemap SearchConsoleSubmitSitemapCmd `cmd:"" name:"submit-sitemap" group:"Write" help:"Submit a sitemap for a site"`
-	Inspect       SearchConsoleInspectCmd       `cmd:"" name:"inspect" group:"Read" help:"Inspect a URL's index status"`
+	Sites              SearchConsoleSitesCmd              `cmd:"" name:"sites" group:"Read" help:"List Search Console sites"`
+	Query              SearchConsoleQueryCmd              `cmd:"" name:"query" group:"Read" help:"Query search analytics data"`
+	Sitemaps           SearchConsoleSitemapsCmd           `cmd:"" name:"sitemaps" group:"Read" help:"List sitemaps for a site"`
+	SubmitSitemap      SearchConsoleSubmitSitemapCmd      `cmd:"" name:"submit-sitemap" group:"Write" help:"Submit a sitemap for a site"`
+	Inspect            SearchConsoleInspectCmd            `cmd:"" name:"inspect" group:"Read" help:"Inspect a URL's index status"`
+	MobileFriendlyTest SearchConsoleMobileFriendlyTestCmd `cmd:"" name:"mobile-friendly-test" group:"Read" help:"Test if a URL is mobile-friendly"`
 }
 
-// --- sites ---
+// SearchConsoleSitesCmd groups sites subcommands.
+type SearchConsoleSitesCmd struct {
+	List   SearchConsoleSitesListCmd   `cmd:"" name:"list" help:"List all sites in Search Console"`
+	Get    SearchConsoleSitesGetCmd    `cmd:"" name:"get" help:"Get a site's details"`
+	Add    SearchConsoleSitesAddCmd    `cmd:"" name:"add" help:"Add a site to Search Console"`
+	Delete SearchConsoleSitesDeleteCmd `cmd:"" name:"delete" aliases:"rm" help:"Remove a site from Search Console"`
+}
 
-type SearchConsoleSitesCmd struct{}
+// SearchConsoleSitemapsCmd groups sitemaps subcommands.
+type SearchConsoleSitemapsCmd struct {
+	List   SearchConsoleSitemapsListCmd   `cmd:"" name:"list" help:"List sitemaps for a site"`
+	Get    SearchConsoleSitemapsGetCmd    `cmd:"" name:"get" help:"Get a sitemap's details"`
+	Delete SearchConsoleSitemapsDeleteCmd `cmd:"" name:"delete" aliases:"rm" help:"Delete a sitemap from Search Console"`
+}
 
-func (c *SearchConsoleSitesCmd) Run(ctx context.Context, flags *RootFlags) error {
+// --- sites list ---
+
+type SearchConsoleSitesListCmd struct{}
+
+func (c *SearchConsoleSitesListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u := ui.FromContext(ctx)
 	account, err := requireAccount(flags)
 	if err != nil {
@@ -136,13 +152,13 @@ func (c *SearchConsoleQueryCmd) Run(ctx context.Context, flags *RootFlags) error
 	return nil
 }
 
-// --- sitemaps ---
+// --- sitemaps list ---
 
-type SearchConsoleSitemapsCmd struct {
+type SearchConsoleSitemapsListCmd struct {
 	SiteURL string `name:"site-url" required:"" help:"Site URL"`
 }
 
-func (c *SearchConsoleSitemapsCmd) Run(ctx context.Context, flags *RootFlags) error {
+func (c *SearchConsoleSitemapsListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u := ui.FromContext(ctx)
 	account, err := requireAccount(flags)
 	if err != nil {

@@ -87,7 +87,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog tasks move --help`, `gog tasks replace --help`
 
 ### Task 6: Search Console — Sitemaps and URL inspection
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/searchconsole-gaps.md
 - **Description**: Add sitemap CRUD (`gog gsc sitemaps delete/get/list/submit`) and URL inspection (`gog gsc url inspect`). The mobile-friendly test may also be in this spec. Sitemaps use the `webmasters` prefix in the API path.
