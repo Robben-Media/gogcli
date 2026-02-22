@@ -64,7 +64,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog keep permissions batch-create --help`
 
 ### Task 4: Google Tasks — Task list management
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/tasks-gaps.md
 - **Description**: Add `gog tasks tasklists delete` (confirmDestructive, warns about cascading task deletion), `gog tasks tasklists get`, `gog tasks tasklists patch` (partial with flagProvided), and `gog tasks tasklists update` (full replace with PUT).
