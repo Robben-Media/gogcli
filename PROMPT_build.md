@@ -12,10 +12,26 @@ Implement the next task from the implementation plan. You may delegate subtasks 
 
 Every iteration:
 
-1. **Pull latest changes** from remote:
+1. **Sync repo and check PR status**:
    ```bash
    git fetch origin
-   git pull origin $(git rev-parse --abbrev-ref HEAD)
+
+   # Check if current branch's PR is merged
+   CURRENT_BRANCH=$(git branch --show-current)
+   PR_STATE=$(gh pr list --head "$CURRENT_BRANCH" --repo Robben-Media/gogcli --json state --jq '.[0].state' 2>/dev/null || echo "none")
+
+   if [ "$PR_STATE" = "MERGED" ]; then
+     # PR was merged - sync from base and start new phase
+     git checkout main
+     git pull origin main
+     # Continue with next task - will create new phase branch if needed
+   elif [ "$PR_STATE" = "OPEN" ]; then
+     # PR exists - pull and continue
+     git pull origin "$CURRENT_BRANCH"
+   else
+     # No PR yet - just pull if possible
+     git pull origin "$CURRENT_BRANCH" 2>/dev/null || true
+   fi
    ```
 2. Read `IMPLEMENTATION_PLAN.md` for task status
 3. Read `AGENTS.md` for build commands, patterns, and coding conventions
