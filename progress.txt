@@ -12,5 +12,25 @@
   - Added comprehensive tests in `internal/cmd/docs_create_test.go`
   - Updated existing tests in `docs_commands_test.go` and `execute_docs_slides_sheets_more_test.go`
 
+### Task 2: Google Keep — Notes CRUD ✅ COMPLETED
+- Date: 2025-02-22
+- Changes:
+  - Created `internal/cmd/keep_notes_edit.go` with `KeepNotesCreateCmd` and `KeepNotesDeleteCmd`
+  - Created `internal/cmd/keep_notes_edit_test.go` with comprehensive tests
+  - Updated `internal/cmd/keep.go` to register new commands under `KeepNotesCmd` parent
+  - `notes create`: Creates text or list notes with `--body`, `--body-from-file`, or `--list-items` flags
+  - `notes delete`: Deletes notes with confirmation (uses global `--force` flag)
+  - Supports `--checked` flag for marking list items as completed
+
+### Task 3: Google Keep — Permissions batch operations ✅ COMPLETED
+- Date: 2025-02-22
+- Changes:
+  - Created `internal/cmd/keep_permissions.go` with `KeepPermissionsBatchCreateCmd` and `KeepPermissionsBatchDeleteCmd`
+  - Created `internal/cmd/keep_permissions_test.go` with comprehensive tests
+  - Updated `internal/cmd/keep.go` to register `KeepPermissionsCmd` parent
+  - `permissions batch-create`: Shares notes with multiple users (only WRITER role supported)
+  - `permissions batch-delete`: Removes sharing with confirmation (uses global `--force` flag)
+  - Supports short permission names (auto-converts to full format)
+
 ## Next Steps
-- Continue with Task 2: Google Keep — Notes CRUD
+- Continue with Task 4: Google Tasks — Task list management
