@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,8 @@ import (
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/ui"
 )
+
+var errUnexpectedFactoryCall = errors.New("unexpected factory call")
 
 func TestDocsCreateCmd_JSON(t *testing.T) {
 	origDocs := newDocsService
@@ -62,7 +65,7 @@ func TestDocsCreateCmd_JSON(t *testing.T) {
 		t.Fatalf("NewDocsService: %v", err)
 	}
 	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
-	newDriveService = func(context.Context, string) (*drive.Service, error) { return nil, nil }
+	newDriveService = func(context.Context, string) (*drive.Service, error) { return nil, errUnexpectedFactoryCall }
 
 	flags := &RootFlags{Account: "a@b.com"}
 	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
@@ -182,6 +185,73 @@ func TestDocsCreateCmd_WithParent(t *testing.T) {
 	}
 }
 
+func TestDocsCreateCmd_WithParentMoveFailure(t *testing.T) {
+	origDocs := newDocsService
+	origDrive := newDriveService
+	t.Cleanup(func() {
+		newDocsService = origDocs
+		newDriveService = origDrive
+	})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		switch {
+		case path == "/v1/documents" && r.Method == http.MethodPost:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"documentId": "newdoc999",
+				"title":      "Doc Move Fails",
+				"revisionId": "rev9",
+				"body":       map[string]any{"content": []any{}},
+			})
+			return
+		case strings.Contains(path, "newdoc999") && r.Method == http.MethodPatch:
+			http.Error(w, `{"error":{"message":"drive move failed"}}`, http.StatusInternalServerError)
+			return
+		default:
+			http.NotFound(w, r)
+			return
+		}
+	}))
+	defer srv.Close()
+
+	docSvc, err := docs.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewDocsService: %v", err)
+	}
+	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
+
+	driveSvc, err := drive.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/drive/v3/"),
+	)
+	if err != nil {
+		t.Fatalf("NewDriveService: %v", err)
+	}
+	newDriveService = func(context.Context, string) (*drive.Service, error) { return driveSvc, nil }
+
+	flags := &RootFlags{Account: "a@b.com"}
+	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
+	if uiErr != nil {
+		t.Fatalf("ui.New: %v", uiErr)
+	}
+	ctx := ui.WithUI(context.Background(), u)
+
+	cmd := &DocsCreateCmd{Title: "Doc Move Fails", Parent: "folder123"}
+	err = cmd.Run(ctx, flags)
+	if err == nil {
+		t.Fatal("expected error when drive move fails")
+	}
+	if !strings.Contains(err.Error(), "document created (id=newdoc999) but failed to move to parent \"folder123\"") {
+		t.Fatalf("expected contextual move-failure error, got: %v", err)
+	}
+}
+
 func TestDocsCreateCmd_EmptyTitle(t *testing.T) {
 	origDocs := newDocsService
 	origDrive := newDriveService
@@ -190,8 +260,8 @@ func TestDocsCreateCmd_EmptyTitle(t *testing.T) {
 		newDriveService = origDrive
 	})
 
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return nil, nil }
-	newDriveService = func(context.Context, string) (*drive.Service, error) { return nil, nil }
+	newDocsService = func(context.Context, string) (*docs.Service, error) { return nil, errUnexpectedFactoryCall }
+	newDriveService = func(context.Context, string) (*drive.Service, error) { return nil, errUnexpectedFactoryCall }
 
 	flags := &RootFlags{Account: "a@b.com"}
 	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
@@ -246,7 +316,7 @@ func TestDocsCreateCmd_Text(t *testing.T) {
 		t.Fatalf("NewDocsService: %v", err)
 	}
 	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
-	newDriveService = func(context.Context, string) (*drive.Service, error) { return nil, nil }
+	newDriveService = func(context.Context, string) (*drive.Service, error) { return nil, errUnexpectedFactoryCall }
 
 	flags := &RootFlags{Account: "a@b.com"}
 

@@ -198,7 +198,7 @@ func (c *DocsCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 			Context(ctx).
 			Do()
 		if err != nil {
-			return err
+			return fmt.Errorf("document created (id=%s) but failed to move to parent %q: %w", doc.DocumentId, parent, err)
 		}
 	}
 
