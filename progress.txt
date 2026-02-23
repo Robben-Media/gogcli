@@ -530,3 +530,27 @@
   - Consumer account blocking on all commands
   - JSON and text output formats
 ---
+
+## Phase 3: Business APIs
+
+## Task 29 - MyBusiness Account Management — Accounts
+### Completed: MyBusiness Account Management — Accounts
+- Date: 2026-02-23
+- Methods implemented: 3 (accounts.create, accounts.get, accounts.patch)
+- Files created/modified:
+  - Created `internal/cmd/businessprofile_accounts.go` with 4 command structs
+  - Created `internal/cmd/businessprofile_accounts_test.go` with 7 test functions
+  - Modified `internal/cmd/businessprofile.go` to restructure BusinessProfileAccountsCmd as parent with subcommands
+  - Modified `internal/cmd/businessprofile_test.go` to update command paths for new subcommand structure
+- Tests added: 7 test cases covering create (JSON+text), get (JSON+text+auto-prefix), patch (JSON+no-fields)
+- Commands available under `gog business-profile accounts`:
+  - `list` - list all accounts (moved from parent)
+  - `create` - create an account with name, type, primary owner
+  - `get` - get an account by name (auto-prefixes accounts/)
+  - `patch` - patch an account (partial update with updateMask)
+- Features:
+  - Auto-prefix: bare IDs automatically get "accounts/" prefix
+  - flagProvided pattern for patch updateMask
+  - accountName and primaryOwner fields for patch
+  - JSON and text output formats
+- Breaking change: `gog business-profile accounts` now requires subcommand (e.g. `accounts list` instead of just `accounts`)

@@ -391,7 +391,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 > Branch: `phase/3-business-apis` | PR → build branch
 
 ### Task 29: MyBusiness Account Management — Accounts
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/mybusinessaccountmanagement-gaps.md
 - **Description**: Add `gog mybusiness accounts create/get/patch`. Patch uses flagProvided for updateMask.
