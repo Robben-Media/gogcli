@@ -14,12 +14,13 @@ import (
 
 // DriveCommentsCmd is the parent command for comments subcommands
 type DriveCommentsCmd struct {
-	List   DriveCommentsListCmd   `cmd:"" name:"list" help:"List comments on a file"`
-	Get    DriveCommentsGetCmd    `cmd:"" name:"get" help:"Get a comment by ID"`
-	Create DriveCommentsCreateCmd `cmd:"" name:"create" help:"Create a comment on a file"`
-	Update DriveCommentsUpdateCmd `cmd:"" name:"update" help:"Update a comment"`
-	Delete DriveCommentsDeleteCmd `cmd:"" name:"delete" help:"Delete a comment"`
-	Reply  DriveCommentReplyCmd   `cmd:"" name:"reply" help:"Reply to a comment"`
+	List    DriveCommentsListCmd   `cmd:"" name:"list" help:"List comments on a file"`
+	Get     DriveCommentsGetCmd    `cmd:"" name:"get" help:"Get a comment by ID"`
+	Create  DriveCommentsCreateCmd `cmd:"" name:"create" help:"Create a comment on a file"`
+	Update  DriveCommentsUpdateCmd `cmd:"" name:"update" help:"Update a comment"`
+	Delete  DriveCommentsDeleteCmd `cmd:"" name:"delete" help:"Delete a comment"`
+	Reply   DriveCommentReplyCmd   `cmd:"" name:"reply" help:"Reply to a comment (shortcut for 'replies create')"`
+	Replies DriveCommentRepliesCmd `cmd:"" name:"replies" help:"Manage replies to comments"`
 }
 
 type DriveCommentsListCmd struct {
@@ -381,6 +382,310 @@ func (c *DriveCommentReplyCmd) Run(ctx context.Context, flags *RootFlags) error 
 	u.Out().Printf("id\t%s", created.Id)
 	u.Out().Printf("content\t%s", created.Content)
 	u.Out().Printf("created\t%s", created.CreatedTime)
+	return nil
+}
+
+// DriveCommentRepliesCmd is the parent command for replies subcommands
+type DriveCommentRepliesCmd struct {
+	List   DriveRepliesListCmd   `cmd:"" name:"list" help:"List replies to a comment"`
+	Get    DriveRepliesGetCmd    `cmd:"" name:"get" help:"Get a specific reply"`
+	Create DriveRepliesCreateCmd `cmd:"" name:"create" help:"Create a reply to a comment"`
+	Update DriveRepliesUpdateCmd `cmd:"" name:"update" help:"Update a reply"`
+	Delete DriveRepliesDeleteCmd `cmd:"" name:"delete" help:"Delete a reply"`
+}
+
+// DriveRepliesListCmd lists all replies to a comment
+type DriveRepliesListCmd struct {
+	FileID    string `arg:"" name:"fileId" help:"File ID"`
+	CommentID string `arg:"" name:"commentId" help:"Comment ID"`
+	Max       int64  `name:"max" help:"Max results" default:"100"`
+	Page      string `name:"page" help:"Page token"`
+}
+
+func (c *DriveRepliesListCmd) Run(ctx context.Context, flags *RootFlags) error {
+	u := ui.FromContext(ctx)
+	account, err := requireAccount(flags)
+	if err != nil {
+		return err
+	}
+	fileID := strings.TrimSpace(c.FileID)
+	commentID := strings.TrimSpace(c.CommentID)
+	if fileID == "" {
+		return usage("empty fileId")
+	}
+	if commentID == "" {
+		return usage("empty commentId")
+	}
+
+	svc, err := newDriveService(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	call := svc.Replies.List(fileID, commentID).
+		IncludeDeleted(false).
+		PageSize(c.Max).
+		Fields("nextPageToken", "replies(id,author,content,createdTime,modifiedTime)").
+		Context(ctx)
+	if strings.TrimSpace(c.Page) != "" {
+		call = call.PageToken(c.Page)
+	}
+
+	resp, err := call.Do()
+	if err != nil {
+		return err
+	}
+
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(os.Stdout, map[string]any{
+			"fileId":        fileID,
+			"commentId":     commentID,
+			"replies":       resp.Replies,
+			"nextPageToken": resp.NextPageToken,
+		})
+	}
+
+	if len(resp.Replies) == 0 {
+		u.Err().Println("No replies")
+		return nil
+	}
+
+	w, flush := tableWriter(ctx)
+	defer flush()
+	fmt.Fprintln(w, "ID\tAUTHOR\tCONTENT\tCREATED")
+	for _, reply := range resp.Replies {
+		author := ""
+		if reply.Author != nil {
+			author = reply.Author.DisplayName
+		}
+		content := truncateString(reply.Content, 50)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+			reply.Id,
+			author,
+			content,
+			formatDateTime(reply.CreatedTime),
+		)
+	}
+	printNextPageHint(u, resp.NextPageToken)
+	return nil
+}
+
+// DriveRepliesGetCmd gets a specific reply
+type DriveRepliesGetCmd struct {
+	FileID    string `arg:"" name:"fileId" help:"File ID"`
+	CommentID string `arg:"" name:"commentId" help:"Comment ID"`
+	ReplyID   string `arg:"" name:"replyId" help:"Reply ID"`
+}
+
+func (c *DriveRepliesGetCmd) Run(ctx context.Context, flags *RootFlags) error {
+	u := ui.FromContext(ctx)
+	account, err := requireAccount(flags)
+	if err != nil {
+		return err
+	}
+	fileID := strings.TrimSpace(c.FileID)
+	commentID := strings.TrimSpace(c.CommentID)
+	replyID := strings.TrimSpace(c.ReplyID)
+	if fileID == "" {
+		return usage("empty fileId")
+	}
+	if commentID == "" {
+		return usage("empty commentId")
+	}
+	if replyID == "" {
+		return usage("empty replyId")
+	}
+
+	svc, err := newDriveService(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	reply, err := svc.Replies.Get(fileID, commentID, replyID).
+		Fields("id, author, content, createdTime, modifiedTime").
+		Context(ctx).
+		Do()
+	if err != nil {
+		return err
+	}
+
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(os.Stdout, map[string]any{"reply": reply})
+	}
+
+	u.Out().Printf("id\t%s", reply.Id)
+	if reply.Author != nil {
+		u.Out().Printf("author\t%s", reply.Author.DisplayName)
+	}
+	u.Out().Printf("content\t%s", reply.Content)
+	u.Out().Printf("created\t%s", reply.CreatedTime)
+	u.Out().Printf("modified\t%s", reply.ModifiedTime)
+	return nil
+}
+
+// DriveRepliesCreateCmd creates a reply to a comment
+type DriveRepliesCreateCmd struct {
+	FileID    string `arg:"" name:"fileId" help:"File ID"`
+	CommentID string `arg:"" name:"commentId" help:"Comment ID"`
+	Content   string `arg:"" name:"content" help:"Reply text"`
+}
+
+func (c *DriveRepliesCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
+	u := ui.FromContext(ctx)
+	account, err := requireAccount(flags)
+	if err != nil {
+		return err
+	}
+	fileID := strings.TrimSpace(c.FileID)
+	commentID := strings.TrimSpace(c.CommentID)
+	content := strings.TrimSpace(c.Content)
+	if fileID == "" {
+		return usage("empty fileId")
+	}
+	if commentID == "" {
+		return usage("empty commentId")
+	}
+	if content == "" {
+		return usage("empty content")
+	}
+
+	svc, err := newDriveService(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	reply := &drive.Reply{
+		Content: content,
+	}
+
+	created, err := svc.Replies.Create(fileID, commentID, reply).
+		Fields("id, author, content, createdTime").
+		Context(ctx).
+		Do()
+	if err != nil {
+		return err
+	}
+
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(os.Stdout, map[string]any{"reply": created})
+	}
+
+	u.Out().Printf("id\t%s", created.Id)
+	u.Out().Printf("content\t%s", created.Content)
+	u.Out().Printf("created\t%s", created.CreatedTime)
+	return nil
+}
+
+// DriveRepliesUpdateCmd updates a reply
+type DriveRepliesUpdateCmd struct {
+	FileID    string `arg:"" name:"fileId" help:"File ID"`
+	CommentID string `arg:"" name:"commentId" help:"Comment ID"`
+	ReplyID   string `arg:"" name:"replyId" help:"Reply ID"`
+	Content   string `arg:"" name:"content" help:"New reply text"`
+}
+
+func (c *DriveRepliesUpdateCmd) Run(ctx context.Context, flags *RootFlags) error {
+	u := ui.FromContext(ctx)
+	account, err := requireAccount(flags)
+	if err != nil {
+		return err
+	}
+	fileID := strings.TrimSpace(c.FileID)
+	commentID := strings.TrimSpace(c.CommentID)
+	replyID := strings.TrimSpace(c.ReplyID)
+	content := strings.TrimSpace(c.Content)
+	if fileID == "" {
+		return usage("empty fileId")
+	}
+	if commentID == "" {
+		return usage("empty commentId")
+	}
+	if replyID == "" {
+		return usage("empty replyId")
+	}
+	if content == "" {
+		return usage("empty content")
+	}
+
+	svc, err := newDriveService(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	reply := &drive.Reply{
+		Content: content,
+	}
+
+	updated, err := svc.Replies.Update(fileID, commentID, replyID, reply).
+		Fields("id, author, content, modifiedTime").
+		Context(ctx).
+		Do()
+	if err != nil {
+		return err
+	}
+
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(os.Stdout, map[string]any{"reply": updated})
+	}
+
+	u.Out().Printf("id\t%s", updated.Id)
+	u.Out().Printf("content\t%s", updated.Content)
+	u.Out().Printf("modified\t%s", updated.ModifiedTime)
+	return nil
+}
+
+// DriveRepliesDeleteCmd deletes a reply
+type DriveRepliesDeleteCmd struct {
+	FileID    string `arg:"" name:"fileId" help:"File ID"`
+	CommentID string `arg:"" name:"commentId" help:"Comment ID"`
+	ReplyID   string `arg:"" name:"replyId" help:"Reply ID"`
+}
+
+func (c *DriveRepliesDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
+	u := ui.FromContext(ctx)
+	account, err := requireAccount(flags)
+	if err != nil {
+		return err
+	}
+	fileID := strings.TrimSpace(c.FileID)
+	commentID := strings.TrimSpace(c.CommentID)
+	replyID := strings.TrimSpace(c.ReplyID)
+	if fileID == "" {
+		return usage("empty fileId")
+	}
+	if commentID == "" {
+		return usage("empty commentId")
+	}
+	if replyID == "" {
+		return usage("empty replyId")
+	}
+
+	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("delete reply %s from comment %s on file %s", replyID, commentID, fileID)); confirmErr != nil {
+		return confirmErr
+	}
+
+	svc, err := newDriveService(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	if err := svc.Replies.Delete(fileID, commentID, replyID).Context(ctx).Do(); err != nil {
+		return err
+	}
+
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(os.Stdout, map[string]any{
+			"deleted":   true,
+			"fileId":    fileID,
+			"commentId": commentID,
+			"replyId":   replyID,
+		})
+	}
+
+	u.Out().Printf("deleted\ttrue")
+	u.Out().Printf("file_id\t%s", fileID)
+	u.Out().Printf("comment_id\t%s", commentID)
+	u.Out().Printf("reply_id\t%s", replyID)
 	return nil
 }
 
