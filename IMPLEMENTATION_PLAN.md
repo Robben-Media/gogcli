@@ -252,15 +252,16 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog gmail cse identities list --help`
 
 ### Task 19: Calendar — ACL management
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/calendar-gaps.md
 - **Description**: Add `gog calendar acl delete/get/insert/list/patch/watch`. ACL rules control calendar sharing. Watch implements webhook registration.
 - **Files**:
-  - `internal/cmd/calendar_acl.go` — create
-  - `internal/cmd/calendar_acl_test.go` — create
+  - `internal/cmd/calendar_acl.go` — created
+  - `internal/cmd/calendar_acl_test.go` — created
 - **Methods**: acl.delete, .get, .insert, .list, .patch, .watch (6)
 - **Verification**: `make ci` passes, `gog calendar acl list --help`
+- **Note**: Breaking change - old `calendar acl <calendarId>` syntax now requires `calendar acl list <calendarId>` due to new subcommand structure.
 
 ### Task 20: Calendar — Calendar list and settings
 - **Status**: pending
