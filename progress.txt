@@ -103,5 +103,26 @@
   - Reorder validation to avoid unnecessary API calls
 ---
 
+## Task 15 - Gmail — Threads and history
+### Completed: Gmail — Threads and history
+- Date: 2026-02-22
+- Methods implemented: 3 (threads.delete, threads.trash, threads.untrash)
+  - Note: threads.get, threads.list, threads.modify, and history.list already existed
+- Files created/modified:
+  - Created `internal/cmd/gmail_threads_edit.go` with 3 new commands
+  - Created `internal/cmd/gmail_threads_edit_test.go` with comprehensive tests
+  - Modified `internal/cmd/gmail_thread.go` to register Delete, Trash, Untrash subcommands
+- Tests added: 15 test cases across multiple test functions
+- Commands:
+  - `gog gmail thread delete` - permanently delete a thread (requires --force or confirmation)
+  - `gog gmail thread trash` - move a thread to trash
+  - `gog gmail thread untrash` - remove a thread from trash
+- Features:
+  - confirmDestructive for thread delete
+  - JSON and text output formats
+  - Proper error handling and validation
+- Learnings: Use different variable names to avoid shadow warnings in nested error handling
+---
+
 ## Next Steps
-- Continue with Task 15: Gmail — Threads and history
+- Continue with Task 16: Gmail — Message operations

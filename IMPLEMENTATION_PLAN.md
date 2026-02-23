@@ -200,7 +200,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog gmail labels create --help`
 
 ### Task 15: Gmail — Threads and history
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/gmail-gaps.md
 - **Description**: Add thread operations (`gog gmail threads delete/get/list/modify/trash/untrash`) and history list (`gog gmail history list`).
