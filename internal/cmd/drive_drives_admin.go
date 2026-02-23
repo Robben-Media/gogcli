@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
+	"github.com/google/uuid"
 	"google.golang.org/api/drive/v3"
 
 	"github.com/steipete/gogcli/internal/outfmt"
@@ -249,12 +249,5 @@ func (c *DriveDrivesUnhideCmd) Run(ctx context.Context, flags *RootFlags) error 
 
 // generateRequestID creates a unique request ID for idempotency
 func generateRequestID() string {
-	return fmt.Sprintf("gogcli-%d", time.Now().Unix())
-}
-
-// timestamp returns the current Unix timestamp (kept for potential future use)
-//
-//nolint:unused
-func timestamp() int64 {
-	return time.Now().Unix()
+	return uuid.New().String()
 }

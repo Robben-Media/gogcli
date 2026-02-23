@@ -282,9 +282,11 @@ func (c *DriveRevisionsUpdateCmd) Run(ctx context.Context, flags *RootFlags) err
 	rev := &drive.Revision{}
 	if c.KeepForever != nil {
 		rev.KeepForever = *c.KeepForever
+		rev.ForceSendFields = append(rev.ForceSendFields, "KeepForever")
 	}
 	if c.Publish != nil {
 		rev.Published = *c.Publish
+		rev.ForceSendFields = append(rev.ForceSendFields, "Published")
 	}
 
 	updated, err := svc.Revisions.Update(fileID, revisionID, rev).
