@@ -140,7 +140,7 @@ func (c *ChatReactionsCreateCmd) Run(ctx context.Context, flags *RootFlags) erro
 		Emoji: &chat.Emoji{},
 	}
 	if strings.HasPrefix(emoji, "customEmojis/") {
-		reaction.Emoji.CustomEmoji = &chat.CustomEmoji{Uid: emoji}
+		reaction.Emoji.CustomEmoji = &chat.CustomEmoji{Name: emoji}
 	} else {
 		reaction.Emoji.Unicode = emoji
 	}

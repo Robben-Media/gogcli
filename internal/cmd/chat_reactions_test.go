@@ -195,7 +195,7 @@ func TestExecute_ChatReactionsCreate_CustomEmoji_JSON(t *testing.T) {
 	origNew := newChatService
 	t.Cleanup(func() { newChatService = origNew })
 
-	var gotCustomEmojiUID string
+	var gotCustomEmojiName string
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !(r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/messages/msg1/reactions")) {
@@ -206,7 +206,7 @@ func TestExecute_ChatReactionsCreate_CustomEmoji_JSON(t *testing.T) {
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		if emoji, ok := body["emoji"].(map[string]any); ok {
 			if custom, ok := emoji["customEmoji"].(map[string]any); ok {
-				gotCustomEmojiUID, _ = custom["uid"].(string)
+				gotCustomEmojiName, _ = custom["name"].(string)
 			}
 		}
 
@@ -239,8 +239,8 @@ func TestExecute_ChatReactionsCreate_CustomEmoji_JSON(t *testing.T) {
 		})
 	})
 
-	if gotCustomEmojiUID != "customEmojis/myemoji" {
-		t.Fatalf("expected customEmojis/myemoji in request body, got %q", gotCustomEmojiUID)
+	if gotCustomEmojiName != "customEmojis/myemoji" {
+		t.Fatalf("expected customEmojis/myemoji in request body, got %q", gotCustomEmojiName)
 	}
 
 	var result map[string]any
