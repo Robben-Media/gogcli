@@ -100,7 +100,7 @@ func TestCalendarMoreCommands_JSON(t *testing.T) {
 	})
 
 	_ = captureStdout(t, func() {
-		if err := runKong(t, &CalendarAclCmd{}, []string{"cal1"}, ctx, flags); err != nil {
+		if err := runKong(t, &CalendarAclListCmd{}, []string{"cal1"}, ctx, flags); err != nil {
 			t.Fatalf("acl: %v", err)
 		}
 	})

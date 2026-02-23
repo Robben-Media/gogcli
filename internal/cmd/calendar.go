@@ -74,58 +74,7 @@ func (c *CalendarCalendarsCmd) Run(ctx context.Context, flags *RootFlags) error 
 	return nil
 }
 
-type CalendarAclCmd struct {
-	CalendarID string `arg:"" name:"calendarId" help:"Calendar ID"`
-	Max        int64  `name:"max" aliases:"limit" help:"Max results" default:"100"`
-	Page       string `name:"page" help:"Page token"`
-}
-
-func (c *CalendarAclCmd) Run(ctx context.Context, flags *RootFlags) error {
-	u := ui.FromContext(ctx)
-	account, err := requireAccount(flags)
-	if err != nil {
-		return err
-	}
-	calendarID := strings.TrimSpace(c.CalendarID)
-	if calendarID == "" {
-		return usage("calendarId required")
-	}
-
-	svc, err := newCalendarService(ctx, account)
-	if err != nil {
-		return err
-	}
-
-	resp, err := svc.Acl.List(calendarID).MaxResults(c.Max).PageToken(c.Page).Do()
-	if err != nil {
-		return err
-	}
-	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
-			"rules":         resp.Items,
-			"nextPageToken": resp.NextPageToken,
-		})
-	}
-	if len(resp.Items) == 0 {
-		u.Err().Println("No ACL rules")
-		return nil
-	}
-
-	w, flush := tableWriter(ctx)
-	defer flush()
-	fmt.Fprintln(w, "SCOPE_TYPE\tSCOPE_VALUE\tROLE")
-	for _, rule := range resp.Items {
-		scopeType := ""
-		scopeValue := ""
-		if rule.Scope != nil {
-			scopeType = rule.Scope.Type
-			scopeValue = rule.Scope.Value
-		}
-		fmt.Fprintf(w, "%s\t%s\t%s\n", scopeType, scopeValue, rule.Role)
-	}
-	printNextPageHint(u, resp.NextPageToken)
-	return nil
-}
+// CalendarAclCmd is defined in calendar_acl.go with subcommands for ACL management.
 
 type CalendarEventsCmd struct {
 	CalendarID        string   `arg:"" name:"calendarId" optional:"" help:"Calendar ID (default: primary)"`

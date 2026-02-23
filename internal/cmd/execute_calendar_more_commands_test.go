@@ -94,7 +94,7 @@ func TestExecute_CalendarMoreCommands_JSON(t *testing.T) {
 
 	_ = captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "calendar", "acl", calendarID}); err != nil {
+			if err := Execute([]string{"--json", "--account", "a@b.com", "calendar", "acl", "list", calendarID}); err != nil {
 				t.Fatalf("acl: %v", err)
 			}
 		})

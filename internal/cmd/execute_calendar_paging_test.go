@@ -115,7 +115,7 @@ func TestExecute_CalendarAcl_MaxAndPage_JSON(t *testing.T) {
 			if err := Execute([]string{
 				"--json",
 				"--account", "a@b.com",
-				"calendar", "acl", "c1",
+				"calendar", "acl", "list", "c1",
 				"--max", "2",
 				"--page", "p2",
 			}); err != nil {

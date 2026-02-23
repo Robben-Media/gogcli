@@ -91,7 +91,7 @@ func TestExecute_CalendarAcl_Text(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--account", "a@b.com", "calendar", "acl", "c1"}); err != nil {
+			if err := Execute([]string{"--account", "a@b.com", "calendar", "acl", "list", "c1"}); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
 		})
