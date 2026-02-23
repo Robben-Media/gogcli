@@ -83,7 +83,7 @@ func TestExecute_DrivePermissions_Text_NoPermissions(t *testing.T) {
 
 	errOut := captureStderr(t, func() {
 		_ = captureStdout(t, func() {
-			if err := Execute([]string{"--account", "a@b.com", "drive", "permissions", "id1"}); err != nil {
+			if err := Execute([]string{"--account", "a@b.com", "drive", "permissions", "list", "id1"}); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
 		})
@@ -124,7 +124,7 @@ func TestExecute_DrivePermissions_Text_WithPermissions(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--account", "a@b.com", "drive", "permissions", "id1"}); err != nil {
+			if err := Execute([]string{"--account", "a@b.com", "drive", "permissions", "list", "id1"}); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
 		})

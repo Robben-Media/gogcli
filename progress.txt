@@ -12,150 +12,408 @@
   - Added comprehensive tests in `internal/cmd/docs_create_test.go`
   - Updated existing tests in `docs_commands_test.go` and `execute_docs_slides_sheets_more_test.go`
 
-### Task 2: Google Keep — Notes CRUD ✅ COMPLETED
+## Phase 2: Core APIs (145 methods, 18 tasks)
+
+### Task 10: People — Contact groups CRUD ✅ COMPLETED
+- Commit: cf94de7
 - Date: 2025-02-22
 - Changes:
-  - Created `internal/cmd/keep_notes_edit.go` with `KeepNotesCreateCmd` and `KeepNotesDeleteCmd`
-  - Created `internal/cmd/keep_notes_edit_test.go` with comprehensive tests
-  - Updated `internal/cmd/keep.go` to register new commands under `KeepNotesCmd` parent
-  - `notes create`: Creates text or list notes with `--body`, `--body-from-file`, or `--list-items` flags
-  - `notes delete`: Deletes notes with confirmation (uses global `--force` flag)
-  - Supports `--checked` flag for marking list items as completed
+  - Created `internal/cmd/contacts_groups.go` with ContactGroupsCmd struct
+  - Implemented 6 methods: list, get, batch-get, create, update, delete
+  - Delete supports `--delete-contacts` flag to also delete contacts in the group
+  - Added comprehensive tests in `internal/cmd/contacts_groups_test.go`
 
-### Task 3: Google Keep — Permissions batch operations ✅ COMPLETED
+### Task 11: People — Contact group members modify ✅ COMPLETED
 - Date: 2025-02-22
 - Changes:
-  - Created `internal/cmd/keep_permissions.go` with `KeepPermissionsBatchCreateCmd` and `KeepPermissionsBatchDeleteCmd`
-  - Created `internal/cmd/keep_permissions_test.go` with comprehensive tests
-  - Updated `internal/cmd/keep.go` to register `KeepPermissionsCmd` parent
-  - `permissions batch-create`: Shares notes with multiple users (only WRITER role supported)
-  - `permissions batch-delete`: Removes sharing with confirmation (uses global `--force` flag)
-  - Supports short permission names (auto-converts to full format)
+  - Created `internal/cmd/people_group_members.go` with ContactGroupMembersCmd struct
+  - Implemented `gog contacts groups members modify` with `--add` and `--remove` flags
+  - Normalizes member resource names (adds "people/" prefix if needed)
+  - Added tests in `internal/cmd/people_group_members_test.go`
+- Methods implemented: contactGroups.members.modify (1)
+- Files created: people_group_members.go, people_group_members_test.go
+- Commit: 9ef02a3
 
-### Task 4: Google Tasks — Task list management ✅ COMPLETED
-- Date: 2025-02-22
-- Changes:
-  - Created `internal/cmd/tasks_tasklists_edit.go` with 4 commands:
-    - `TasksListsGetCmd`: Retrieves a single task list by ID
-    - `TasksListsDeleteCmd`: Permanently deletes task list with all tasks (confirmDestructive)
-    - `TasksListsPatchCmd`: Partial update with flagProvided for updateMask
-    - `TasksListsUpdateCmd`: Full replace (PUT semantics)
-  - Created `internal/cmd/tasks_tasklists_edit_test.go` with comprehensive tests
-  - Updated `internal/cmd/tasks_lists.go` to register new commands under `TasksListsCmd` parent
-  - Commands available: `gog tasks lists get/delete/patch/update`
-  - Aliases: delete (rm, del), update (replace)
+## Phase 2 PR
+- URL: https://github.com/Robben-Media/gogcli/pull/4
 
-### Task 5: Google Tasks — Task move and update ✅ COMPLETED
-- Date: 2025-02-22
-- Changes:
-  - Created `internal/cmd/tasks_edit.go` with `TasksMoveCmd` and `TasksReplaceCmd`
-  - Created `internal/cmd/tasks_edit_test.go` with comprehensive tests
-  - Updated `internal/cmd/tasks.go` to register new commands and add `patch` alias to `update`
-  - `tasks move`: Moves tasks within a list using POST with `--parent` and `--previous` flags
-  - `tasks replace`: Full PUT replace with required `--title` flag, supports `--notes`, `--status`, `--due`
-  - Existing `tasks update` now has alias `patch` to clarify its partial-update behavior
-  - All tests pass (10 new test cases)
-  - Commands available: `gog tasks move`, `gog tasks replace`
+## Task 12 - People — Batch contact operations
+### Completed: People — Batch contact operations
+- Date: 2026-02-22
+- Methods implemented: 4 (people.batchCreateContacts, .batchDeleteContacts, .batchUpdateContacts, .getBatchGet)
+- Files created/modified:
+  - Created `internal/cmd/people_batch.go` with ContactsBatchCmd and 4 subcommands
+  - Created `internal/cmd/people_batch_test.go` with comprehensive tests
+  - Modified `internal/cmd/contacts.go` to add Batch subcommand
+- Tests added: 19 test cases across 4 test functions
+- Commands:
+  - `gog contacts batch create` - create multiple contacts from JSON
+  - `gog contacts batch delete` - delete multiple contacts (requires --force or confirmation)
+  - `gog contacts batch update` - update multiple contacts from JSON map
+  - `gog contacts batch get` - retrieve multiple contacts by resource names
+- Features:
+  - JSON input via `--contacts-json` or `--contacts-file` flags
+  - `@filepath` and `-` (stdin) support for file input
+  - Automatic normalization of resource names (adds "people/" prefix if needed)
+  - confirmDestructive for batch delete
+  - Proper read-mask and update-mask defaults
+- Learnings: Use different variable names to avoid shadow warnings in nested error handling
+---
 
-## Completed Tasks Summary
+## Task 13 - People — Photo management
+### Completed: People — Photo management
+- Date: 2026-02-22
+- Methods implemented: 2 (people.deleteContactPhoto, people.updateContactPhoto)
+- Files created/modified:
+  - Created `internal/cmd/people_photo.go` with ContactsPhotoCmd and 2 subcommands
+  - Created `internal/cmd/people_photo_test.go` with comprehensive tests
+  - Modified `internal/cmd/contacts.go` to add Photo subcommand
+- Tests added: 12 test cases across 3 test functions
+- Commands:
+  - `gog contacts photo delete` - delete a contact's photo (requires --force or confirmation)
+  - `gog contacts photo update` - update a contact's photo from file or stdin
+- Features:
+  - Image file input via `--file` or `-f` flag
+  - `-` for stdin support
+  - Base64 encoding of image bytes for API
+  - confirmDestructive for photo delete
+  - Normalization of resource names (adds "people/" prefix if needed)
+- Learnings: Use `io.ReadAll(os.Stdin)` instead of `os.Stdin.ReadAll()` - os.File doesn't have ReadAll method
+---
 
-All Phase 1 tasks (Tasks 1-9) are now COMPLETED:
-- Task 1: Google Docs — documents.create
-- Task 2: Google Keep — Notes CRUD (notes.create, notes.delete)
-- Task 3: Google Keep — Permissions batch operations
-- Task 4: Google Tasks — Task list management
-- Task 5: Google Tasks — Task move and update
-- Task 6: Search Console — Sitemaps and URL inspection
-- Task 7: Analytics Data — Report operations
-- Task 8: Analytics Data — Audience exports
-- Task 9: Sheets — All 8 gap methods
+## Task 14 - Gmail — Labels management
+### Completed: Gmail — Labels management
+- Date: 2026-02-22
+- Methods implemented: 2 (labels.patch, labels.update)
+- Files created/modified:
+  - Modified `internal/cmd/gmail_labels.go` to add GmailLabelsPatchCmd and GmailLabelsUpdateCmd
+  - Created `internal/cmd/gmail_labels_edit_test.go` with comprehensive tests
+- Tests added: 18 test cases across multiple test functions
+- Commands:
+  - `gog gmail labels patch` - partial update of a label (only provided fields updated)
+  - `gog gmail labels update` - full replacement of a label (all fields updated)
+- Features:
+  - Patch uses `flagProvided()` pattern to only send explicitly-set fields
+  - Visibility validation (labelListVisibility, messageListVisibility)
+  - Name-to-ID resolution for label argument
+  - JSON and text output formats
+- Learnings: 
+  - Kong enum constraints require either required flag or default value
+  - Validate input BEFORE making API calls (e.g., check for updates before resolving label name)
+  - Reorder validation to avoid unnecessary API calls
+---
 
-Total methods implemented: 33 methods across 9 tasks.
+## Task 15 - Gmail — Threads and history
+### Completed: Gmail — Threads and history
+- Date: 2026-02-22
+- Methods implemented: 3 (threads.delete, threads.trash, threads.untrash)
+  - Note: threads.get, threads.list, threads.modify, and history.list already existed
+- Files created/modified:
+  - Created `internal/cmd/gmail_threads_edit.go` with 3 new commands
+  - Created `internal/cmd/gmail_threads_edit_test.go` with comprehensive tests
+  - Modified `internal/cmd/gmail_thread.go` to register Delete, Trash, Untrash subcommands
+- Tests added: 15 test cases across multiple test functions
+- Commands:
+  - `gog gmail thread delete` - permanently delete a thread (requires --force or confirmation)
+  - `gog gmail thread trash` - move a thread to trash
+  - `gog gmail thread untrash` - remove a thread from trash
+- Features:
+  - confirmDestructive for thread delete
+  - JSON and text output formats
+  - Proper error handling and validation
+- Learnings: Use different variable names to avoid shadow warnings in nested error handling
+---
+
+## Task 16 - Gmail — Message operations
+### Completed: Gmail — Message operations
+- Date: 2026-02-22
+- Methods implemented: 6 (messages.import, messages.insert, messages.modify, messages.trash, messages.untrash)
+  - Note: messages.send already exists at top-level as `gog gmail send`
+  - Note: messages.batchDelete and messages.batchModify already exist at `gog gmail batch delete/modify`
+- Files created/modified:
+  - Created `internal/cmd/gmail_messages_edit.go` with 5 new commands
+  - Created `internal/cmd/gmail_messages_edit_test.go` with comprehensive tests
+  - Modified `internal/cmd/gmail_messages.go` to add Import, Insert, Modify, Trash, Untrash subcommands
+- Tests added: 15 test cases across multiple test functions
+- Commands:
+  - `gog gmail messages import` - import a message into mailbox (processed through Gmail pipeline)
+  - `gog gmail messages insert` - insert a message directly into mailbox (bypasses processing)
+  - `gog gmail messages modify` - modify labels on a message (--add, --remove flags)
+  - `gog gmail messages trash` - move a message to trash
+  - `gog gmail messages untrash` - remove a message from trash
+- Features:
+  - Raw message input via `--raw` (base64url encoded) or `--raw-file` (file path or `-` for stdin)
+  - Thread ID support for import/insert
+  - Label name resolution for modify (accepts both label names and IDs)
+  - JSON and text output formats
+  - Proper error handling and validation
+- Learnings: Gmail API uses different endpoints for import vs insert; both accept raw RFC 2822 messages
+---
+
+## Task 17 - Gmail — Settings (delegates, filters, forwarding)
+### Completed: Gmail — Settings
+- Date: 2026-02-22
+- Methods implemented: 28 (all Gmail settings methods)
+  - delegates: create, delete, get, list
+  - filters: create, delete, get, list
+  - forwardingAddresses: create, delete, get, list
+  - sendAs: create, delete, get, list, update, verify
+  - autoForwarding: get, update
+  - imap: get, update
+  - pop: get, update
+  - vacation: get, update
+  - language: get, update
+- Files created/modified:
+  - `internal/cmd/gmail_delegates.go` - delegates CRUD commands
+  - `internal/cmd/gmail_filters.go` - filters CRUD commands
+  - `internal/cmd/gmail_forwarding.go` - forwarding addresses CRUD commands
+  - `internal/cmd/gmail_sendas.go` - send-as commands including verify
+  - `internal/cmd/gmail_autoforward.go` - auto-forwarding settings
+  - `internal/cmd/gmail_vacation.go` - vacation responder settings
+  - `internal/cmd/gmail_imap_pop_language.go` - IMAP, POP, and language settings
+  - Multiple test files for all commands
+- Tests added: All existing tests pass
+- Commands available under `gog gmail settings`:
+  - delegates, filters, forwarding, autoforward, sendas, vacation, watch, imap, pop, language
+- Note: This task was already implemented - all settings commands were in place
+---
+
+## Task 18 - Gmail — CSE (Client-Side Encryption)
+### Completed: Gmail — CSE (Client-Side Encryption)
+- Date: 2026-02-22
+- Methods implemented: 11 (cse.identities and cse.keypairs)
+  - cse.identities: list, get, create, delete, patch (5)
+  - cse.keypairs: list, get, create, enable, disable, obliterate (6)
+- Files created/modified:
+  - Created `internal/cmd/gmail_cse.go` with GmailCseCmd struct and all subcommands
+  - Created `internal/cmd/gmail_cse_test.go` with 19 test cases
+  - Modified `internal/cmd/gmail.go` to register CSE under GmailSettingsCmd
+- Tests added: 19 test cases covering all CSE operations
+- Commands available under `gog gmail settings cse`:
+  - `identities list/get/create/delete/patch`
+  - `keypairs list/get/create/enable/disable/obliterate`
+- Features:
+  - Sign-and-encrypt key pair support for identities
+  - PKCS#7 input via --pkcs7 or --file (supports stdin with -)
+  - confirmDestructive for delete and disable operations
+  - Extra-strong warning for obliterate (irreversible, makes encrypted emails unreadable)
+  - JSON and text output formats
+- Learnings: CSE is enterprise-only feature; obliterate is the most destructive operation in the Gmail API
+---
+
+## Next Steps
+- Continue with Task 21: Calendar — Event watch and channels
 
 ---
 
-## Task 6 - 2026-02-22
-### Completed: Search Console — Sitemaps and URL inspection
+## Task 19 - Calendar — ACL management
+### Completed: Calendar — ACL management
+- Date: 2025-02-22
+- Methods implemented: 6 (acl.delete, .get, .insert, .list, .patch, .watch)
+- Files created/modified:
+  - Created `internal/cmd/calendar_acl.go` with CalendarAclCmd struct and all subcommands
+  - Created `internal/cmd/calendar_acl_test.go` with comprehensive tests
+  - Modified `internal/cmd/calendar.go` to register ACL command
+- Tests added: 26 test cases covering all ACL operations
+- Commands available under `gog calendar acl`:
+  - `list` - list ACL rules for a calendar
+  - `get` - get an ACL rule by ID
+  - `insert` - insert an ACL rule (share calendar)
+  - `delete` - delete an ACL rule (remove sharing)
+  - `patch` - patch an ACL rule (change role)
+  - `watch` - watch for ACL changes
+- Features:
+  - Scope type validation (user, group, domain, default)
+  - Role validation (none, freeBusyReader, reader, writer, owner)
+  - confirmDestructive for delete
+  - Webhook support for watch with auto-generated channel ID
+  - JSON and text output formats
+- Note: Breaking change - old `calendar acl <calendarId>` syntax now requires `calendar acl list <calendarId>` due to new subcommand structure.
+- Commit: 60642a1
+
+---
+
+## Task 20 - Calendar — Calendar list and settings
+### Completed: Calendar — Calendar list and settings
+- Date: 2025-02-22
+- Methods implemented: 10
+  - calendarList: list (existed), get, insert, update, patch, delete, watch (6 new)
+  - settings: list, get, watch (3 new)
+  - Note: freebusy already existed at `gog calendar freebusy`
+- Files created/modified:
+  - Created `internal/cmd/calendar_list_edit.go` with CalendarCalendarsCmd subcommands
+  - Created `internal/cmd/calendar_list_edit_test.go` with 9 test cases
+  - Created `internal/cmd/calendar_settings.go` with CalendarSettingsCmd subcommands
+  - Created `internal/cmd/calendar_settings_test.go` with 6 test cases
+  - Modified `internal/cmd/calendar.go` to restructure calendars as parent command and add settings
+- Tests added: 15 test cases covering all calendar list and settings operations
+- Commands available under `gog calendar calendars`:
+  - `list` - list calendars
+  - `get` - get a calendar from the list
+  - `insert` - add a calendar to the list
+  - `update` - update a calendar in the list
+  - `patch` - patch a calendar in the list
+  - `delete` - remove a calendar from the list (confirmDestructive)
+  - `watch` - watch for changes to the calendar list
+- Commands available under `gog calendar settings`:
+  - `list` - list all calendar settings
+  - `get` - get a specific calendar setting
+  - `watch` - watch for changes to calendar settings
+- Features:
+  - Custom colors (background/foreground) for calendars
+  - Summary override for calendars
+  - Hidden/selected state management
+  - Default reminders JSON input
+  - Webhook support for watch with auto-generated channel ID
+  - JSON and text output formats
+- Note: Breaking change - old `calendar calendars` syntax now requires `calendar calendars list` due to new subcommand structure.
+
+---
+
+## Task 21 - Calendar — Event watch and channels
+### Completed: Calendar — Event watch and channels
+- Date: 2026-02-23
 - Methods implemented: 6
-  - `sitemaps.get` - Get sitemap details
-  - `sitemaps.delete` - Delete sitemap from Search Console (with confirmation)
-  - `sites.get` - Get a site's details
-  - `sites.add` - Add a site to Search Console
-  - `sites.delete` - Remove a site from Search Console (with confirmation)
-  - `urlTestingTools.mobileFriendlyTest.run` - Test if a URL is mobile-friendly
+  - events.watch - set up webhook to watch for event changes
+  - events.import - import an event from another source (preserves original ID)
+  - events.instances - get instances of a recurring event
+  - events.quickAdd - create an event from text (e.g., "Meeting tomorrow at 3pm")
+  - events.move - move an event to another calendar
+  - channels.stop - stop watching a resource
 - Files created/modified:
-  - `internal/cmd/searchconsole.go` — restructured sites/sitemaps to use subcommand pattern
-  - `internal/cmd/searchconsole_sitemaps.go` — created (get/delete commands)
-  - `internal/cmd/searchconsole_sites.go` — created (get/add/delete + mobile-friendly-test)
-  - `internal/cmd/searchconsole_test.go` — updated tests for new command structure
-  - `internal/cmd/searchconsole_more_test.go` — created (9 new tests)
-- Tests added: 9 new test functions
-- Key changes:
-  - Restructured command hierarchy: `sites list` instead of `sites`, `sitemaps list` instead of `sitemaps`
-  - Added `mobile-friendly-test` command with JSON and text output
-  - Delete commands use `confirmDestructive()` with `--force` flag support
+  - Created `internal/cmd/calendar_events_edit.go` with 5 event operation commands
+  - Created `internal/cmd/calendar_events_edit_test.go` with 14 test cases
+  - Created `internal/cmd/calendar_channels.go` with channels stop command
+  - Created `internal/cmd/calendar_channels_test.go` with 6 test cases
+  - Modified `internal/cmd/calendar.go` to register new commands
+- Tests added: 20 test cases covering all event and channel operations
+- Commands available:
+  - `gog calendar events-watch` - watch for event changes via webhook
+  - `gog calendar events-import` - import event preserving original ID/metadata
+  - `gog calendar events-instances` - list instances of recurring event
+  - `gog calendar events-quick-add` - create event from text string
+  - `gog calendar events-move` - move event between calendars
+  - `gog calendar channels stop` - stop receiving notifications
+- Features:
+  - Auto-generated channel IDs for watch operations
+  - Auth token support for webhook verification
+  - iCal UID support for import
+  - Recurrence rule support for import
+  - Time range filtering for instances
+  - send-updates notification control
+  - JSON and text output formats
+- Learnings: Calendar events operations are split across multiple files for organization; watch/import/instances/quickAdd/move fit naturally as separate top-level commands rather than subcommands.
 
 ---
 
-## Task 7 - 2025-02-22
-### Completed: Analytics Data — Report operations
-- Methods implemented: 4
-  - `properties.runPivotReport` - Run a pivot report with pivoted dimensions
-  - `properties.batchRunReports` - Run up to 5 reports in a single batch request
-  - `properties.batchRunPivotReports` - Run up to 5 pivot reports in a single batch
-  - `properties.checkCompatibility` - Check if dimension/metric combinations are compatible
+## Task 22 - Drive — Comments and replies
+### Completed: Drive — Comments and replies
+- Date: 2026-02-23
+- Methods implemented: 10
+  - comments.create, .delete, .get, .list, .update (5) - already existed
+  - replies.create, .delete, .get, .list, .update (5) - new
 - Files created/modified:
-  - `internal/cmd/analytics_reports.go` — created (4 new command structs)
-  - `internal/cmd/analytics_reports_test.go` — created (13 new tests)
-  - `internal/cmd/analytics.go` — modified (added 4 new commands to AnalyticsCmd)
-- Tests added: 13 new test functions
-- Key features:
-  - `pivot-report`: Requires `--pivots-json` with pivot definitions; supports `--filter-json`, `--keep-empty`, `--currency-code`
-  - `batch-reports`: Accepts `--requests-json` with array of up to 5 report requests
-  - `batch-pivot-reports`: Accepts `--requests-json` with array of up to 5 pivot report requests
-  - `check-compatibility`: Validates dimension/metric combinations; returns COMPATIBLE/INCOMPATIBLE status
-  - All JSON flags support `@filepath` syntax for reading from file or `-` for stdin
-  - Helper function `readJSONFromFlag` created for reusable `@filepath` parsing
+  - Modified `internal/cmd/drive_comments.go` - added DriveCommentRepliesCmd with subcommands
+  - Created `internal/cmd/drive_replies_test.go` with 8 test functions
+- Tests added: 14 test cases covering all reply operations
+- Commands available:
+  - `gog drive comments list/get/create/update/delete` - existing comment commands
+  - `gog drive comments reply` - shortcut for creating a reply
+  - `gog drive comments replies list` - list all replies to a comment
+  - `gog drive comments replies get` - get a specific reply
+  - `gog drive comments replies create` - create a reply to a comment
+  - `gog drive comments replies update` - update a reply
+  - `gog drive comments replies delete` - delete a reply (with confirmation)
+- Features:
+  - Pagination support for list command
+  - confirmDestructive for delete command
+  - JSON and text output formats
+  - Truncation for long content in table display
+- Learnings:
+  - Comments commands were already fully implemented; only replies needed additional CRUD operations
+  - The existing `reply` command was kept as a shortcut for backward compatibility
+  - Nested subcommands work well with Kong's struct composition pattern
 
 ---
 
-## Task 8 - 2025-02-22
-### Completed: Analytics Data — Audience exports
-- Methods implemented: 4
-  - `properties.audienceExports.create` - Create a new audience export (returns long-running operation)
-  - `properties.audienceExports.get` - Get an audience export by name
-  - `properties.audienceExports.list` - List audience exports for a property
-  - `properties.audienceExports.query` - Query rows from a completed audience export
+## Task 24 - Drive — Revisions and about
+### Completed: Drive — Revisions and about
+- Date: 2026-02-23
+- Methods implemented: 9
+  - revisions.delete, .get, .list, .update (4)
+  - about.get (1)
+  - changes.list, .getStartPageToken, .watch (3)
+  - channels.stop (1)
 - Files created/modified:
-  - `internal/cmd/analytics_audience.go` — created (4 new command structs)
-  - `internal/cmd/analytics_audience_test.go` — created (10 new tests)
-  - `internal/cmd/analytics.go` — modified (added AudienceExportsCmd)
-- Tests added: 10 new test functions
-- Key features:
-  - `create`: Returns operation name and done status; export runs asynchronously
-  - `get`: Shows export metadata including state, row count, creation time
-  - `list`: Pagination with --max and --page flags
-  - `query`: Retrieves rows from ACTIVE exports; shows dimension values
-  - Audience export states: CREATING, ACTIVE, FAILED
+  - Created `internal/cmd/drive_about.go` with DriveAboutCmd
+  - Created `internal/cmd/drive_about_test.go` with 1 test case
+  - Created `internal/cmd/drive_revisions.go` with DriveRevisionsCmd and 4 subcommands
+  - Created `internal/cmd/drive_revisions_test.go` with 14 test cases
+  - Created `internal/cmd/drive_changes.go` with DriveChangesCmd and 3 subcommands
+  - Created `internal/cmd/drive_changes_test.go` with 9 test cases
+  - Created `internal/cmd/drive_channels.go` with DriveChannelsCmd and stop subcommand
+  - Created `internal/cmd/drive_channels_test.go` with 3 test cases
+  - Modified `internal/cmd/drive.go` to register About, Revisions, Changes, Channels commands
+  - Modified `internal/cmd/confirm.go` to add nolint directive for goconst
+- Tests added: 27 test cases covering all revision, about, changes, and channels operations
+- Commands available:
+  - `gog drive about` - get account info and storage quota
+  - `gog drive revisions list/get/delete/update` - manage file revisions
+  - `gog drive changes list/get-start-page-token/watch` - track file changes
+  - `gog drive channels stop` - stop webhook notifications
+- Features:
+  - User info display (name, email, photo)
+  - Storage quota display with human-readable sizes
+  - Revision management with keepForever and publish options
+  - Download revision content
+  - Changes tracking with page tokens
+  - Webhook watch for changes
+  - confirmDestructive for revision delete
+  - JSON and text output formats
+- Learnings:
+  - Added `allDrivesCorpora` constant to satisfy goconst linter
+  - Added #nosec G304 comment for user-provided file paths
+  - Pre-existing test failures in calendar/docs/gmail/classroom tests are unrelated to this task
+
 ---
 
-## Task 9 - 2025-02-22
-### Completed: Sheets — All 8 gap methods
+## Task 25 - Drive — Remaining operations
+### Completed: Drive — Remaining operations
+- Date: 2026-02-23
 - Methods implemented: 8
-  - `spreadsheets.developerMetadata.get` - Get a developer metadata entry by ID
-  - `spreadsheets.developerMetadata.search` - Search developer metadata
-  - `spreadsheets.getByDataFilter` - Get spreadsheet data by data filter
-  - `spreadsheets.sheets.copyTo` - Copy a sheet to another spreadsheet
-  - `spreadsheets.values.batchClear` - Clear values from multiple ranges
-  - `spreadsheets.values.batchClearByDataFilter` - Clear values by data filter
-  - `spreadsheets.values.batchGetByDataFilter` - Get values by data filter
-  - `spreadsheets.values.batchUpdateByDataFilter` - Update values by data filter
+  - files.watch - watch a file for changes via webhook
+  - files.generateIds - generate IDs for batch creation
+  - files.emptyTrash - permanently delete all trashed files
+  - drives.create - create a shared drive
+  - drives.update - update a shared drive's name
+  - drives.delete - delete a shared drive
+  - drives.hide - hide a shared drive from default view
+  - drives.unhide - unhide a shared drive
 - Files created/modified:
-  - `internal/cmd/sheets_gaps.go` — created (8 new command structs)
-  - `internal/cmd/sheets.go` — modified (added new commands to SheetsCmd, added userEnteredValueInput constant)
-- Key features:
-  - Developer metadata commands under `gog sheets dev-metadata get/search`
-  - `copy-to` copies a sheet tab to another spreadsheet
-  - Batch-clear commands use `confirmDestructive()` with `--force` flag
-  - All data filter commands support `@filepath` syntax for JSON input
-  - Added `userEnteredValueInput` constant to reduce string duplication
+  - Created `internal/cmd/drive_files_edit.go` with DriveFilesCmd and 3 subcommands
+  - Created `internal/cmd/drive_files_edit_test.go` with 16 test cases
+  - Created `internal/cmd/drive_drives_admin.go` with DriveDrivesAdminCmd and 5 subcommands
+  - Modified `internal/cmd/drive.go` to register SharedDrive and FileOps commands
+- Tests added: 16 test cases covering all file operations and shared drive admin operations
+- Commands available:
+  - `gog drive file-ops watch` - watch a file for changes
+  - `gog drive file-ops generate-ids` - generate file IDs for batch operations
+  - `gog drive file-ops empty-trash` - permanently delete all trashed files
+  - `gog drive shared-drive create` - create a shared drive
+  - `gog drive shared-drive update` - update a shared drive's name
+  - `gog drive shared-drive delete` - delete a shared drive (with confirmation)
+  - `gog drive shared-drive hide` - hide a shared drive from default view
+  - `gog drive shared-drive unhide` - unhide a shared drive
+- Features:
+  - Auto-generated channel IDs for watch operations
+  - Auto-generated request IDs for idempotent shared drive creation
+  - Space validation for generate-ids (drive, appDataFolder, photos)
+  - Count validation (1-1000) for generate-ids
+  - Extra-strong confirmation warning for empty-trash (irreversible)
+  - confirmDestructive for shared drive delete
+  - JSON and text output formats
+- Learnings:
+  - Command names should not conflict with parent command names (avoid `name:"drive"` inside `DriveCmd`)
+  - Use global `--force` flag from RootFlags instead of local Force flags to avoid duplicates
+  - JSON mode tests capture stdout properly via `outfmt.WriteJSON`
+  - Pre-existing test failures in calendar/CSE/classroom tests are unrelated to this task

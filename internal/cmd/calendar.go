@@ -10,9 +10,12 @@ import (
 	"github.com/steipete/gogcli/internal/ui"
 )
 
+const calendarIDPrimary = "primary"
+
 type CalendarCmd struct {
-	Calendars       CalendarCalendarsCmd       `cmd:"" name:"calendars" help:"List calendars"`
-	ACL             CalendarAclCmd             `cmd:"" name:"acl" help:"List calendar ACL"`
+	Calendars       CalendarCalendarsCmd       `cmd:"" name:"calendars" help:"Manage calendar list"`
+	ACL             CalendarAclCmd             `cmd:"" name:"acl" help:"Manage calendar ACL"`
+	Settings        CalendarSettingsCmd        `cmd:"" name:"settings" help:"Manage calendar settings"`
 	Events          CalendarEventsCmd          `cmd:"" name:"events" aliases:"list" help:"List events from a calendar or all calendars"`
 	Event           CalendarEventCmd           `cmd:"" name:"event" aliases:"get" help:"Get event"`
 	Create          CalendarCreateCmd          `cmd:"" name:"create" help:"Create an event"`
@@ -30,14 +33,34 @@ type CalendarCmd struct {
 	FocusTime       CalendarFocusTimeCmd       `cmd:"" name:"focus-time" help:"Create a Focus Time block"`
 	OOO             CalendarOOOCmd             `cmd:"" name:"out-of-office" aliases:"ooo" help:"Create an Out of Office event"`
 	WorkingLocation CalendarWorkingLocationCmd `cmd:"" name:"working-location" aliases:"wl" help:"Set working location (home/office/custom)"`
+	// Event operations
+	EventsWatch     CalendarEventsWatchCmd     `cmd:"" name:"events-watch" help:"Watch for event changes"`
+	EventsImport    CalendarEventsImportCmd    `cmd:"" name:"events-import" help:"Import an event from another source"`
+	EventsInstances CalendarEventsInstancesCmd `cmd:"" name:"events-instances" help:"Get instances of a recurring event"`
+	EventsQuickAdd  CalendarEventsQuickAddCmd  `cmd:"" name:"events-quick-add" help:"Create an event from text"`
+	EventsMove      CalendarEventsMoveCmd      `cmd:"" name:"events-move" help:"Move an event to another calendar"`
+	// Channel operations
+	Channels CalendarChannelsCmd `cmd:"" name:"channels" help:"Manage notification channels"`
 }
 
+// CalendarCalendarsCmd is the parent command for calendar list operations.
 type CalendarCalendarsCmd struct {
+	List   CalendarCalendarsListCmd   `cmd:"" name:"list" help:"List calendars"`
+	Get    CalendarCalendarsGetCmd    `cmd:"" name:"get" help:"Get a calendar from the list"`
+	Insert CalendarCalendarsInsertCmd `cmd:"" name:"insert" help:"Add a calendar to the list"`
+	Update CalendarCalendarsUpdateCmd `cmd:"" name:"update" help:"Update a calendar in the list"`
+	Patch  CalendarCalendarsPatchCmd  `cmd:"" name:"patch" help:"Patch a calendar in the list"`
+	Delete CalendarCalendarsDeleteCmd `cmd:"" name:"delete" help:"Remove a calendar from the list"`
+	Watch  CalendarCalendarsWatchCmd  `cmd:"" name:"watch" help:"Watch for changes to the calendar list"`
+}
+
+// CalendarCalendarsListCmd lists calendars in the user's calendar list.
+type CalendarCalendarsListCmd struct {
 	Max  int64  `name:"max" aliases:"limit" help:"Max results" default:"100"`
 	Page string `name:"page" help:"Page token"`
 }
 
-func (c *CalendarCalendarsCmd) Run(ctx context.Context, flags *RootFlags) error {
+func (c *CalendarCalendarsListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u := ui.FromContext(ctx)
 	account, err := requireAccount(flags)
 	if err != nil {
@@ -74,58 +97,7 @@ func (c *CalendarCalendarsCmd) Run(ctx context.Context, flags *RootFlags) error 
 	return nil
 }
 
-type CalendarAclCmd struct {
-	CalendarID string `arg:"" name:"calendarId" help:"Calendar ID"`
-	Max        int64  `name:"max" aliases:"limit" help:"Max results" default:"100"`
-	Page       string `name:"page" help:"Page token"`
-}
-
-func (c *CalendarAclCmd) Run(ctx context.Context, flags *RootFlags) error {
-	u := ui.FromContext(ctx)
-	account, err := requireAccount(flags)
-	if err != nil {
-		return err
-	}
-	calendarID := strings.TrimSpace(c.CalendarID)
-	if calendarID == "" {
-		return usage("calendarId required")
-	}
-
-	svc, err := newCalendarService(ctx, account)
-	if err != nil {
-		return err
-	}
-
-	resp, err := svc.Acl.List(calendarID).MaxResults(c.Max).PageToken(c.Page).Do()
-	if err != nil {
-		return err
-	}
-	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
-			"rules":         resp.Items,
-			"nextPageToken": resp.NextPageToken,
-		})
-	}
-	if len(resp.Items) == 0 {
-		u.Err().Println("No ACL rules")
-		return nil
-	}
-
-	w, flush := tableWriter(ctx)
-	defer flush()
-	fmt.Fprintln(w, "SCOPE_TYPE\tSCOPE_VALUE\tROLE")
-	for _, rule := range resp.Items {
-		scopeType := ""
-		scopeValue := ""
-		if rule.Scope != nil {
-			scopeType = rule.Scope.Type
-			scopeValue = rule.Scope.Value
-		}
-		fmt.Fprintf(w, "%s\t%s\t%s\n", scopeType, scopeValue, rule.Role)
-	}
-	printNextPageHint(u, resp.NextPageToken)
-	return nil
-}
+// CalendarAclCmd is defined in calendar_acl.go with subcommands for ACL management.
 
 type CalendarEventsCmd struct {
 	CalendarID        string   `arg:"" name:"calendarId" optional:"" help:"Calendar ID (default: primary)"`
@@ -166,7 +138,7 @@ func (c *CalendarEventsCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("calendarId not allowed with --cal/--calendars")
 	}
 	if !c.All && calendarID == "" && len(calInputs) == 0 {
-		calendarID = "primary"
+		calendarID = calendarIDPrimary
 	}
 
 	svc, err := newCalendarService(ctx, account)

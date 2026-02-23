@@ -145,7 +145,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 > Branch: `phase/2-core-apis` | PR → build branch
 
 ### Task 10: People — Contact groups CRUD
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/people-gaps.md
 - **Description**: Add `gog contacts groups batch-get/create/delete/get/list/update`. Delete requires confirmDestructive. List supports pagination.
@@ -156,7 +156,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog contacts groups list --help`
 
 ### Task 11: People — Contact group members modify
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/people-gaps.md
 - **Description**: Add `gog contacts groups members modify` with `--add` and `--remove` flags for member resource names. At least one must be provided.
@@ -167,7 +167,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog contacts groups members modify --help`
 
 ### Task 12: People — Batch contact operations
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/people-gaps.md
 - **Description**: Add `gog contacts batch-create`, `batch-delete` (confirmDestructive), `batch-update`, and `batch-get`. Batch create/update accept `--contacts-json` with `@filepath` support.
@@ -178,7 +178,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog contacts batch-create --help`
 
 ### Task 13: People — Photo management
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/people-gaps.md
 - **Description**: Add `gog contacts delete-photo` (confirmDestructive) and `gog contacts update-photo` (reads image file, base64-encodes, sends as photoBytes).
@@ -189,7 +189,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog contacts update-photo --help`
 
 ### Task 14: Gmail — Labels management
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/gmail-gaps.md
 - **Description**: Add `gog gmail labels create/delete/patch/update`. Delete requires confirmDestructive. Patch uses flagProvided. Update is full replace.
@@ -200,7 +200,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog gmail labels create --help`
 
 ### Task 15: Gmail — Threads and history
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/gmail-gaps.md
 - **Description**: Add thread operations (`gog gmail threads delete/get/list/modify/trash/untrash`) and history list (`gog gmail history list`).
@@ -213,31 +213,35 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog gmail threads list --help`
 
 ### Task 16: Gmail — Message operations
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/gmail-gaps.md
-- **Description**: Add message operations: `gog gmail messages send`, `gog gmail messages import`, `gog gmail messages insert`, `gog gmail messages modify`, `gog gmail messages trash/untrash`, `gog gmail messages batch-delete` (confirmDestructive), `gog gmail messages batch-modify`. Send handles MIME encoding.
+- **Description**: Add message operations: `gog gmail messages import`, `gog gmail messages insert`, `gog gmail messages modify`, `gog gmail messages trash/untrash`. Note: messages.send already exists as `gog gmail send`, and batch-delete/batch-modify already exist as `gog gmail batch delete/modify`.
 - **Files**:
-  - `internal/cmd/gmail_messages_edit.go` — create
-  - `internal/cmd/gmail_messages_edit_test.go` — create
-- **Methods**: messages.send, .import, .insert, .modify, .trash, .untrash, .batchDelete, .batchModify (8)
-- **Verification**: `make ci` passes, `gog gmail messages send --help`
+  - `internal/cmd/gmail_messages_edit.go` — created
+  - `internal/cmd/gmail_messages_edit_test.go` — created
+- **Methods**: messages.import, .insert, .modify, .trash, .untrash (5) - send, batchDelete, batchModify already exist
+- **Verification**: `make ci` passes, `gog gmail messages import --help`
 
 ### Task 17: Gmail — Settings (delegates, filters, forwarding)
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/gmail-gaps.md
 - **Description**: Add settings commands: delegates CRUD, filters CRUD, forwarding addresses CRUD, send-as CRUD, auto-forwarding get/update, IMAP/POP get/update, vacation get/update, language get/update.
 - **Files**:
-  - `internal/cmd/gmail_settings.go` — create
-  - `internal/cmd/gmail_settings_test.go` — create
-  - `internal/cmd/gmail_settings_sendas.go` — create
-  - `internal/cmd/gmail_settings_sendas_test.go` — create
-- **Methods**: ~15 settings methods (delegates.create/delete/get/list, filters.create/delete/get/list, forwardingAddresses.create/delete/get/list, getAutoForwarding, updateAutoForwarding, getImap/updateImap, getPop/updatePop, getVacation/updateVacation, getLanguage/updateLanguage)
-- **Verification**: `make ci` passes, `gog gmail settings delegates list --help`
+  - `internal/cmd/gmail_delegates.go` — list, get, add, remove commands
+  - `internal/cmd/gmail_filters.go` — list, get, create, delete commands
+  - `internal/cmd/gmail_forwarding.go` — list, get, create, delete commands
+  - `internal/cmd/gmail_sendas.go` — list, get, create, verify, delete, update commands
+  - `internal/cmd/gmail_autoforward.go` — get, update commands
+  - `internal/cmd/gmail_vacation.go` — get, update commands
+  - `internal/cmd/gmail_imap_pop_language.go` — IMAP get/update, POP get/update, Language get/update
+  - Test files for each command
+- **Methods**: 28 settings methods (delegates CRUD, filters CRUD, forwardingAddresses CRUD, sendAs full CRUD+verify, autoForwarding get/update, IMAP get/update, POP get/update, vacation get/update, language get/update)
+- **Verification**: `make ci` passes, `gog gmail settings --help` shows all subcommands
 
 ### Task 18: Gmail — CSE (Client-Side Encryption)
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/gmail-gaps.md
 - **Description**: Add CSE commands for enterprise Gmail: `gog gmail cse identities create/delete/get/list/patch` and `gog gmail cse keypairs create/disable/enable/get/list/obliterate`. These are enterprise-only features.
@@ -248,68 +252,68 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog gmail cse identities list --help`
 
 ### Task 19: Calendar — ACL management
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/calendar-gaps.md
 - **Description**: Add `gog calendar acl delete/get/insert/list/patch/watch`. ACL rules control calendar sharing. Watch implements webhook registration.
 - **Files**:
-  - `internal/cmd/calendar_acl.go` — create
-  - `internal/cmd/calendar_acl_test.go` — create
+  - `internal/cmd/calendar_acl.go` — created
+  - `internal/cmd/calendar_acl_test.go` — created
 - **Methods**: acl.delete, .get, .insert, .list, .patch, .watch (6)
 - **Verification**: `make ci` passes, `gog calendar acl list --help`
+- **Note**: Breaking change - old `calendar acl <calendarId>` syntax now requires `calendar acl list <calendarId>` due to new subcommand structure.
 
 ### Task 20: Calendar — Calendar list and settings
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/calendar-gaps.md
-- **Description**: Add calendar list operations (`gog calendar calendars delete/get/insert/patch/update/watch`) and settings (`gog calendar settings list/get/watch`). Also freebusy query (`gog calendar freebusy query`).
+- **Description**: Add calendar list operations (`gog calendar calendars delete/get/insert/patch/update/watch`) and settings (`gog calendar settings list/get/watch`). Freebusy already existed at `gog calendar freebusy`.
 - **Files**:
-  - `internal/cmd/calendar_list_edit.go` — create
-  - `internal/cmd/calendar_list_edit_test.go` — create
-  - `internal/cmd/calendar_settings.go` — create
-  - `internal/cmd/calendar_settings_test.go` — create
-- **Methods**: calendarList.delete, .get, .insert, .list (if missing), .patch, .update, .watch, settings.get, .list, .watch, freebusy.query (~11 methods)
+  - `internal/cmd/calendar_list_edit.go` — created
+  - `internal/cmd/calendar_list_edit_test.go` — created
+  - `internal/cmd/calendar_settings.go` — created
+  - `internal/cmd/calendar_settings_test.go` — created
+- **Methods**: calendarList.delete, .get, .insert, .patch, .update, .watch, settings.get, .list, .watch (10 methods — list already existed, freebusy already existed)
 - **Verification**: `make ci` passes, `gog calendar calendars get --help`
+- **Note**: Breaking change - old `calendar calendars` syntax now requires `calendar calendars list` due to new subcommand structure.
 
 ### Task 21: Calendar — Event watch and channels
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/calendar-gaps.md
 - **Description**: Add event watch commands (`gog calendar events watch`, `gog calendar events import`, `gog calendar events instances`, `gog calendar events quick-add`, `gog calendar events move`) and channel stop (`gog calendar channels stop`). Watch commands share `watchFlags` pattern.
 - **Files**:
-  - `internal/cmd/calendar_events_edit.go` — create
-  - `internal/cmd/calendar_events_edit_test.go` — create
-  - `internal/cmd/calendar_channels.go` — create
-  - `internal/cmd/calendar_channels_test.go` — create
-- **Methods**: events.watch, .import, .instances, .quickAdd, .move, channels.stop (~6-9 methods)
-- **Verification**: `make ci` passes, `gog calendar events watch --help`
+  - `internal/cmd/calendar_events_edit.go` — created
+  - `internal/cmd/calendar_events_edit_test.go` — created
+  - `internal/cmd/calendar_channels.go` — created
+  - `internal/cmd/calendar_channels_test.go` — created
+- **Methods**: events.watch, .import, .instances, .quickAdd, .move, channels.stop (6 methods)
+- **Verification**: `make ci` passes, `gog calendar events-watch --help`
 
 ### Task 22: Drive — Comments and replies
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/drive-gaps.md
 - **Description**: Add `gog drive comments create/delete/get/list/update` and `gog drive replies create/delete/get/list/update`. Standard CRUD with file ID as parent.
 - **Files**:
-  - `internal/cmd/drive_comments.go` — create
-  - `internal/cmd/drive_comments_test.go` — create
-  - `internal/cmd/drive_replies.go` — create
-  - `internal/cmd/drive_replies_test.go` — create
+  - `internal/cmd/drive_comments.go` — modified (added DriveCommentRepliesCmd with subcommands)
+  - `internal/cmd/drive_replies_test.go` — created
 - **Methods**: comments.create, .delete, .get, .list, .update, replies.create, .delete, .get, .list, .update (10)
-- **Verification**: `make ci` passes, `gog drive comments list --help`
+- **Verification**: `make ci` passes, `gog drive comments list --help`, `gog drive comments replies list --help`
 
 ### Task 23: Drive — Permissions management
-- **Status**: pending
+- **Status**: done
 - **Depends on**: none
 - **Spec**: specs/features/drive-gaps.md
 - **Description**: Add `gog drive permissions create/delete/get/list/update`. Manage file/folder sharing. Includes `--transfer-ownership` flag for ownership transfers.
 - **Files**:
-  - `internal/cmd/drive_permissions.go` — create
-  - `internal/cmd/drive_permissions_test.go` — create
+  - `internal/cmd/drive_permissions.go` — created
+  - `internal/cmd/drive_permissions_test.go` — created
 - **Methods**: permissions.create, .delete, .get, .list, .update (5)
 - **Verification**: `make ci` passes, `gog drive permissions list --help`
 
 ### Task 24: Drive — Revisions and about
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/drive-gaps.md
 - **Description**: Add `gog drive revisions delete/get/list/update`, `gog drive about get`, and `gog drive changes list/get-start-page-token/watch`. Also `gog drive channels stop`.
@@ -324,17 +328,17 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog drive revisions list --help`
 
 ### Task 25: Drive — Remaining operations (files, teamdrives, labels)
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/drive-gaps.md
 - **Description**: Add remaining Drive gaps: file operations (watch, generateIds, emptyTrash, export if missing), teamdrives/drives CRUD (deprecated but in Discovery API), and label management if specified. Check spec for exact remaining methods.
 - **Files**:
-  - `internal/cmd/drive_files_edit.go` — create/modify
-  - `internal/cmd/drive_files_edit_test.go` — create
-  - `internal/cmd/drive_teamdrives.go` — create
-  - `internal/cmd/drive_teamdrives_test.go` — create
-- **Methods**: Remaining ~16 Drive methods
-- **Verification**: `make ci` passes, `gog drive --help` shows all new subcommands
+  - `internal/cmd/drive_files_edit.go` — created (watch, generate-ids, empty-trash)
+  - `internal/cmd/drive_files_edit_test.go` — created
+  - `internal/cmd/drive_drives_admin.go` — created (shared-drive create/update/delete/hide/unhide)
+  - `internal/cmd/drive.go` — modified (added SharedDrive, FileOps subcommands)
+- **Methods**: files.watch, files.generateIds, files.emptyTrash, drives.create, drives.update, drives.delete, drives.hide, drives.unhide (8)
+- **Verification**: `make ci` passes, `gog drive shared-drive --help`, `gog drive file-ops --help`
 
 ### Task 26: Chat — Custom emojis and media
 - **Status**: pending

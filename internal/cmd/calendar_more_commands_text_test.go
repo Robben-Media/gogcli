@@ -104,11 +104,11 @@ func TestCalendarMoreCommands_Text(t *testing.T) {
 		}
 		ctx := ui.WithUI(context.Background(), u)
 
-		if err := runKong(t, &CalendarCalendarsCmd{}, []string{}, ctx, flags); err != nil {
+		if err := runKong(t, &CalendarCalendarsListCmd{}, []string{}, ctx, flags); err != nil {
 			t.Fatalf("calendars: %v", err)
 		}
 
-		if err := runKong(t, &CalendarAclCmd{}, []string{"cal1"}, ctx, flags); err != nil {
+		if err := runKong(t, &CalendarAclListCmd{}, []string{"cal1"}, ctx, flags); err != nil {
 			t.Fatalf("acl: %v", err)
 		}
 

@@ -15,7 +15,12 @@ import (
 )
 
 type GmailMessagesCmd struct {
-	Search GmailMessagesSearchCmd `cmd:"" name:"search" group:"Read" help:"Search messages using Gmail query syntax"`
+	Search  GmailMessagesSearchCmd  `cmd:"" name:"search" group:"Read" help:"Search messages using Gmail query syntax"`
+	Import  GmailMessagesImportCmd  `cmd:"" name:"import" group:"Write" help:"Import a message into mailbox (processed through Gmail pipeline)"`
+	Insert  GmailMessagesInsertCmd  `cmd:"" name:"insert" group:"Write" help:"Insert a message directly into mailbox (bypasses processing)"`
+	Modify  GmailMessagesModifyCmd  `cmd:"" name:"modify" group:"Organize" help:"Modify labels on a message"`
+	Trash   GmailMessagesTrashCmd   `cmd:"" name:"trash" group:"Organize" help:"Move a message to trash"`
+	Untrash GmailMessagesUntrashCmd `cmd:"" name:"untrash" group:"Organize" help:"Remove a message from trash"`
 }
 
 type GmailMessagesSearchCmd struct {

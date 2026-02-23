@@ -55,6 +55,10 @@ type GmailSettingsCmd struct {
 	SendAs      GmailSendAsCmd      `cmd:"" name:"sendas" group:"Admin" help:"Send-as settings"`
 	Vacation    GmailVacationCmd    `cmd:"" name:"vacation" group:"Admin" help:"Vacation responder"`
 	Watch       GmailWatchCmd       `cmd:"" name:"watch" group:"Admin" help:"Manage Gmail watch"`
+	Imap        GmailImapCmd        `cmd:"" name:"imap" group:"Admin" help:"IMAP settings"`
+	Pop         GmailPopCmd         `cmd:"" name:"pop" group:"Admin" help:"POP settings"`
+	Language    GmailLanguageCmd    `cmd:"" name:"language" group:"Admin" help:"Display language"`
+	Cse         GmailCseCmd         `cmd:"" name:"cse" group:"Admin" help:"Client-side encryption (enterprise only)"`
 }
 
 type GmailSearchCmd struct {
