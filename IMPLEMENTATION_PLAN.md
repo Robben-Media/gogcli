@@ -366,7 +366,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog chat spaces search --help`
 
 ### Task 28: Chat — Members, messages, attachments, reactions, events, read states
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/chat-gaps.md
 - **Description**: Add remaining Chat commands: members CRUD (`create/delete/get/list/patch`), messages operations (`delete/get/patch/update`), attachments get, reactions (`create/delete/list`), events (`get/list`), notification settings (`get/patch`), thread-read-state get, space-read-state update. This is a larger task covering the remaining 19 Chat methods.

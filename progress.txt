@@ -486,3 +486,47 @@
   - Kong enum fields require either required or valid default; use manual validation for optional enums
   - Existing "create" uses spaces.setup; added "create-direct" for spaces.create API
 ---
+
+## Task 28 - 2026-02-23
+### Completed: Chat — Members, messages, attachments, reactions, events, read states
+- Methods implemented: 19
+  - members.create, .delete, .get, .list, .patch (5)
+  - messages.delete, .get, .patch, .update (4)
+  - attachments.get (1)
+  - reactions.create, .delete, .list (3)
+  - spaceEvents.get, .list (2)
+  - notificationSettings.get, .patch (2)
+  - threadReadState.get (1)
+  - spaceReadState.update (1)
+- Files created/modified:
+  - Created `internal/cmd/chat_members.go` with ChatMembersCmd and 5 subcommands
+  - Created `internal/cmd/chat_members_test.go` with 7 test functions
+  - Created `internal/cmd/chat_messages_edit.go` with 5 commands (get, delete, patch, update, attachments)
+  - Created `internal/cmd/chat_messages_edit_test.go` with 8 test functions
+  - Created `internal/cmd/chat_reactions.go` with ChatReactionsCmd and 3 subcommands
+  - Created `internal/cmd/chat_reactions_test.go` with 6 test functions
+  - Created `internal/cmd/chat_events.go` with ChatEventsCmd and 2 subcommands
+  - Created `internal/cmd/chat_events_test.go` with 5 test functions
+  - Created `internal/cmd/chat_readstate.go` with 3 parent structs and 4 subcommands
+  - Created `internal/cmd/chat_readstate_test.go` with 7 test functions
+  - Modified `internal/cmd/chat.go` to register Members, Reactions, Events, NotificationSettings, ThreadReadState, SpaceReadState
+  - Modified `internal/cmd/chat_messages.go` to register Get, Delete, Patch, Update, Attachments
+- Tests added: 33 test functions covering all 19 methods
+- Commands available:
+  - `gog chat members list/get/create/delete/patch` - space membership management
+  - `gog chat messages get/delete/patch/update` - message operations
+  - `gog chat messages attachments` - get attachment metadata
+  - `gog chat reactions list/create/delete` - message reactions
+  - `gog chat events get/list` - space events
+  - `gog chat notification-settings get/patch` - notification settings
+  - `gog chat thread-read-state get` - thread read state
+  - `gog chat space-read-state update` - space read state
+- Features:
+  - Member role management (ROLE_MEMBER, ROLE_MANAGER)
+  - flagProvided/updateMask pattern for patch operations
+  - Custom emoji vs unicode emoji detection for reactions
+  - Event filtering with required --filter flag
+  - confirmDestructive for delete operations
+  - Consumer account blocking on all commands
+  - JSON and text output formats
+---
