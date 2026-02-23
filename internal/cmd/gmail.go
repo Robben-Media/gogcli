@@ -58,6 +58,7 @@ type GmailSettingsCmd struct {
 	Imap        GmailImapCmd        `cmd:"" name:"imap" group:"Admin" help:"IMAP settings"`
 	Pop         GmailPopCmd         `cmd:"" name:"pop" group:"Admin" help:"POP settings"`
 	Language    GmailLanguageCmd    `cmd:"" name:"language" group:"Admin" help:"Display language"`
+	Cse         GmailCseCmd         `cmd:"" name:"cse" group:"Admin" help:"Client-side encryption (enterprise only)"`
 }
 
 type GmailSearchCmd struct {

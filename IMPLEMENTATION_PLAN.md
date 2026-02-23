@@ -224,20 +224,24 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog gmail messages import --help`
 
 ### Task 17: Gmail — Settings (delegates, filters, forwarding)
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/gmail-gaps.md
 - **Description**: Add settings commands: delegates CRUD, filters CRUD, forwarding addresses CRUD, send-as CRUD, auto-forwarding get/update, IMAP/POP get/update, vacation get/update, language get/update.
 - **Files**:
-  - `internal/cmd/gmail_settings.go` — create
-  - `internal/cmd/gmail_settings_test.go` — create
-  - `internal/cmd/gmail_settings_sendas.go` — create
-  - `internal/cmd/gmail_settings_sendas_test.go` — create
-- **Methods**: ~15 settings methods (delegates.create/delete/get/list, filters.create/delete/get/list, forwardingAddresses.create/delete/get/list, getAutoForwarding, updateAutoForwarding, getImap/updateImap, getPop/updatePop, getVacation/updateVacation, getLanguage/updateLanguage)
-- **Verification**: `make ci` passes, `gog gmail settings delegates list --help`
+  - `internal/cmd/gmail_delegates.go` — list, get, add, remove commands
+  - `internal/cmd/gmail_filters.go` — list, get, create, delete commands
+  - `internal/cmd/gmail_forwarding.go` — list, get, create, delete commands
+  - `internal/cmd/gmail_sendas.go` — list, get, create, verify, delete, update commands
+  - `internal/cmd/gmail_autoforward.go` — get, update commands
+  - `internal/cmd/gmail_vacation.go` — get, update commands
+  - `internal/cmd/gmail_imap_pop_language.go` — IMAP get/update, POP get/update, Language get/update
+  - Test files for each command
+- **Methods**: 28 settings methods (delegates CRUD, filters CRUD, forwardingAddresses CRUD, sendAs full CRUD+verify, autoForwarding get/update, IMAP get/update, POP get/update, vacation get/update, language get/update)
+- **Verification**: `make ci` passes, `gog gmail settings --help` shows all subcommands
 
 ### Task 18: Gmail — CSE (Client-Side Encryption)
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/gmail-gaps.md
 - **Description**: Add CSE commands for enterprise Gmail: `gog gmail cse identities create/delete/get/list/patch` and `gog gmail cse keypairs create/disable/enable/get/list/obliterate`. These are enterprise-only features.

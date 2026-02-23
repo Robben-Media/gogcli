@@ -150,5 +150,56 @@
 - Learnings: Gmail API uses different endpoints for import vs insert; both accept raw RFC 2822 messages
 ---
 
+## Task 17 - Gmail — Settings (delegates, filters, forwarding)
+### Completed: Gmail — Settings
+- Date: 2026-02-22
+- Methods implemented: 28 (all Gmail settings methods)
+  - delegates: create, delete, get, list
+  - filters: create, delete, get, list
+  - forwardingAddresses: create, delete, get, list
+  - sendAs: create, delete, get, list, update, verify
+  - autoForwarding: get, update
+  - imap: get, update
+  - pop: get, update
+  - vacation: get, update
+  - language: get, update
+- Files created/modified:
+  - `internal/cmd/gmail_delegates.go` - delegates CRUD commands
+  - `internal/cmd/gmail_filters.go` - filters CRUD commands
+  - `internal/cmd/gmail_forwarding.go` - forwarding addresses CRUD commands
+  - `internal/cmd/gmail_sendas.go` - send-as commands including verify
+  - `internal/cmd/gmail_autoforward.go` - auto-forwarding settings
+  - `internal/cmd/gmail_vacation.go` - vacation responder settings
+  - `internal/cmd/gmail_imap_pop_language.go` - IMAP, POP, and language settings
+  - Multiple test files for all commands
+- Tests added: All existing tests pass
+- Commands available under `gog gmail settings`:
+  - delegates, filters, forwarding, autoforward, sendas, vacation, watch, imap, pop, language
+- Note: This task was already implemented - all settings commands were in place
+---
+
+## Task 18 - Gmail — CSE (Client-Side Encryption)
+### Completed: Gmail — CSE (Client-Side Encryption)
+- Date: 2026-02-22
+- Methods implemented: 11 (cse.identities and cse.keypairs)
+  - cse.identities: list, get, create, delete, patch (5)
+  - cse.keypairs: list, get, create, enable, disable, obliterate (6)
+- Files created/modified:
+  - Created `internal/cmd/gmail_cse.go` with GmailCseCmd struct and all subcommands
+  - Created `internal/cmd/gmail_cse_test.go` with 19 test cases
+  - Modified `internal/cmd/gmail.go` to register CSE under GmailSettingsCmd
+- Tests added: 19 test cases covering all CSE operations
+- Commands available under `gog gmail settings cse`:
+  - `identities list/get/create/delete/patch`
+  - `keypairs list/get/create/enable/disable/obliterate`
+- Features:
+  - Sign-and-encrypt key pair support for identities
+  - PKCS#7 input via --pkcs7 or --file (supports stdin with -)
+  - confirmDestructive for delete and disable operations
+  - Extra-strong warning for obliterate (irreversible, makes encrypted emails unreadable)
+  - JSON and text output formats
+- Learnings: CSE is enterprise-only feature; obliterate is the most destructive operation in the Gmail API
+---
+
 ## Next Steps
-- Continue with Task 17: Gmail — Settings (delegates, filters, forwarding)
+- Continue with Task 19: Calendar — ACL management
