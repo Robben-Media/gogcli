@@ -267,3 +267,39 @@
   - Webhook support for watch with auto-generated channel ID
   - JSON and text output formats
 - Note: Breaking change - old `calendar calendars` syntax now requires `calendar calendars list` due to new subcommand structure.
+
+---
+
+## Task 21 - Calendar — Event watch and channels
+### Completed: Calendar — Event watch and channels
+- Date: 2026-02-23
+- Methods implemented: 6
+  - events.watch - set up webhook to watch for event changes
+  - events.import - import an event from another source (preserves original ID)
+  - events.instances - get instances of a recurring event
+  - events.quickAdd - create an event from text (e.g., "Meeting tomorrow at 3pm")
+  - events.move - move an event to another calendar
+  - channels.stop - stop watching a resource
+- Files created/modified:
+  - Created `internal/cmd/calendar_events_edit.go` with 5 event operation commands
+  - Created `internal/cmd/calendar_events_edit_test.go` with 14 test cases
+  - Created `internal/cmd/calendar_channels.go` with channels stop command
+  - Created `internal/cmd/calendar_channels_test.go` with 6 test cases
+  - Modified `internal/cmd/calendar.go` to register new commands
+- Tests added: 20 test cases covering all event and channel operations
+- Commands available:
+  - `gog calendar events-watch` - watch for event changes via webhook
+  - `gog calendar events-import` - import event preserving original ID/metadata
+  - `gog calendar events-instances` - list instances of recurring event
+  - `gog calendar events-quick-add` - create event from text string
+  - `gog calendar events-move` - move event between calendars
+  - `gog calendar channels stop` - stop receiving notifications
+- Features:
+  - Auto-generated channel IDs for watch operations
+  - Auth token support for webhook verification
+  - iCal UID support for import
+  - Recurrence rule support for import
+  - Time range filtering for instances
+  - send-updates notification control
+  - JSON and text output formats
+- Learnings: Calendar events operations are split across multiple files for organization; watch/import/instances/quickAdd/move fit naturally as separate top-level commands rather than subcommands.

@@ -31,6 +31,14 @@ type CalendarCmd struct {
 	FocusTime       CalendarFocusTimeCmd       `cmd:"" name:"focus-time" help:"Create a Focus Time block"`
 	OOO             CalendarOOOCmd             `cmd:"" name:"out-of-office" aliases:"ooo" help:"Create an Out of Office event"`
 	WorkingLocation CalendarWorkingLocationCmd `cmd:"" name:"working-location" aliases:"wl" help:"Set working location (home/office/custom)"`
+	// Event operations
+	EventsWatch     CalendarEventsWatchCmd     `cmd:"" name:"events-watch" help:"Watch for event changes"`
+	EventsImport    CalendarEventsImportCmd    `cmd:"" name:"events-import" help:"Import an event from another source"`
+	EventsInstances CalendarEventsInstancesCmd `cmd:"" name:"events-instances" help:"Get instances of a recurring event"`
+	EventsQuickAdd  CalendarEventsQuickAddCmd  `cmd:"" name:"events-quick-add" help:"Create an event from text"`
+	EventsMove      CalendarEventsMoveCmd      `cmd:"" name:"events-move" help:"Move an event to another calendar"`
+	// Channel operations
+	Channels CalendarChannelsCmd `cmd:"" name:"channels" help:"Manage notification channels"`
 }
 
 // CalendarCalendarsCmd is the parent command for calendar list operations.

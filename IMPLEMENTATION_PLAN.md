@@ -278,17 +278,17 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Note**: Breaking change - old `calendar calendars` syntax now requires `calendar calendars list` due to new subcommand structure.
 
 ### Task 21: Calendar — Event watch and channels
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/calendar-gaps.md
 - **Description**: Add event watch commands (`gog calendar events watch`, `gog calendar events import`, `gog calendar events instances`, `gog calendar events quick-add`, `gog calendar events move`) and channel stop (`gog calendar channels stop`). Watch commands share `watchFlags` pattern.
 - **Files**:
-  - `internal/cmd/calendar_events_edit.go` — create
-  - `internal/cmd/calendar_events_edit_test.go` — create
-  - `internal/cmd/calendar_channels.go` — create
-  - `internal/cmd/calendar_channels_test.go` — create
-- **Methods**: events.watch, .import, .instances, .quickAdd, .move, channels.stop (~6-9 methods)
-- **Verification**: `make ci` passes, `gog calendar events watch --help`
+  - `internal/cmd/calendar_events_edit.go` — created
+  - `internal/cmd/calendar_events_edit_test.go` — created
+  - `internal/cmd/calendar_channels.go` — created
+  - `internal/cmd/calendar_channels_test.go` — created
+- **Methods**: events.watch, .import, .instances, .quickAdd, .move, channels.stop (6 methods)
+- **Verification**: `make ci` passes, `gog calendar events-watch --help`
 
 ### Task 22: Drive — Comments and replies
 - **Status**: pending
