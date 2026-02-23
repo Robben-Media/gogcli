@@ -291,17 +291,15 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog calendar events-watch --help`
 
 ### Task 22: Drive — Comments and replies
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/drive-gaps.md
 - **Description**: Add `gog drive comments create/delete/get/list/update` and `gog drive replies create/delete/get/list/update`. Standard CRUD with file ID as parent.
 - **Files**:
-  - `internal/cmd/drive_comments.go` — create
-  - `internal/cmd/drive_comments_test.go` — create
-  - `internal/cmd/drive_replies.go` — create
-  - `internal/cmd/drive_replies_test.go` — create
+  - `internal/cmd/drive_comments.go` — modified (added DriveCommentRepliesCmd with subcommands)
+  - `internal/cmd/drive_replies_test.go` — created
 - **Methods**: comments.create, .delete, .get, .list, .update, replies.create, .delete, .get, .list, .update (10)
-- **Verification**: `make ci` passes, `gog drive comments list --help`
+- **Verification**: `make ci` passes, `gog drive comments list --help`, `gog drive comments replies list --help`
 
 ### Task 23: Drive — Permissions management
 - **Status**: pending

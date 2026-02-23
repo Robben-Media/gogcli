@@ -303,3 +303,33 @@
   - send-updates notification control
   - JSON and text output formats
 - Learnings: Calendar events operations are split across multiple files for organization; watch/import/instances/quickAdd/move fit naturally as separate top-level commands rather than subcommands.
+
+---
+
+## Task 22 - Drive — Comments and replies
+### Completed: Drive — Comments and replies
+- Date: 2026-02-23
+- Methods implemented: 10
+  - comments.create, .delete, .get, .list, .update (5) - already existed
+  - replies.create, .delete, .get, .list, .update (5) - new
+- Files created/modified:
+  - Modified `internal/cmd/drive_comments.go` - added DriveCommentRepliesCmd with subcommands
+  - Created `internal/cmd/drive_replies_test.go` with 8 test functions
+- Tests added: 14 test cases covering all reply operations
+- Commands available:
+  - `gog drive comments list/get/create/update/delete` - existing comment commands
+  - `gog drive comments reply` - shortcut for creating a reply
+  - `gog drive comments replies list` - list all replies to a comment
+  - `gog drive comments replies get` - get a specific reply
+  - `gog drive comments replies create` - create a reply to a comment
+  - `gog drive comments replies update` - update a reply
+  - `gog drive comments replies delete` - delete a reply (with confirmation)
+- Features:
+  - Pagination support for list command
+  - confirmDestructive for delete command
+  - JSON and text output formats
+  - Truncation for long content in table display
+- Learnings: 
+  - Comments commands were already fully implemented; only replies needed additional CRUD operations
+  - The existing `reply` command was kept as a shortcut for backward compatibility
+  - Nested subcommands work well with Kong's struct composition pattern
