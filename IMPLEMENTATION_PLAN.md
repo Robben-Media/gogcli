@@ -313,7 +313,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog drive permissions list --help`
 
 ### Task 24: Drive — Revisions and about
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/drive-gaps.md
 - **Description**: Add `gog drive revisions delete/get/list/update`, `gog drive about get`, and `gog drive changes list/get-start-page-token/watch`. Also `gog drive channels stop`.

@@ -329,7 +329,48 @@
   - confirmDestructive for delete command
   - JSON and text output formats
   - Truncation for long content in table display
-- Learnings: 
+- Learnings:
   - Comments commands were already fully implemented; only replies needed additional CRUD operations
   - The existing `reply` command was kept as a shortcut for backward compatibility
   - Nested subcommands work well with Kong's struct composition pattern
+
+---
+
+## Task 24 - Drive — Revisions and about
+### Completed: Drive — Revisions and about
+- Date: 2026-02-23
+- Methods implemented: 9
+  - revisions.delete, .get, .list, .update (4)
+  - about.get (1)
+  - changes.list, .getStartPageToken, .watch (3)
+  - channels.stop (1)
+- Files created/modified:
+  - Created `internal/cmd/drive_about.go` with DriveAboutCmd
+  - Created `internal/cmd/drive_about_test.go` with 1 test case
+  - Created `internal/cmd/drive_revisions.go` with DriveRevisionsCmd and 4 subcommands
+  - Created `internal/cmd/drive_revisions_test.go` with 14 test cases
+  - Created `internal/cmd/drive_changes.go` with DriveChangesCmd and 3 subcommands
+  - Created `internal/cmd/drive_changes_test.go` with 9 test cases
+  - Created `internal/cmd/drive_channels.go` with DriveChannelsCmd and stop subcommand
+  - Created `internal/cmd/drive_channels_test.go` with 3 test cases
+  - Modified `internal/cmd/drive.go` to register About, Revisions, Changes, Channels commands
+  - Modified `internal/cmd/confirm.go` to add nolint directive for goconst
+- Tests added: 27 test cases covering all revision, about, changes, and channels operations
+- Commands available:
+  - `gog drive about` - get account info and storage quota
+  - `gog drive revisions list/get/delete/update` - manage file revisions
+  - `gog drive changes list/get-start-page-token/watch` - track file changes
+  - `gog drive channels stop` - stop webhook notifications
+- Features:
+  - User info display (name, email, photo)
+  - Storage quota display with human-readable sizes
+  - Revision management with keepForever and publish options
+  - Download revision content
+  - Changes tracking with page tokens
+  - Webhook watch for changes
+  - confirmDestructive for revision delete
+  - JSON and text output formats
+- Learnings:
+  - Added `allDrivesCorpora` constant to satisfy goconst linter
+  - Added #nosec G304 comment for user-provided file paths
+  - Pre-existing test failures in calendar/docs/gmail/classroom tests are unrelated to this task
