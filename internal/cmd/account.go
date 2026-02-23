@@ -89,7 +89,7 @@ func resolveAccountAlias(value string) (string, bool, error) {
 
 func shouldAutoSelectAccount(value string) bool {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "auto", aclScopeTypeDefault:
+	case "auto", "default":
 		return true
 	default:
 		return false

@@ -417,3 +417,72 @@
   - Use global `--force` flag from RootFlags instead of local Force flags to avoid duplicates
   - JSON mode tests capture stdout properly via `outfmt.WriteJSON`
   - Pre-existing test failures in calendar/CSE/classroom tests are unrelated to this task
+
+---
+
+## Task 26 - Chat — Custom emojis and media
+### Completed: Chat — Custom emojis and media
+- Date: 2026-02-23
+- Methods implemented: 6
+  - customEmojis.create, .delete, .get, .list (4)
+  - media.download, media.upload (2)
+- Files created/modified:
+  - Created `internal/cmd/chat_emoji.go` with ChatEmojiCmd and 4 subcommands
+  - Created `internal/cmd/chat_emoji_test.go` with 6 test functions
+  - Created `internal/cmd/chat_media.go` with ChatMediaCmd and 2 subcommands
+  - Created `internal/cmd/chat_media_test.go` with 4 test functions
+  - Modified `internal/cmd/chat.go` to add Emoji and Media commands
+- Tests added: 14 test cases covering all emoji and media operations
+- Commands available:
+  - `gog chat emoji list` - list custom emojis (with pagination and filter)
+  - `gog chat emoji get` - get a custom emoji by name
+  - `gog chat emoji create` - create a custom emoji from image file
+  - `gog chat emoji delete` - delete a custom emoji (with confirmation)
+  - `gog chat media upload` - upload a file attachment to a space
+  - `gog chat media download` - download a media attachment to file
+- Features:
+  - Emoji name validation (must be lowercase, alphanumeric, hyphens, underscores, wrapped in colons)
+  - Image file input via --file or -f flag (supports stdin with -)
+  - Base64 encoding for emoji images
+  - Multipart upload for media files
+  - Custom filename support for uploads
+  - Output path support for downloads
+  - Workspace account requirement (blocks consumer @gmail.com accounts)
+  - confirmDestructive for emoji delete
+  - JSON and text output formats
+- Learnings:
+  - Chat API emoji names must follow strict format: `:name:` with lowercase alphanumeric, hyphens, underscores
+  - Media upload uses multipart upload with googleapi.ChunkSize option
+  - All Chat commands require Workspace accounts (enforced via requireWorkspaceAccount)
+---
+
+## Task 27 - 2026-02-23
+### Completed: Chat — Spaces management
+- Methods implemented: 7 (spaces.completeImport, .create, .delete, .findDirectMessage, .get, .patch, .search)
+- Files created/modified:
+  - Created `internal/cmd/chat_spaces_edit.go` with 7 new commands + printSpaceDetails helper
+  - Created `internal/cmd/chat_spaces_edit_test.go` with 12 test functions
+  - Modified `internal/cmd/chat_spaces.go` to register new subcommands in ChatSpacesCmd
+  - Modified `internal/cmd/account.go` to remove unused nolint directive
+- Tests added: 12 test functions covering all space operations
+- Commands available:
+  - `gog chat spaces get` - get space details
+  - `gog chat spaces delete` - delete a space (with confirmation)
+  - `gog chat spaces patch` - partial update with flagProvided/updateMask
+  - `gog chat spaces search` - search spaces with query
+  - `gog chat spaces find-dm` - find DM space with a user
+  - `gog chat spaces complete-import` - complete space import
+  - `gog chat spaces create-direct` - create space via spaces.create API (no initial members)
+- Features:
+  - Resource name normalization (auto-prepends "spaces/" prefix)
+  - Patch uses flagProvided() for updateMask (displayName, spaceDetails.description, externalUserAllowed)
+  - Search supports pagination (--max, --page)
+  - confirmDestructive for delete
+  - Consumer account blocking
+  - JSON and text output formats
+- Learnings:
+  - Space.Description lives in SpaceDetails.Description, not directly on Space
+  - CompleteImportSpaceResponse wraps the space in a .Space field
+  - Kong enum fields require either required or valid default; use manual validation for optional enums
+  - Existing "create" uses spaces.setup; added "create-direct" for spaces.create API
+---
