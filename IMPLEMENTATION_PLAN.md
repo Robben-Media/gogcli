@@ -213,15 +213,15 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog gmail threads list --help`
 
 ### Task 16: Gmail — Message operations
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/gmail-gaps.md
-- **Description**: Add message operations: `gog gmail messages send`, `gog gmail messages import`, `gog gmail messages insert`, `gog gmail messages modify`, `gog gmail messages trash/untrash`, `gog gmail messages batch-delete` (confirmDestructive), `gog gmail messages batch-modify`. Send handles MIME encoding.
+- **Description**: Add message operations: `gog gmail messages import`, `gog gmail messages insert`, `gog gmail messages modify`, `gog gmail messages trash/untrash`. Note: messages.send already exists as `gog gmail send`, and batch-delete/batch-modify already exist as `gog gmail batch delete/modify`.
 - **Files**:
-  - `internal/cmd/gmail_messages_edit.go` — create
-  - `internal/cmd/gmail_messages_edit_test.go` — create
-- **Methods**: messages.send, .import, .insert, .modify, .trash, .untrash, .batchDelete, .batchModify (8)
-- **Verification**: `make ci` passes, `gog gmail messages send --help`
+  - `internal/cmd/gmail_messages_edit.go` — created
+  - `internal/cmd/gmail_messages_edit_test.go` — created
+- **Methods**: messages.import, .insert, .modify, .trash, .untrash (5) - send, batchDelete, batchModify already exist
+- **Verification**: `make ci` passes, `gog gmail messages import --help`
 
 ### Task 17: Gmail — Settings (delegates, filters, forwarding)
 - **Status**: pending
