@@ -264,17 +264,18 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Note**: Breaking change - old `calendar acl <calendarId>` syntax now requires `calendar acl list <calendarId>` due to new subcommand structure.
 
 ### Task 20: Calendar — Calendar list and settings
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/calendar-gaps.md
-- **Description**: Add calendar list operations (`gog calendar calendars delete/get/insert/patch/update/watch`) and settings (`gog calendar settings list/get/watch`). Also freebusy query (`gog calendar freebusy query`).
+- **Description**: Add calendar list operations (`gog calendar calendars delete/get/insert/patch/update/watch`) and settings (`gog calendar settings list/get/watch`). Freebusy already existed at `gog calendar freebusy`.
 - **Files**:
-  - `internal/cmd/calendar_list_edit.go` — create
-  - `internal/cmd/calendar_list_edit_test.go` — create
-  - `internal/cmd/calendar_settings.go` — create
-  - `internal/cmd/calendar_settings_test.go` — create
-- **Methods**: calendarList.delete, .get, .insert, .list (if missing), .patch, .update, .watch, settings.get, .list, .watch, freebusy.query (~11 methods)
+  - `internal/cmd/calendar_list_edit.go` — created
+  - `internal/cmd/calendar_list_edit_test.go` — created
+  - `internal/cmd/calendar_settings.go` — created
+  - `internal/cmd/calendar_settings_test.go` — created
+- **Methods**: calendarList.delete, .get, .insert, .patch, .update, .watch, settings.get, .list, .watch (10 methods — list already existed, freebusy already existed)
 - **Verification**: `make ci` passes, `gog calendar calendars get --help`
+- **Note**: Breaking change - old `calendar calendars` syntax now requires `calendar calendars list` due to new subcommand structure.
 
 ### Task 21: Calendar — Event watch and channels
 - **Status**: pending

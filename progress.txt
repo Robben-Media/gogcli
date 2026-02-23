@@ -202,4 +202,68 @@
 ---
 
 ## Next Steps
-- Continue with Task 19: Calendar — ACL management
+- Continue with Task 21: Calendar — Event watch and channels
+
+---
+
+## Task 19 - Calendar — ACL management
+### Completed: Calendar — ACL management
+- Date: 2025-02-22
+- Methods implemented: 6 (acl.delete, .get, .insert, .list, .patch, .watch)
+- Files created/modified:
+  - Created `internal/cmd/calendar_acl.go` with CalendarAclCmd struct and all subcommands
+  - Created `internal/cmd/calendar_acl_test.go` with comprehensive tests
+  - Modified `internal/cmd/calendar.go` to register ACL command
+- Tests added: 26 test cases covering all ACL operations
+- Commands available under `gog calendar acl`:
+  - `list` - list ACL rules for a calendar
+  - `get` - get an ACL rule by ID
+  - `insert` - insert an ACL rule (share calendar)
+  - `delete` - delete an ACL rule (remove sharing)
+  - `patch` - patch an ACL rule (change role)
+  - `watch` - watch for ACL changes
+- Features:
+  - Scope type validation (user, group, domain, default)
+  - Role validation (none, freeBusyReader, reader, writer, owner)
+  - confirmDestructive for delete
+  - Webhook support for watch with auto-generated channel ID
+  - JSON and text output formats
+- Note: Breaking change - old `calendar acl <calendarId>` syntax now requires `calendar acl list <calendarId>` due to new subcommand structure.
+- Commit: 60642a1
+
+---
+
+## Task 20 - Calendar — Calendar list and settings
+### Completed: Calendar — Calendar list and settings
+- Date: 2025-02-22
+- Methods implemented: 10
+  - calendarList: list (existed), get, insert, update, patch, delete, watch (6 new)
+  - settings: list, get, watch (3 new)
+  - Note: freebusy already existed at `gog calendar freebusy`
+- Files created/modified:
+  - Created `internal/cmd/calendar_list_edit.go` with CalendarCalendarsCmd subcommands
+  - Created `internal/cmd/calendar_list_edit_test.go` with 9 test cases
+  - Created `internal/cmd/calendar_settings.go` with CalendarSettingsCmd subcommands
+  - Created `internal/cmd/calendar_settings_test.go` with 6 test cases
+  - Modified `internal/cmd/calendar.go` to restructure calendars as parent command and add settings
+- Tests added: 15 test cases covering all calendar list and settings operations
+- Commands available under `gog calendar calendars`:
+  - `list` - list calendars
+  - `get` - get a calendar from the list
+  - `insert` - add a calendar to the list
+  - `update` - update a calendar in the list
+  - `patch` - patch a calendar in the list
+  - `delete` - remove a calendar from the list (confirmDestructive)
+  - `watch` - watch for changes to the calendar list
+- Commands available under `gog calendar settings`:
+  - `list` - list all calendar settings
+  - `get` - get a specific calendar setting
+  - `watch` - watch for changes to calendar settings
+- Features:
+  - Custom colors (background/foreground) for calendars
+  - Summary override for calendars
+  - Hidden/selected state management
+  - Default reminders JSON input
+  - Webhook support for watch with auto-generated channel ID
+  - JSON and text output formats
+- Note: Breaking change - old `calendar calendars` syntax now requires `calendar calendars list` due to new subcommand structure.
