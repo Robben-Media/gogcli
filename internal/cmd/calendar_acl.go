@@ -14,6 +14,14 @@ import (
 	"github.com/steipete/gogcli/internal/ui"
 )
 
+// ACL scope type constants
+const (
+	aclScopeTypeDefault = "default"
+	aclScopeTypeUser    = "user"
+	aclScopeTypeGroup   = "group"
+	aclScopeTypeDomain  = "domain"
+)
+
 // Calendar ACL commands - manage calendar sharing permissions.
 // ACL rules control who can access a calendar and what level of access they have.
 
@@ -148,13 +156,13 @@ func (c *CalendarAclInsertCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	// Validate scope type
-	validScopeTypes := map[string]bool{"user": true, "group": true, "domain": true, "default": true}
+	validScopeTypes := map[string]bool{aclScopeTypeUser: true, aclScopeTypeGroup: true, aclScopeTypeDomain: true, aclScopeTypeDefault: true}
 	if !validScopeTypes[c.ScopeType] {
 		return usage("invalid scope-type: must be user, group, domain, or default")
 	}
 
 	// Scope value is required for user, group, domain
-	if c.ScopeType != "default" && strings.TrimSpace(c.ScopeValue) == "" {
+	if c.ScopeType != aclScopeTypeDefault && strings.TrimSpace(c.ScopeValue) == "" {
 		return usage("--scope-value is required for scope-type user, group, or domain")
 	}
 

@@ -302,13 +302,13 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog drive comments list --help`, `gog drive comments replies list --help`
 
 ### Task 23: Drive — Permissions management
-- **Status**: pending
+- **Status**: done
 - **Depends on**: none
 - **Spec**: specs/features/drive-gaps.md
 - **Description**: Add `gog drive permissions create/delete/get/list/update`. Manage file/folder sharing. Includes `--transfer-ownership` flag for ownership transfers.
 - **Files**:
-  - `internal/cmd/drive_permissions.go` — create
-  - `internal/cmd/drive_permissions_test.go` — create
+  - `internal/cmd/drive_permissions.go` — created
+  - `internal/cmd/drive_permissions_test.go` — created
 - **Methods**: permissions.create, .delete, .get, .list, .update (5)
 - **Verification**: `make ci` passes, `gog drive permissions list --help`
 

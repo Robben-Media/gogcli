@@ -33,7 +33,7 @@ func (c *CalendarEventsWatchCmd) Run(ctx context.Context, flags *RootFlags) erro
 
 	calendarID := strings.TrimSpace(c.CalendarID)
 	if calendarID == "" {
-		calendarID = "primary"
+		calendarID = calendarIDPrimary
 	}
 	if strings.TrimSpace(c.WebhookURL) == "" {
 		return usage("--webhook-url is required")
@@ -107,7 +107,7 @@ func (c *CalendarEventsImportCmd) Run(ctx context.Context, flags *RootFlags) err
 
 	calendarID := strings.TrimSpace(c.CalendarID)
 	if calendarID == "" {
-		calendarID = "primary"
+		calendarID = calendarIDPrimary
 	}
 	eventID := strings.TrimSpace(c.EventID)
 	if eventID == "" {
@@ -202,7 +202,7 @@ func (c *CalendarEventsInstancesCmd) Run(ctx context.Context, flags *RootFlags) 
 
 	calendarID := strings.TrimSpace(c.CalendarID)
 	if calendarID == "" {
-		calendarID = "primary"
+		calendarID = calendarIDPrimary
 	}
 	eventID := strings.TrimSpace(c.EventID)
 	if eventID == "" {
@@ -280,7 +280,7 @@ func (c *CalendarEventsQuickAddCmd) Run(ctx context.Context, flags *RootFlags) e
 
 	calendarID := strings.TrimSpace(c.CalendarID)
 	if calendarID == "" {
-		calendarID = "primary"
+		calendarID = calendarIDPrimary
 	}
 	text := strings.TrimSpace(c.Text)
 	if text == "" {
@@ -332,7 +332,7 @@ func (c *CalendarEventsMoveCmd) Run(ctx context.Context, flags *RootFlags) error
 
 	sourceCalendarID := strings.TrimSpace(c.SourceCalendarID)
 	if sourceCalendarID == "" {
-		sourceCalendarID = "primary"
+		sourceCalendarID = calendarIDPrimary
 	}
 	eventID := strings.TrimSpace(c.EventID)
 	if eventID == "" {

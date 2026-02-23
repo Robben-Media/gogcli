@@ -53,7 +53,7 @@ func getCalendarLocation(ctx context.Context, svc *calendar.Service, calendarID 
 
 // getUserTimezone fetches the timezone from the user's primary calendar.
 func getUserTimezone(ctx context.Context, svc *calendar.Service) (*time.Location, error) {
-	cal, err := svc.CalendarList.Get("primary").Context(ctx).Do()
+	cal, err := svc.CalendarList.Get(calendarIDPrimary).Context(ctx).Do()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get primary calendar: %w", err)
 	}

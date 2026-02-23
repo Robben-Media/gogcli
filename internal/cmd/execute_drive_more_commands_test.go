@@ -154,7 +154,7 @@ func TestExecute_DriveMoreCommands_JSON(t *testing.T) {
 			}
 		})
 		_ = captureStdout(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "drive", "permissions", "id1"}); err != nil {
+			if err := Execute([]string{"--json", "--account", "a@b.com", "drive", "permissions", "list", "id1"}); err != nil {
 				t.Fatalf("permissions: %v", err)
 			}
 		})
@@ -292,7 +292,7 @@ func TestExecute_DriveMoreCommands_Text(t *testing.T) {
 			if err := Execute([]string{"--account", "a@b.com", "drive", "share", "id1", "--anyone", "--role", "reader"}); err != nil {
 				t.Fatalf("share: %v", err)
 			}
-			if err := Execute([]string{"--account", "a@b.com", "drive", "permissions", "id1"}); err != nil {
+			if err := Execute([]string{"--account", "a@b.com", "drive", "permissions", "list", "id1"}); err != nil {
 				t.Fatalf("permissions: %v", err)
 			}
 			if err := Execute([]string{"--force", "--account", "a@b.com", "drive", "unshare", "id1", "p1"}); err != nil {

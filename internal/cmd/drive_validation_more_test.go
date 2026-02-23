@@ -42,7 +42,7 @@ func TestDriveCommands_MissingAccount(t *testing.T) {
 		{"rename", func() error { return (&DriveRenameCmd{}).Run(ctx, flags) }},
 		{"share", func() error { return (&DriveShareCmd{}).Run(ctx, flags) }},
 		{"unshare", func() error { return (&DriveUnshareCmd{}).Run(ctx, flags) }},
-		{"permissions", func() error { return (&DrivePermissionsCmd{}).Run(ctx, flags) }},
+		{"permissions list", func() error { return (&DrivePermissionsListCmd{}).Run(ctx, flags) }},
 		{"url", func() error { return (&DriveURLCmd{}).Run(ctx, flags) }},
 	}
 
@@ -80,7 +80,7 @@ func TestDriveCommands_UsageErrors(t *testing.T) {
 		{"share invalid role", func() error { return (&DriveShareCmd{FileID: "f1", Email: "x@y.com", Role: "nope"}).Run(ctx, flags) }},
 		{"unshare missing file", func() error { return (&DriveUnshareCmd{}).Run(ctx, flags) }},
 		{"unshare missing perm", func() error { return (&DriveUnshareCmd{FileID: "f1"}).Run(ctx, flags) }},
-		{"permissions missing file", func() error { return (&DrivePermissionsCmd{}).Run(ctx, flags) }},
+		{"permissions list missing file", func() error { return (&DrivePermissionsListCmd{}).Run(ctx, flags) }},
 	}
 
 	for _, tc := range cases {

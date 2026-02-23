@@ -56,7 +56,7 @@ type DriveCmd struct {
 	Rename      DriveRenameCmd      `cmd:"" name:"rename" help:"Rename a file or folder"`
 	Share       DriveShareCmd       `cmd:"" name:"share" help:"Share a file or folder"`
 	Unshare     DriveUnshareCmd     `cmd:"" name:"unshare" help:"Remove a permission from a file"`
-	Permissions DrivePermissionsCmd `cmd:"" name:"permissions" help:"List permissions on a file"`
+	Permissions DrivePermissionsCmd `cmd:"" name:"permissions" help:"Manage file permissions"`
 	URL         DriveURLCmd         `cmd:"" name:"url" help:"Print web URLs for files"`
 	Comments    DriveCommentsCmd    `cmd:"" name:"comments" help:"Manage comments on files"`
 	Drives      DriveDrivesCmd      `cmd:"" name:"drives" help:"List shared drives (Team Drives)"`
@@ -606,9 +606,9 @@ func (c *DriveShareCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 	role := strings.TrimSpace(c.Role)
 	if role == "" {
-		role = "reader"
+		role = permRoleReader
 	}
-	if role != "reader" && role != "writer" {
+	if role != permRoleReader && role != permRoleWriter {
 		return usage("invalid --role (expected reader|writer)")
 	}
 
@@ -619,10 +619,10 @@ func (c *DriveShareCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	perm := &drive.Permission{Role: role}
 	if c.Anyone {
-		perm.Type = "anyone"
+		perm.Type = permTypeAnyone
 		perm.AllowFileDiscovery = c.Discoverable
 	} else {
-		perm.Type = "user"
+		perm.Type = permTypeUser
 		perm.EmailAddress = strings.TrimSpace(c.Email)
 	}
 
@@ -698,70 +698,6 @@ func (c *DriveUnshareCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u.Out().Printf("removed\ttrue")
 	u.Out().Printf("file_id\t%s", fileID)
 	u.Out().Printf("permission_id\t%s", permissionID)
-	return nil
-}
-
-type DrivePermissionsCmd struct {
-	FileID string `arg:"" name:"fileId" help:"File ID"`
-	Max    int64  `name:"max" aliases:"limit" help:"Max results" default:"100"`
-	Page   string `name:"page" help:"Page token"`
-}
-
-func (c *DrivePermissionsCmd) Run(ctx context.Context, flags *RootFlags) error {
-	u := ui.FromContext(ctx)
-	account, err := requireAccount(flags)
-	if err != nil {
-		return err
-	}
-	fileID := strings.TrimSpace(c.FileID)
-	if fileID == "" {
-		return usage("empty fileId")
-	}
-
-	svc, err := newDriveService(ctx, account)
-	if err != nil {
-		return err
-	}
-
-	call := svc.Permissions.List(fileID).
-		SupportsAllDrives(true).
-		Fields("nextPageToken, permissions(id, type, role, emailAddress)").
-		Context(ctx)
-	if c.Max > 0 {
-		call = call.PageSize(c.Max)
-	}
-	if strings.TrimSpace(c.Page) != "" {
-		call = call.PageToken(c.Page)
-	}
-
-	resp, err := call.Do()
-	if err != nil {
-		return err
-	}
-	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
-			"fileId":          fileID,
-			"permissions":     resp.Permissions,
-			"permissionCount": len(resp.Permissions),
-			"nextPageToken":   resp.NextPageToken,
-		})
-	}
-	if len(resp.Permissions) == 0 {
-		u.Err().Println("No permissions")
-		return nil
-	}
-
-	w, flush := tableWriter(ctx)
-	defer flush()
-	fmt.Fprintln(w, "ID\tTYPE\tROLE\tEMAIL")
-	for _, p := range resp.Permissions {
-		email := p.EmailAddress
-		if email == "" {
-			email = "-"
-		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", p.Id, p.Type, p.Role, email)
-	}
-	printNextPageHint(u, resp.NextPageToken)
 	return nil
 }
 

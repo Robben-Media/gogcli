@@ -10,6 +10,8 @@ import (
 	"github.com/steipete/gogcli/internal/ui"
 )
 
+const calendarIDPrimary = "primary"
+
 type CalendarCmd struct {
 	Calendars       CalendarCalendarsCmd       `cmd:"" name:"calendars" help:"Manage calendar list"`
 	ACL             CalendarAclCmd             `cmd:"" name:"acl" help:"Manage calendar ACL"`
@@ -136,7 +138,7 @@ func (c *CalendarEventsCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("calendarId not allowed with --cal/--calendars")
 	}
 	if !c.All && calendarID == "" && len(calInputs) == 0 {
-		calendarID = "primary"
+		calendarID = calendarIDPrimary
 	}
 
 	svc, err := newCalendarService(ctx, account)
