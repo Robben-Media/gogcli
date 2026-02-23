@@ -22,10 +22,18 @@ type KeepCmd struct {
 	ServiceAccount string `name:"service-account" help:"Path to service account JSON file"`
 	Impersonate    string `name:"impersonate" help:"Email to impersonate (required with service-account)"`
 
-	List       KeepListCmd       `cmd:"" default:"withargs" help:"List notes"`
-	Get        KeepGetCmd        `cmd:"" name:"get" help:"Get a note"`
-	Search     KeepSearchCmd     `cmd:"" name:"search" help:"Search notes by text (client-side)"`
-	Attachment KeepAttachmentCmd `cmd:"" name:"attachment" help:"Download an attachment"`
+	List        KeepListCmd        `cmd:"" default:"withargs" help:"List notes"`
+	Get         KeepGetCmd         `cmd:"" name:"get" help:"Get a note"`
+	Search      KeepSearchCmd      `cmd:"" name:"search" help:"Search notes by text (client-side)"`
+	Attachment  KeepAttachmentCmd  `cmd:"" name:"attachment" help:"Download an attachment"`
+	Notes       KeepNotesCmd       `cmd:"" name:"notes" help:"Create or delete notes"`
+	Permissions KeepPermissionsCmd `cmd:"" name:"permissions" help:"Manage note permissions"`
+}
+
+// KeepNotesCmd contains subcommands for note creation and deletion.
+type KeepNotesCmd struct {
+	Create KeepNotesCreateCmd `cmd:"" name:"create" help:"Create a new note (text or list)"`
+	Delete KeepNotesDeleteCmd `cmd:"" name:"delete" help:"Delete a note"`
 }
 
 type KeepListCmd struct {

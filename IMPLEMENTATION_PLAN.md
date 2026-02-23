@@ -42,7 +42,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog docs create --help` works
 
 ### Task 2: Google Keep — Notes CRUD
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/keep-gaps.md
 - **Description**: Add `gog keep notes create` (text notes and list notes via mutually exclusive flags) and `gog keep notes delete` (with confirmDestructive). Both require `requireWorkspaceAccount()`.
@@ -53,7 +53,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog keep notes create --help`, `gog keep notes delete --help`
 
 ### Task 3: Google Keep — Permissions batch operations
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/keep-gaps.md
 - **Description**: Add `gog keep permissions batch-create` (share note with multiple members) and `gog keep permissions batch-delete` (remove sharing, with confirmDestructive). Both require Workspace accounts.
@@ -64,7 +64,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog keep permissions batch-create --help`
 
 ### Task 4: Google Tasks — Task list management
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/tasks-gaps.md
 - **Description**: Add `gog tasks tasklists delete` (confirmDestructive, warns about cascading task deletion), `gog tasks tasklists get`, `gog tasks tasklists patch` (partial with flagProvided), and `gog tasks tasklists update` (full replace with PUT).
@@ -75,18 +75,19 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog tasks tasklists get --help`
 
 ### Task 5: Google Tasks — Task move and update
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/tasks-gaps.md
-- **Description**: Add `gog tasks move` (POST with query params for parent/previous positioning) and `gog tasks update` (full PUT replace, contrast with existing `tasks patch`). Check for naming conflicts with existing TasksCmd struct.
+- **Description**: Add `gog tasks move` (POST with query params for parent/previous positioning) and `gog tasks replace` (full PUT replace, contrast with existing `tasks update` which uses PATCH). Added `patch` alias to `update` for clarity.
 - **Files**:
   - `internal/cmd/tasks_edit.go` — create
   - `internal/cmd/tasks_edit_test.go` — create
+  - `internal/cmd/tasks.go` — modified (added Move, Replace, updated help text, added patch alias)
 - **Methods**: tasks.move, tasks.update (2)
-- **Verification**: `make ci` passes, `gog tasks move --help`, `gog tasks update --help`
+- **Verification**: `make ci` passes, `gog tasks move --help`, `gog tasks replace --help`
 
 ### Task 6: Search Console — Sitemaps and URL inspection
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/searchconsole-gaps.md
 - **Description**: Add sitemap CRUD (`gog gsc sitemaps delete/get/list/submit`) and URL inspection (`gog gsc url inspect`). The mobile-friendly test may also be in this spec. Sitemaps use the `webmasters` prefix in the API path.
@@ -99,29 +100,31 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog gsc sitemaps list --help`
 
 ### Task 7: Analytics Data — Report operations
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/analyticsdata-gaps.md
-- **Description**: Add report commands: `gog analytics data run-report`, `gog analytics data run-realtime-report`, `gog analytics data run-pivot-report`, `gog analytics data batch-run-reports`, `gog analytics data batch-run-pivot-reports`. These accept complex JSON request bodies via `--request-json` flag.
+- **Description**: Add report commands: `gog analytics pivot-report`, `gog analytics batch-reports`, `gog analytics batch-pivot-reports`, `gog analytics check-compatibility`. These accept complex JSON request bodies via `--pivots-json`, `--requests-json`, or `--filter-json` flags. All support `@filepath` syntax for reading JSON from files.
 - **Files**:
-  - `internal/cmd/analyticsdata_reports.go` — create
-  - `internal/cmd/analyticsdata_reports_test.go` — create
-- **Methods**: properties.runReport, properties.runRealtimeReport, properties.runPivotReport, properties.batchRunReports, properties.batchRunPivotReports (5)
-- **Verification**: `make ci` passes, `gog analytics data run-report --help`
+  - `internal/cmd/analytics_reports.go` — created
+  - `internal/cmd/analytics_reports_test.go` — created
+  - `internal/cmd/analytics.go` — modified (added new commands to AnalyticsCmd struct)
+- **Methods**: properties.runPivotReport, properties.batchRunReports, properties.batchRunPivotReports, properties.checkCompatibility (4)
+- **Verification**: `make ci` passes, `gog analytics pivot-report --help`, `gog analytics batch-reports --help`
 
 ### Task 8: Analytics Data — Audience exports
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/analyticsdata-gaps.md
-- **Description**: Add audience export commands: `gog analytics data audience-exports create/get/list/query`. Create returns an operation; query returns exported user data.
+- **Description**: Add audience export commands: `gog analytics audience-exports create/get/list/query`. Create returns a long-running operation; query returns exported user data.
 - **Files**:
-  - `internal/cmd/analyticsdata_audience.go` — create
-  - `internal/cmd/analyticsdata_audience_test.go` — create
-- **Methods**: properties.audienceExports.create, .get, .list, .query (3 — verify exact count from spec)
-- **Verification**: `make ci` passes, `gog analytics data audience-exports list --help`
+  - `internal/cmd/analytics_audience.go` — created
+  - `internal/cmd/analytics_audience_test.go` — created
+  - `internal/cmd/analytics.go` — modified (added AudienceExports command)
+- **Methods**: properties.audienceExports.create, .get, .list, .query (4)
+- **Verification**: `make ci` passes, `gog analytics audience-exports list --help`
 
 ### Task 9: Sheets — All 8 gap methods
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/sheets-gaps.md
 - **Description**: Add developer metadata commands (`gog sheets metadata get/search`), spreadsheet filter operations (`gog sheets get-by-filter`), sheet copy (`gog sheets copy-to`), and values operations (`gog sheets values batch-clear`, `batch-clear-by-filter`, `batch-get-by-filter`, `batch-update-by-filter`). DataFilter methods accept `--filters-json` with `@filepath` support.

@@ -12,5 +12,150 @@
   - Added comprehensive tests in `internal/cmd/docs_create_test.go`
   - Updated existing tests in `docs_commands_test.go` and `execute_docs_slides_sheets_more_test.go`
 
-## Next Steps
-- Continue with Task 2: Google Keep — Notes CRUD
+### Task 2: Google Keep — Notes CRUD ✅ COMPLETED
+- Date: 2025-02-22
+- Changes:
+  - Created `internal/cmd/keep_notes_edit.go` with `KeepNotesCreateCmd` and `KeepNotesDeleteCmd`
+  - Created `internal/cmd/keep_notes_edit_test.go` with comprehensive tests
+  - Updated `internal/cmd/keep.go` to register new commands under `KeepNotesCmd` parent
+  - `notes create`: Creates text or list notes with `--body`, `--body-from-file`, or `--list-items` flags
+  - `notes delete`: Deletes notes with confirmation (uses global `--force` flag)
+  - Supports `--checked` flag for marking list items as completed
+
+### Task 3: Google Keep — Permissions batch operations ✅ COMPLETED
+- Date: 2025-02-22
+- Changes:
+  - Created `internal/cmd/keep_permissions.go` with `KeepPermissionsBatchCreateCmd` and `KeepPermissionsBatchDeleteCmd`
+  - Created `internal/cmd/keep_permissions_test.go` with comprehensive tests
+  - Updated `internal/cmd/keep.go` to register `KeepPermissionsCmd` parent
+  - `permissions batch-create`: Shares notes with multiple users (only WRITER role supported)
+  - `permissions batch-delete`: Removes sharing with confirmation (uses global `--force` flag)
+  - Supports short permission names (auto-converts to full format)
+
+### Task 4: Google Tasks — Task list management ✅ COMPLETED
+- Date: 2025-02-22
+- Changes:
+  - Created `internal/cmd/tasks_tasklists_edit.go` with 4 commands:
+    - `TasksListsGetCmd`: Retrieves a single task list by ID
+    - `TasksListsDeleteCmd`: Permanently deletes task list with all tasks (confirmDestructive)
+    - `TasksListsPatchCmd`: Partial update with flagProvided for updateMask
+    - `TasksListsUpdateCmd`: Full replace (PUT semantics)
+  - Created `internal/cmd/tasks_tasklists_edit_test.go` with comprehensive tests
+  - Updated `internal/cmd/tasks_lists.go` to register new commands under `TasksListsCmd` parent
+  - Commands available: `gog tasks lists get/delete/patch/update`
+  - Aliases: delete (rm, del), update (replace)
+
+### Task 5: Google Tasks — Task move and update ✅ COMPLETED
+- Date: 2025-02-22
+- Changes:
+  - Created `internal/cmd/tasks_edit.go` with `TasksMoveCmd` and `TasksReplaceCmd`
+  - Created `internal/cmd/tasks_edit_test.go` with comprehensive tests
+  - Updated `internal/cmd/tasks.go` to register new commands and add `patch` alias to `update`
+  - `tasks move`: Moves tasks within a list using POST with `--parent` and `--previous` flags
+  - `tasks replace`: Full PUT replace with required `--title` flag, supports `--notes`, `--status`, `--due`
+  - Existing `tasks update` now has alias `patch` to clarify its partial-update behavior
+  - All tests pass (10 new test cases)
+  - Commands available: `gog tasks move`, `gog tasks replace`
+
+## Completed Tasks Summary
+
+All Phase 1 tasks (Tasks 1-9) are now COMPLETED:
+- Task 1: Google Docs — documents.create
+- Task 2: Google Keep — Notes CRUD (notes.create, notes.delete)
+- Task 3: Google Keep — Permissions batch operations
+- Task 4: Google Tasks — Task list management
+- Task 5: Google Tasks — Task move and update
+- Task 6: Search Console — Sitemaps and URL inspection
+- Task 7: Analytics Data — Report operations
+- Task 8: Analytics Data — Audience exports
+- Task 9: Sheets — All 8 gap methods
+
+Total methods implemented: 33 methods across 9 tasks.
+
+---
+
+## Task 6 - 2026-02-22
+### Completed: Search Console — Sitemaps and URL inspection
+- Methods implemented: 6
+  - `sitemaps.get` - Get sitemap details
+  - `sitemaps.delete` - Delete sitemap from Search Console (with confirmation)
+  - `sites.get` - Get a site's details
+  - `sites.add` - Add a site to Search Console
+  - `sites.delete` - Remove a site from Search Console (with confirmation)
+  - `urlTestingTools.mobileFriendlyTest.run` - Test if a URL is mobile-friendly
+- Files created/modified:
+  - `internal/cmd/searchconsole.go` — restructured sites/sitemaps to use subcommand pattern
+  - `internal/cmd/searchconsole_sitemaps.go` — created (get/delete commands)
+  - `internal/cmd/searchconsole_sites.go` — created (get/add/delete + mobile-friendly-test)
+  - `internal/cmd/searchconsole_test.go` — updated tests for new command structure
+  - `internal/cmd/searchconsole_more_test.go` — created (9 new tests)
+- Tests added: 9 new test functions
+- Key changes:
+  - Restructured command hierarchy: `sites list` instead of `sites`, `sitemaps list` instead of `sitemaps`
+  - Added `mobile-friendly-test` command with JSON and text output
+  - Delete commands use `confirmDestructive()` with `--force` flag support
+
+---
+
+## Task 7 - 2025-02-22
+### Completed: Analytics Data — Report operations
+- Methods implemented: 4
+  - `properties.runPivotReport` - Run a pivot report with pivoted dimensions
+  - `properties.batchRunReports` - Run up to 5 reports in a single batch request
+  - `properties.batchRunPivotReports` - Run up to 5 pivot reports in a single batch
+  - `properties.checkCompatibility` - Check if dimension/metric combinations are compatible
+- Files created/modified:
+  - `internal/cmd/analytics_reports.go` — created (4 new command structs)
+  - `internal/cmd/analytics_reports_test.go` — created (13 new tests)
+  - `internal/cmd/analytics.go` — modified (added 4 new commands to AnalyticsCmd)
+- Tests added: 13 new test functions
+- Key features:
+  - `pivot-report`: Requires `--pivots-json` with pivot definitions; supports `--filter-json`, `--keep-empty`, `--currency-code`
+  - `batch-reports`: Accepts `--requests-json` with array of up to 5 report requests
+  - `batch-pivot-reports`: Accepts `--requests-json` with array of up to 5 pivot report requests
+  - `check-compatibility`: Validates dimension/metric combinations; returns COMPATIBLE/INCOMPATIBLE status
+  - All JSON flags support `@filepath` syntax for reading from file or `-` for stdin
+  - Helper function `readJSONFromFlag` created for reusable `@filepath` parsing
+
+---
+
+## Task 8 - 2025-02-22
+### Completed: Analytics Data — Audience exports
+- Methods implemented: 4
+  - `properties.audienceExports.create` - Create a new audience export (returns long-running operation)
+  - `properties.audienceExports.get` - Get an audience export by name
+  - `properties.audienceExports.list` - List audience exports for a property
+  - `properties.audienceExports.query` - Query rows from a completed audience export
+- Files created/modified:
+  - `internal/cmd/analytics_audience.go` — created (4 new command structs)
+  - `internal/cmd/analytics_audience_test.go` — created (10 new tests)
+  - `internal/cmd/analytics.go` — modified (added AudienceExportsCmd)
+- Tests added: 10 new test functions
+- Key features:
+  - `create`: Returns operation name and done status; export runs asynchronously
+  - `get`: Shows export metadata including state, row count, creation time
+  - `list`: Pagination with --max and --page flags
+  - `query`: Retrieves rows from ACTIVE exports; shows dimension values
+  - Audience export states: CREATING, ACTIVE, FAILED
+---
+
+## Task 9 - 2025-02-22
+### Completed: Sheets — All 8 gap methods
+- Methods implemented: 8
+  - `spreadsheets.developerMetadata.get` - Get a developer metadata entry by ID
+  - `spreadsheets.developerMetadata.search` - Search developer metadata
+  - `spreadsheets.getByDataFilter` - Get spreadsheet data by data filter
+  - `spreadsheets.sheets.copyTo` - Copy a sheet to another spreadsheet
+  - `spreadsheets.values.batchClear` - Clear values from multiple ranges
+  - `spreadsheets.values.batchClearByDataFilter` - Clear values by data filter
+  - `spreadsheets.values.batchGetByDataFilter` - Get values by data filter
+  - `spreadsheets.values.batchUpdateByDataFilter` - Update values by data filter
+- Files created/modified:
+  - `internal/cmd/sheets_gaps.go` — created (8 new command structs)
+  - `internal/cmd/sheets.go` — modified (added new commands to SheetsCmd, added userEnteredValueInput constant)
+- Key features:
+  - Developer metadata commands under `gog sheets dev-metadata get/search`
+  - `copy-to` copies a sheet tab to another spreadsheet
+  - Batch-clear commands use `confirmDestructive()` with `--force` flag
+  - All data filter commands support `@filepath` syntax for JSON input
+  - Added `userEnteredValueInput` constant to reduce string duplication

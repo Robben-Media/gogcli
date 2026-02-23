@@ -15,6 +15,10 @@ import (
 type TasksListsCmd struct {
 	List   TasksListsListCmd   `cmd:"" default:"withargs" help:"List task lists"`
 	Create TasksListsCreateCmd `cmd:"" name:"create" help:"Create a task list" aliases:"add,new"`
+	Get    TasksListsGetCmd    `cmd:"" name:"get" help:"Get a task list"`
+	Delete TasksListsDeleteCmd `cmd:"" name:"delete" help:"Delete a task list" aliases:"rm,del"`
+	Patch  TasksListsPatchCmd  `cmd:"" name:"patch" help:"Partially update a task list"`
+	Update TasksListsUpdateCmd `cmd:"" name:"update" help:"Replace a task list" aliases:"replace"`
 }
 
 type TasksListsListCmd struct {

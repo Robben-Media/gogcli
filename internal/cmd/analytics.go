@@ -20,12 +20,17 @@ var (
 )
 
 type AnalyticsCmd struct {
-	Report     AnalyticsReportCmd     `cmd:"" name:"report" group:"Read" help:"Run a report"`
-	Realtime   AnalyticsRealtimeCmd   `cmd:"" name:"realtime" group:"Read" help:"Run a realtime report"`
-	Properties AnalyticsPropertiesCmd `cmd:"" name:"properties" group:"Read" help:"List properties"`
-	Accounts   AnalyticsAccountsCmd   `cmd:"" name:"accounts" group:"Read" help:"List accounts"`
-	Dimensions AnalyticsDimensionsCmd `cmd:"" name:"dimensions" group:"Read" help:"List available dimensions for a property"`
-	Metrics    AnalyticsMetricsCmd    `cmd:"" name:"metrics" group:"Read" help:"List available metrics for a property"`
+	Report             AnalyticsReportCmd             `cmd:"" name:"report" group:"Read" help:"Run a report"`
+	Realtime           AnalyticsRealtimeCmd           `cmd:"" name:"realtime" group:"Read" help:"Run a realtime report"`
+	PivotReport        AnalyticsPivotReportCmd        `cmd:"" name:"pivot-report" group:"Read" help:"Run a pivot report"`
+	BatchReports       AnalyticsBatchReportsCmd       `cmd:"" name:"batch-reports" group:"Read" help:"Run multiple reports in a batch"`
+	BatchPivotReports  AnalyticsBatchPivotReportsCmd  `cmd:"" name:"batch-pivot-reports" group:"Read" help:"Run multiple pivot reports in a batch"`
+	CheckCompatibility AnalyticsCheckCompatibilityCmd `cmd:"" name:"check-compatibility" group:"Read" help:"Check dimension and metric compatibility"`
+	AudienceExports    AnalyticsAudienceExportsCmd    `cmd:"" name:"audience-exports" group:"Read" help:"Manage audience exports"`
+	Properties         AnalyticsPropertiesCmd         `cmd:"" name:"properties" group:"Read" help:"List properties"`
+	Accounts           AnalyticsAccountsCmd           `cmd:"" name:"accounts" group:"Read" help:"List accounts"`
+	Dimensions         AnalyticsDimensionsCmd         `cmd:"" name:"dimensions" group:"Read" help:"List available dimensions for a property"`
+	Metrics            AnalyticsMetricsCmd            `cmd:"" name:"metrics" group:"Read" help:"List available metrics for a property"`
 }
 
 const analyticsPropertyPrefix = "properties/"
