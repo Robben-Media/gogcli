@@ -60,10 +60,12 @@ type DriveCmd struct {
 	URL         DriveURLCmd         `cmd:"" name:"url" help:"Print web URLs for files"`
 	Comments    DriveCommentsCmd    `cmd:"" name:"comments" help:"Manage comments on files"`
 	Drives      DriveDrivesCmd      `cmd:"" name:"drives" help:"List shared drives (Team Drives)"`
+	SharedDrive DriveDrivesAdminCmd `cmd:"" name:"shared-drive" help:"Manage shared drives (create, update, delete, hide, unhide)"`
 	About       DriveAboutCmd       `cmd:"" name:"about" help:"Get account info and storage quota"`
 	Revisions   DriveRevisionsCmd   `cmd:"" name:"revisions" help:"Manage file revisions"`
 	Changes     DriveChangesCmd     `cmd:"" name:"changes" help:"List and watch for file changes"`
 	Channels    DriveChannelsCmd    `cmd:"" name:"channels" help:"Manage webhook channels"`
+	FileOps     DriveFilesCmd       `cmd:"" name:"file-ops" help:"File operations (watch, generate-ids, empty-trash)"`
 }
 
 type DriveLsCmd struct {

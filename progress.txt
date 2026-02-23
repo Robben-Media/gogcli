@@ -374,3 +374,46 @@
   - Added `allDrivesCorpora` constant to satisfy goconst linter
   - Added #nosec G304 comment for user-provided file paths
   - Pre-existing test failures in calendar/docs/gmail/classroom tests are unrelated to this task
+
+---
+
+## Task 25 - Drive — Remaining operations
+### Completed: Drive — Remaining operations
+- Date: 2026-02-23
+- Methods implemented: 8
+  - files.watch - watch a file for changes via webhook
+  - files.generateIds - generate IDs for batch creation
+  - files.emptyTrash - permanently delete all trashed files
+  - drives.create - create a shared drive
+  - drives.update - update a shared drive's name
+  - drives.delete - delete a shared drive
+  - drives.hide - hide a shared drive from default view
+  - drives.unhide - unhide a shared drive
+- Files created/modified:
+  - Created `internal/cmd/drive_files_edit.go` with DriveFilesCmd and 3 subcommands
+  - Created `internal/cmd/drive_files_edit_test.go` with 16 test cases
+  - Created `internal/cmd/drive_drives_admin.go` with DriveDrivesAdminCmd and 5 subcommands
+  - Modified `internal/cmd/drive.go` to register SharedDrive and FileOps commands
+- Tests added: 16 test cases covering all file operations and shared drive admin operations
+- Commands available:
+  - `gog drive file-ops watch` - watch a file for changes
+  - `gog drive file-ops generate-ids` - generate file IDs for batch operations
+  - `gog drive file-ops empty-trash` - permanently delete all trashed files
+  - `gog drive shared-drive create` - create a shared drive
+  - `gog drive shared-drive update` - update a shared drive's name
+  - `gog drive shared-drive delete` - delete a shared drive (with confirmation)
+  - `gog drive shared-drive hide` - hide a shared drive from default view
+  - `gog drive shared-drive unhide` - unhide a shared drive
+- Features:
+  - Auto-generated channel IDs for watch operations
+  - Auto-generated request IDs for idempotent shared drive creation
+  - Space validation for generate-ids (drive, appDataFolder, photos)
+  - Count validation (1-1000) for generate-ids
+  - Extra-strong confirmation warning for empty-trash (irreversible)
+  - confirmDestructive for shared drive delete
+  - JSON and text output formats
+- Learnings:
+  - Command names should not conflict with parent command names (avoid `name:"drive"` inside `DriveCmd`)
+  - Use global `--force` flag from RootFlags instead of local Force flags to avoid duplicates
+  - JSON mode tests capture stdout properly via `outfmt.WriteJSON`
+  - Pre-existing test failures in calendar/CSE/classroom tests are unrelated to this task

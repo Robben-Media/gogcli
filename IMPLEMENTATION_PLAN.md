@@ -328,17 +328,17 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog drive revisions list --help`
 
 ### Task 25: Drive — Remaining operations (files, teamdrives, labels)
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/drive-gaps.md
 - **Description**: Add remaining Drive gaps: file operations (watch, generateIds, emptyTrash, export if missing), teamdrives/drives CRUD (deprecated but in Discovery API), and label management if specified. Check spec for exact remaining methods.
 - **Files**:
-  - `internal/cmd/drive_files_edit.go` — create/modify
-  - `internal/cmd/drive_files_edit_test.go` — create
-  - `internal/cmd/drive_teamdrives.go` — create
-  - `internal/cmd/drive_teamdrives_test.go` — create
-- **Methods**: Remaining ~16 Drive methods
-- **Verification**: `make ci` passes, `gog drive --help` shows all new subcommands
+  - `internal/cmd/drive_files_edit.go` — created (watch, generate-ids, empty-trash)
+  - `internal/cmd/drive_files_edit_test.go` — created
+  - `internal/cmd/drive_drives_admin.go` — created (shared-drive create/update/delete/hide/unhide)
+  - `internal/cmd/drive.go` — modified (added SharedDrive, FileOps subcommands)
+- **Methods**: files.watch, files.generateIds, files.emptyTrash, drives.create, drives.update, drives.delete, drives.hide, drives.unhide (8)
+- **Verification**: `make ci` passes, `gog drive shared-drive --help`, `gog drive file-ops --help`
 
 ### Task 26: Chat — Custom emojis and media
 - **Status**: pending
