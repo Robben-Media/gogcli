@@ -94,7 +94,7 @@ func TestCalendarMoreCommands_JSON(t *testing.T) {
 	ctx = outfmt.WithMode(ctx, outfmt.Mode{JSON: true})
 
 	_ = captureStdout(t, func() {
-		if err := runKong(t, &CalendarCalendarsCmd{}, []string{}, ctx, flags); err != nil {
+		if err := runKong(t, &CalendarCalendarsListCmd{}, []string{}, ctx, flags); err != nil {
 			t.Fatalf("calendars: %v", err)
 		}
 	})
