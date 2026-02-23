@@ -124,5 +124,31 @@
 - Learnings: Use different variable names to avoid shadow warnings in nested error handling
 ---
 
+## Task 16 - Gmail — Message operations
+### Completed: Gmail — Message operations
+- Date: 2026-02-22
+- Methods implemented: 6 (messages.import, messages.insert, messages.modify, messages.trash, messages.untrash)
+  - Note: messages.send already exists at top-level as `gog gmail send`
+  - Note: messages.batchDelete and messages.batchModify already exist at `gog gmail batch delete/modify`
+- Files created/modified:
+  - Created `internal/cmd/gmail_messages_edit.go` with 5 new commands
+  - Created `internal/cmd/gmail_messages_edit_test.go` with comprehensive tests
+  - Modified `internal/cmd/gmail_messages.go` to add Import, Insert, Modify, Trash, Untrash subcommands
+- Tests added: 15 test cases across multiple test functions
+- Commands:
+  - `gog gmail messages import` - import a message into mailbox (processed through Gmail pipeline)
+  - `gog gmail messages insert` - insert a message directly into mailbox (bypasses processing)
+  - `gog gmail messages modify` - modify labels on a message (--add, --remove flags)
+  - `gog gmail messages trash` - move a message to trash
+  - `gog gmail messages untrash` - remove a message from trash
+- Features:
+  - Raw message input via `--raw` (base64url encoded) or `--raw-file` (file path or `-` for stdin)
+  - Thread ID support for import/insert
+  - Label name resolution for modify (accepts both label names and IDs)
+  - JSON and text output formats
+  - Proper error handling and validation
+- Learnings: Gmail API uses different endpoints for import vs insert; both accept raw RFC 2822 messages
+---
+
 ## Next Steps
-- Continue with Task 16: Gmail — Message operations
+- Continue with Task 17: Gmail — Settings (delegates, filters, forwarding)
