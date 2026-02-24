@@ -583,3 +583,27 @@
   - flagProvided pattern for admin patch updateMask
   - Filter support for invitation list
   - JSON and text output formats
+
+---
+
+## Task 31 - MyBusiness Account Management — Location admins and transfer
+### Completed: MyBusiness Account Management — Location admins and transfer
+- Date: 2026-02-23
+- Methods implemented: 5 (locations.admins.create, .delete, .list, .patch, locations.transfer)
+- Files created/modified:
+  - Created `internal/cmd/businessprofile_location_admins.go` with 5 command structs (list, create, delete, patch, transfer)
+  - Created `internal/cmd/businessprofile_location_admins_test.go` with 8 test functions
+  - Modified `internal/cmd/businessprofile.go` to register LocationAdmins and Transfer subcommands
+- Tests added: 8 test cases covering all location admin and transfer operations
+- Commands available under `gog business-profile location-admins`:
+  - `list` - list admins for a location (no pagination)
+  - `create` - add an admin with email and role
+  - `delete` - remove an admin (confirmDestructive)
+  - `patch` - update an admin's role (flagProvided updateMask)
+- Command `gog business-profile locations-transfer`:
+  - Transfer location ownership to another account (confirmDestructive with clear warning)
+- Features:
+  - Auto-prefix for location and account resource names
+  - confirmDestructive for admin delete and location transfer
+  - flagProvided pattern for admin patch updateMask
+  - JSON and text output formats

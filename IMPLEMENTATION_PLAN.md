@@ -415,7 +415,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog mybusiness account-admins list --help`
 
 ### Task 31: MyBusiness Account Management — Location admins and transfer
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/mybusinessaccountmanagement-gaps.md
 - **Description**: Add `gog mybusiness location-admins create/delete/list/patch` and `gog mybusiness locations transfer` (confirmDestructive — transfers ownership). No pagination on location admin list.
