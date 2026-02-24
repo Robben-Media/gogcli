@@ -19,9 +19,11 @@ var (
 )
 
 type BusinessProfileCmd struct {
-	Accounts  BusinessProfileAccountsCmd  `cmd:"" name:"accounts" help:"Account management"`
-	Locations BusinessProfileLocationsCmd `cmd:"" name:"locations" group:"Read" help:"List locations for an account"`
-	Get       BusinessProfileGetCmd       `cmd:"" name:"get" group:"Read" help:"Get location details"`
+	Accounts    BusinessProfileAccountsCmd      `cmd:"" name:"accounts" help:"Account management"`
+	Admins      BusinessProfileAccountAdminsCmd `cmd:"" name:"account-admins" help:"Account admin management"`
+	Invitations BusinessProfileInvitationsCmd   `cmd:"" name:"account-invitations" help:"Account invitation management"`
+	Locations   BusinessProfileLocationsCmd     `cmd:"" name:"locations" group:"Read" help:"List locations for an account"`
+	Get         BusinessProfileGetCmd           `cmd:"" name:"get" group:"Read" help:"Get location details"`
 }
 
 // BusinessProfileAccountsCmd is a parent struct with account subcommands.

@@ -402,7 +402,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog mybusiness accounts get --help`
 
 ### Task 30: MyBusiness Account Management — Account admins and invitations
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/mybusinessaccountmanagement-gaps.md
 - **Description**: Add account admins (`gog mybusiness account-admins create/delete/list/patch`) and invitations (`gog mybusiness account-invitations accept/decline/list`). No pagination on admin list or invitation list endpoints.

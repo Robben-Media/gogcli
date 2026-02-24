@@ -554,3 +554,32 @@
   - accountName and primaryOwner fields for patch
   - JSON and text output formats
 - Breaking change: `gog business-profile accounts` now requires subcommand (e.g. `accounts list` instead of just `accounts`)
+
+---
+
+## Task 30 - MyBusiness Account Management — Account admins and invitations
+### Completed: MyBusiness Account Management — Account admins and invitations
+- Date: 2026-02-23
+- Methods implemented: 7 (admins.create, .delete, .list, .patch, invitations.accept, .decline, .list)
+- Files created/modified:
+  - Created `internal/cmd/businessprofile_admins.go` with 4 command structs (list, create, delete, patch)
+  - Created `internal/cmd/businessprofile_admins_test.go` with 7 test functions
+  - Created `internal/cmd/businessprofile_invitations.go` with 3 command structs (list, accept, decline)
+  - Created `internal/cmd/businessprofile_invitations_test.go` with 5 test functions
+  - Modified `internal/cmd/businessprofile.go` to register Admins and Invitations subcommands
+- Tests added: 12 test cases covering all admin and invitation operations
+- Commands available under `gog business-profile account-admins`:
+  - `list` - list admins for an account (no pagination)
+  - `create` - add an admin with email and role
+  - `delete` - remove an admin (confirmDestructive)
+  - `patch` - update an admin's role (flagProvided updateMask)
+- Commands available under `gog business-profile account-invitations`:
+  - `list` - list pending invitations (supports --filter)
+  - `accept` - accept an invitation
+  - `decline` - decline an invitation
+- Features:
+  - Auto-prefix for account resource names
+  - confirmDestructive for admin delete
+  - flagProvided pattern for admin patch updateMask
+  - Filter support for invitation list
+  - JSON and text output formats
