@@ -441,7 +441,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog mybusiness-info categories list --help`
 
 ### Task 33: MyBusiness Business Information — Attributes
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/mybusinessbusinessinformation-gaps.md
 - **Description**: Add attributes commands: `gog mybusiness-info attributes list`, `gog mybusiness-info location-attributes get/get-google-updated/update`. Update accepts `--attributes-json` with `@filepath` support.

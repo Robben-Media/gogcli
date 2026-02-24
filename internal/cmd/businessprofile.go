@@ -28,6 +28,8 @@ type BusinessProfileCmd struct {
 	Chains          BusinessProfileInfoChainsCmd          `cmd:"" name:"chains" help:"Chain reference data"`
 	GoogleLocations BusinessProfileInfoGoogleLocationsCmd `cmd:"" name:"google-locations" help:"Search for Google locations"`
 	InfoLocations   BusinessProfileInfoLocationsCmd       `cmd:"" name:"info-locations" help:"Location creation, deletion, and patching"`
+	Attributes      BusinessProfileInfoAttributesCmd      `cmd:"" name:"attributes" help:"Attribute metadata"`
+	LocationAttrs   BusinessProfileInfoLocationAttrsCmd   `cmd:"" name:"location-attributes" help:"Location attribute management"`
 	Locations       BusinessProfileLocationsCmd           `cmd:"" name:"locations" group:"Read" help:"List locations for an account"`
 	Get             BusinessProfileGetCmd                 `cmd:"" name:"get" group:"Read" help:"Get location details"`
 }

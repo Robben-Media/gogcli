@@ -641,3 +641,26 @@
   - Auto-prefix for resource names
   - Pagination support for categories list
   - JSON and text output formats
+
+### Task 33: MyBusiness Business Information — Attributes ✅ COMPLETED
+- Branch: phase/3-business-apis
+- Files created:
+  - `internal/cmd/businessprofile_info_attributes.go` — 4 commands
+  - `internal/cmd/businessprofile_info_attributes_test.go` — 5 tests
+- Files modified:
+  - `internal/cmd/businessprofile.go` — added Attributes and LocationAttrs fields
+- Commands added:
+  - `gog business-profile attributes list` — list attribute metadata
+  - `gog business-profile location-attributes get` — get attributes for a location
+  - `gog business-profile location-attributes get-google-updated` — get Google-updated attributes
+  - `gog business-profile location-attributes update` — update attributes with @filepath JSON support
+- Features:
+  - @filepath support for JSON input (--attributes-json @file.json)
+  - AttributeMask for partial updates
+  - Pagination support for attribute list
+
+## Phase 3 Complete
+- All 5 tasks (29-33) completed
+- 28 methods implemented across Business Profile APIs
+- mybusinessaccountmanagement: accounts, admins, invitations, location admins, transfer
+- mybusinessbusinessinformation: categories, chains, google-locations, locations, attributes
