@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/alecthomas/kong"
 	"github.com/google/uuid"
@@ -360,6 +361,14 @@ func (c *CalendarAclWatchCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	if c.AuthToken != "" {
 		channel.Token = c.AuthToken
+	}
+
+	if ttl := strings.TrimSpace(c.TTL); ttl != "" {
+		d, parseErr := time.ParseDuration(ttl)
+		if parseErr != nil {
+			return usage(fmt.Sprintf("invalid --ttl: %v", parseErr))
+		}
+		channel.Expiration = time.Now().Add(d).UnixMilli()
 	}
 
 	call := svc.Acl.Watch(calendarID, channel)

@@ -341,20 +341,21 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog drive shared-drive --help`, `gog drive file-ops --help`
 
 ### Task 26: Chat — Custom emojis and media
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/chat-gaps.md
 - **Description**: Add `gog chat emoji create/delete/get/list` and `gog chat media download/upload`. All require Workspace accounts. Media upload uses multipart. Media download streams binary to file/stdout.
 - **Files**:
-  - `internal/cmd/chat_emoji.go` — create
-  - `internal/cmd/chat_emoji_test.go` — create
-  - `internal/cmd/chat_media.go` — create
-  - `internal/cmd/chat_media_test.go` — create
+  - `internal/cmd/chat_emoji.go` — created
+  - `internal/cmd/chat_emoji_test.go` — created
+  - `internal/cmd/chat_media.go` — created
+  - `internal/cmd/chat_media_test.go` — created
+  - `internal/cmd/chat.go` — modified (added Emoji and Media commands)
 - **Methods**: customEmojis.create, .delete, .get, .list, media.download, media.upload (6)
 - **Verification**: `make ci` passes, `gog chat emoji list --help`
 
 ### Task 27: Chat — Spaces management
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/chat-gaps.md
 - **Description**: Add `gog chat spaces complete-import/create/delete/find-dm/get/patch/search`. Patch uses flagProvided for updateMask. All require Workspace.
@@ -365,7 +366,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog chat spaces search --help`
 
 ### Task 28: Chat — Members, messages, attachments, reactions, events, read states
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/chat-gaps.md
 - **Description**: Add remaining Chat commands: members CRUD (`create/delete/get/list/patch`), messages operations (`delete/get/patch/update`), attachments get, reactions (`create/delete/list`), events (`get/list`), notification settings (`get/patch`), thread-read-state get, space-read-state update. This is a larger task covering the remaining 19 Chat methods.

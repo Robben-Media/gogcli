@@ -13,8 +13,13 @@ import (
 )
 
 type ChatMessagesCmd struct {
-	List ChatMessagesListCmd `cmd:"" name:"list" help:"List messages"`
-	Send ChatMessagesSendCmd `cmd:"" name:"send" help:"Send a message"`
+	List        ChatMessagesListCmd   `cmd:"" name:"list" help:"List messages"`
+	Send        ChatMessagesSendCmd   `cmd:"" name:"send" help:"Send a message"`
+	Get         ChatMessagesGetCmd    `cmd:"" name:"get" help:"Get a message"`
+	Delete      ChatMessagesDeleteCmd `cmd:"" name:"delete" help:"Delete a message"`
+	Patch       ChatMessagesPatchCmd  `cmd:"" name:"patch" help:"Patch a message (partial update)"`
+	Update      ChatMessagesUpdateCmd `cmd:"" name:"update" help:"Update a message (full replace)"`
+	Attachments ChatAttachmentsGetCmd `cmd:"" name:"attachments" help:"Get attachment metadata"`
 }
 
 type ChatMessagesListCmd struct {

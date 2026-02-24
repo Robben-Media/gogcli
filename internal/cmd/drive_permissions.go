@@ -354,6 +354,8 @@ func (c *DrivePermissionsUpdateCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 	if c.RemoveExpiration {
 		perm.ExpirationTime = ""
+		// ForceSendFields ensures the empty string is sent to clear expiration
+		perm.ForceSendFields = append(perm.ForceSendFields, "ExpirationTime")
 	} else if c.ExpirationTime != "" {
 		perm.ExpirationTime = c.ExpirationTime
 	}

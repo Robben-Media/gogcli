@@ -121,11 +121,16 @@ func (c *DriveFilesGenerateIdsCmd) Run(ctx context.Context, flags *RootFlags) er
 		return err
 	}
 
-	resp, err := svc.Files.GenerateIds().
+	call := svc.Files.GenerateIds().
 		Count(c.Count).
 		Space(space).
-		Context(ctx).
-		Do()
+		Context(ctx)
+	fileType := strings.TrimSpace(c.Type)
+	if fileType != "" {
+		call = call.Type(fileType)
+	}
+
+	resp, err := call.Do()
 	if err != nil {
 		return err
 	}

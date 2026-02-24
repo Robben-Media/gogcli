@@ -13,9 +13,16 @@ import (
 )
 
 type ChatSpacesCmd struct {
-	List   ChatSpacesListCmd   `cmd:"" name:"list" help:"List spaces"`
-	Find   ChatSpacesFindCmd   `cmd:"" name:"find" help:"Find spaces by display name"`
-	Create ChatSpacesCreateCmd `cmd:"" name:"create" help:"Create a space"`
+	List           ChatSpacesListCmd           `cmd:"" name:"list" help:"List spaces"`
+	Find           ChatSpacesFindCmd           `cmd:"" name:"find" help:"Find spaces by display name"`
+	Create         ChatSpacesCreateCmd         `cmd:"" name:"create" help:"Create a space (via setup with members)"`
+	CreateDirect   ChatSpacesCreateDirectCmd   `cmd:"" name:"create-direct" help:"Create a named space (via spaces.create API, no initial members)"`
+	Get            ChatSpacesGetCmd            `cmd:"" name:"get" help:"Get space details"`
+	Delete         ChatSpacesDeleteCmd         `cmd:"" name:"delete" help:"Delete a space"`
+	Patch          ChatSpacesPatchCmd          `cmd:"" name:"patch" help:"Patch a space (partial update)"`
+	Search         ChatSpacesSearchCmd         `cmd:"" name:"search" help:"Search for spaces"`
+	FindDm         ChatSpacesFindDmCmd         `cmd:"" name:"find-dm" help:"Find a direct message space with a user"`
+	CompleteImport ChatSpacesCompleteImportCmd `cmd:"" name:"complete-import" help:"Complete import of a space"`
 }
 
 type ChatSpacesListCmd struct {
