@@ -19,13 +19,17 @@ var (
 )
 
 type BusinessProfileCmd struct {
-	Accounts       BusinessProfileAccountsCmd         `cmd:"" name:"accounts" help:"Account management"`
-	Admins         BusinessProfileAccountAdminsCmd    `cmd:"" name:"account-admins" help:"Account admin management"`
-	Invitations    BusinessProfileInvitationsCmd      `cmd:"" name:"account-invitations" help:"Account invitation management"`
-	LocationAdmins BusinessProfileLocationAdminsCmd   `cmd:"" name:"location-admins" help:"Location admin management"`
-	Transfer       BusinessProfileLocationTransferCmd `cmd:"" name:"locations-transfer" help:"Transfer location ownership"`
-	Locations      BusinessProfileLocationsCmd        `cmd:"" name:"locations" group:"Read" help:"List locations for an account"`
-	Get            BusinessProfileGetCmd              `cmd:"" name:"get" group:"Read" help:"Get location details"`
+	Accounts        BusinessProfileAccountsCmd            `cmd:"" name:"accounts" help:"Account management"`
+	Admins          BusinessProfileAccountAdminsCmd       `cmd:"" name:"account-admins" help:"Account admin management"`
+	Invitations     BusinessProfileInvitationsCmd         `cmd:"" name:"account-invitations" help:"Account invitation management"`
+	LocationAdmins  BusinessProfileLocationAdminsCmd      `cmd:"" name:"location-admins" help:"Location admin management"`
+	Transfer        BusinessProfileLocationTransferCmd    `cmd:"" name:"locations-transfer" help:"Transfer location ownership"`
+	Categories      BusinessProfileInfoCategoriesCmd      `cmd:"" name:"categories" help:"Business category reference data"`
+	Chains          BusinessProfileInfoChainsCmd          `cmd:"" name:"chains" help:"Chain reference data"`
+	GoogleLocations BusinessProfileInfoGoogleLocationsCmd `cmd:"" name:"google-locations" help:"Search for Google locations"`
+	InfoLocations   BusinessProfileInfoLocationsCmd       `cmd:"" name:"info-locations" help:"Location creation, deletion, and patching"`
+	Locations       BusinessProfileLocationsCmd           `cmd:"" name:"locations" group:"Read" help:"List locations for an account"`
+	Get             BusinessProfileGetCmd                 `cmd:"" name:"get" group:"Read" help:"Get location details"`
 }
 
 // BusinessProfileAccountsCmd is a parent struct with account subcommands.

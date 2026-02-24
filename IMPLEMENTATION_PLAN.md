@@ -426,7 +426,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog mybusiness location-admins list --help`
 
 ### Task 32: MyBusiness Business Information — Categories, chains, locations
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/mybusinessbusinessinformation-gaps.md
 - **Description**: Add reference data commands (`gog mybusiness-info categories batch-get/list`, `gog mybusiness-info chains get/search`, `gog mybusiness-info google-locations search`) and location operations (`gog mybusiness-info locations create/delete/get-google-updated/patch`).

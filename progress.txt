@@ -607,3 +607,37 @@
   - confirmDestructive for admin delete and location transfer
   - flagProvided pattern for admin patch updateMask
   - JSON and text output formats
+
+---
+
+## Task 32 - MyBusiness Business Information — Categories, chains, locations
+### Completed: MyBusiness Business Information — Categories, chains, locations
+- Date: 2026-02-24
+- Methods implemented: 9 (categories.batchGet, .list, chains.get, .search, googleLocations.search, accounts.locations.create, locations.delete, .getGoogleUpdated, .patch)
+- Files created/modified:
+  - Created `internal/cmd/businessprofile_info_categories.go` with 2 commands (list, batch-get)
+  - Created `internal/cmd/businessprofile_info_categories_test.go` with 3 test functions
+  - Created `internal/cmd/businessprofile_info_chains.go` with 2 commands (get, search)
+  - Created `internal/cmd/businessprofile_info_chains_test.go` with 4 test functions
+  - Created `internal/cmd/businessprofile_info_locations.go` with 5 commands (create, delete, get-google-updated, patch, google-locations search)
+  - Created `internal/cmd/businessprofile_info_locations_test.go` with 5 test functions
+  - Modified `internal/cmd/businessprofile.go` to register Categories, Chains, GoogleLocations, InfoLocations subcommands
+- Tests added: 12 test cases covering all category, chain, google-locations, and location operations
+- Commands available:
+  - `gog business-profile categories list` - list business categories by region
+  - `gog business-profile categories batch-get` - get multiple categories by name
+  - `gog business-profile chains get` - get chain details
+  - `gog business-profile chains search` - search for chains by name
+  - `gog business-profile google-locations` - search for Google locations
+  - `gog business-profile info-locations create` - create a location under an account
+  - `gog business-profile info-locations delete` - delete a location (confirmDestructive)
+  - `gog business-profile info-locations get-google-updated` - get Google-updated version
+  - `gog business-profile info-locations patch` - patch a location (flagProvided updateMask)
+- Features:
+  - Full address composition from individual flags
+  - Primary category and phone number composition
+  - flagProvided pattern for location patch updateMask
+  - confirmDestructive for location delete
+  - Auto-prefix for resource names
+  - Pagination support for categories list
+  - JSON and text output formats
