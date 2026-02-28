@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 
-	mybusinessaccountmanagement "google.golang.org/api/mybusinessaccountmanagement/v1"
 	mybusinessbusinessinformation "google.golang.org/api/mybusinessbusinessinformation/v1"
 
 	"github.com/steipete/gogcli/internal/googleapi"
@@ -20,52 +19,27 @@ var (
 )
 
 type BusinessProfileCmd struct {
-	Accounts  BusinessProfileAccountsCmd  `cmd:"" name:"accounts" group:"Read" help:"List accounts"`
-	Locations BusinessProfileLocationsCmd `cmd:"" name:"locations" group:"Read" help:"List locations for an account"`
-	Get       BusinessProfileGetCmd       `cmd:"" name:"get" group:"Read" help:"Get location details"`
+	Accounts        BusinessProfileAccountsCmd            `cmd:"" name:"accounts" help:"Account management"`
+	Admins          BusinessProfileAccountAdminsCmd       `cmd:"" name:"account-admins" help:"Account admin management"`
+	Invitations     BusinessProfileInvitationsCmd         `cmd:"" name:"account-invitations" help:"Account invitation management"`
+	LocationAdmins  BusinessProfileLocationAdminsCmd      `cmd:"" name:"location-admins" help:"Location admin management"`
+	Transfer        BusinessProfileLocationTransferCmd    `cmd:"" name:"locations-transfer" help:"Transfer location ownership"`
+	Categories      BusinessProfileInfoCategoriesCmd      `cmd:"" name:"categories" help:"Business category reference data"`
+	Chains          BusinessProfileInfoChainsCmd          `cmd:"" name:"chains" help:"Chain reference data"`
+	GoogleLocations BusinessProfileInfoGoogleLocationsCmd `cmd:"" name:"google-locations" help:"Search for Google locations"`
+	InfoLocations   BusinessProfileInfoLocationsCmd       `cmd:"" name:"info-locations" help:"Location creation, deletion, and patching"`
+	Attributes      BusinessProfileInfoAttributesCmd      `cmd:"" name:"attributes" help:"Attribute metadata"`
+	LocationAttrs   BusinessProfileInfoLocationAttrsCmd   `cmd:"" name:"location-attributes" help:"Location attribute management"`
+	Locations       BusinessProfileLocationsCmd           `cmd:"" name:"locations" group:"Read" help:"List locations for an account"`
+	Get             BusinessProfileGetCmd                 `cmd:"" name:"get" group:"Read" help:"Get location details"`
 }
 
-// --- accounts ---
-
-type BusinessProfileAccountsCmd struct{}
-
-func (c *BusinessProfileAccountsCmd) Run(ctx context.Context, flags *RootFlags) error {
-	u := ui.FromContext(ctx)
-	account, err := requireAccount(flags)
-	if err != nil {
-		return err
-	}
-
-	svc, err := newBusinessProfileAccountsService(ctx, account)
-	if err != nil {
-		return err
-	}
-
-	resp, err := svc.Accounts.List().Do()
-	if err != nil {
-		return err
-	}
-
-	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
-			"accounts":      resp.Accounts,
-			"nextPageToken": resp.NextPageToken,
-		})
-	}
-
-	if len(resp.Accounts) == 0 {
-		u.Err().Println("No accounts")
-		return nil
-	}
-
-	w, flush := tableWriter(ctx)
-	defer flush()
-	fmt.Fprintln(w, "NAME\tACCOUNT_NAME\tTYPE\tROLE")
-	for _, acct := range resp.Accounts {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", acct.Name, acct.AccountName, acct.Type, acct.Role)
-	}
-	printNextPageHint(u, resp.NextPageToken)
-	return nil
+// BusinessProfileAccountsCmd is a parent struct with account subcommands.
+type BusinessProfileAccountsCmd struct {
+	List   BusinessProfileAccountsListCmd   `cmd:"" name:"list" help:"List accounts"`
+	Create BusinessProfileAccountsCreateCmd `cmd:"" name:"create" help:"Create an account"`
+	Get    BusinessProfileAccountsGetCmd    `cmd:"" name:"get" help:"Get an account"`
+	Patch  BusinessProfileAccountsPatchCmd  `cmd:"" name:"patch" help:"Patch an account (partial update)"`
 }
 
 // --- locations ---
@@ -210,7 +184,4 @@ func formatAddress(addr *mybusinessbusinessinformation.PostalAddress) string {
 }
 
 // Ensure service types are used to avoid import cycle lint errors.
-var (
-	_ *mybusinessbusinessinformation.Service
-	_ *mybusinessaccountmanagement.Service
-)
+var _ *mybusinessbusinessinformation.Service

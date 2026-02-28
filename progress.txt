@@ -530,3 +530,137 @@
   - Consumer account blocking on all commands
   - JSON and text output formats
 ---
+
+## Phase 3: Business APIs
+
+## Task 29 - MyBusiness Account Management — Accounts
+### Completed: MyBusiness Account Management — Accounts
+- Date: 2026-02-23
+- Methods implemented: 3 (accounts.create, accounts.get, accounts.patch)
+- Files created/modified:
+  - Created `internal/cmd/businessprofile_accounts.go` with 4 command structs
+  - Created `internal/cmd/businessprofile_accounts_test.go` with 7 test functions
+  - Modified `internal/cmd/businessprofile.go` to restructure BusinessProfileAccountsCmd as parent with subcommands
+  - Modified `internal/cmd/businessprofile_test.go` to update command paths for new subcommand structure
+- Tests added: 7 test cases covering create (JSON+text), get (JSON+text+auto-prefix), patch (JSON+no-fields)
+- Commands available under `gog business-profile accounts`:
+  - `list` - list all accounts (moved from parent)
+  - `create` - create an account with name, type, primary owner
+  - `get` - get an account by name (auto-prefixes accounts/)
+  - `patch` - patch an account (partial update with updateMask)
+- Features:
+  - Auto-prefix: bare IDs automatically get "accounts/" prefix
+  - flagProvided pattern for patch updateMask
+  - accountName and primaryOwner fields for patch
+  - JSON and text output formats
+- Breaking change: `gog business-profile accounts` now requires subcommand (e.g. `accounts list` instead of just `accounts`)
+
+---
+
+## Task 30 - MyBusiness Account Management — Account admins and invitations
+### Completed: MyBusiness Account Management — Account admins and invitations
+- Date: 2026-02-23
+- Methods implemented: 7 (admins.create, .delete, .list, .patch, invitations.accept, .decline, .list)
+- Files created/modified:
+  - Created `internal/cmd/businessprofile_admins.go` with 4 command structs (list, create, delete, patch)
+  - Created `internal/cmd/businessprofile_admins_test.go` with 7 test functions
+  - Created `internal/cmd/businessprofile_invitations.go` with 3 command structs (list, accept, decline)
+  - Created `internal/cmd/businessprofile_invitations_test.go` with 5 test functions
+  - Modified `internal/cmd/businessprofile.go` to register Admins and Invitations subcommands
+- Tests added: 12 test cases covering all admin and invitation operations
+- Commands available under `gog business-profile account-admins`:
+  - `list` - list admins for an account (no pagination)
+  - `create` - add an admin with email and role
+  - `delete` - remove an admin (confirmDestructive)
+  - `patch` - update an admin's role (flagProvided updateMask)
+- Commands available under `gog business-profile account-invitations`:
+  - `list` - list pending invitations (supports --filter)
+  - `accept` - accept an invitation
+  - `decline` - decline an invitation
+- Features:
+  - Auto-prefix for account resource names
+  - confirmDestructive for admin delete
+  - flagProvided pattern for admin patch updateMask
+  - Filter support for invitation list
+  - JSON and text output formats
+
+---
+
+## Task 31 - MyBusiness Account Management — Location admins and transfer
+### Completed: MyBusiness Account Management — Location admins and transfer
+- Date: 2026-02-23
+- Methods implemented: 5 (locations.admins.create, .delete, .list, .patch, locations.transfer)
+- Files created/modified:
+  - Created `internal/cmd/businessprofile_location_admins.go` with 5 command structs (list, create, delete, patch, transfer)
+  - Created `internal/cmd/businessprofile_location_admins_test.go` with 8 test functions
+  - Modified `internal/cmd/businessprofile.go` to register LocationAdmins and Transfer subcommands
+- Tests added: 8 test cases covering all location admin and transfer operations
+- Commands available under `gog business-profile location-admins`:
+  - `list` - list admins for a location (no pagination)
+  - `create` - add an admin with email and role
+  - `delete` - remove an admin (confirmDestructive)
+  - `patch` - update an admin's role (flagProvided updateMask)
+- Command `gog business-profile locations-transfer`:
+  - Transfer location ownership to another account (confirmDestructive with clear warning)
+- Features:
+  - Auto-prefix for location and account resource names
+  - confirmDestructive for admin delete and location transfer
+  - flagProvided pattern for admin patch updateMask
+  - JSON and text output formats
+
+---
+
+## Task 32 - MyBusiness Business Information — Categories, chains, locations
+### Completed: MyBusiness Business Information — Categories, chains, locations
+- Date: 2026-02-24
+- Methods implemented: 9 (categories.batchGet, .list, chains.get, .search, googleLocations.search, accounts.locations.create, locations.delete, .getGoogleUpdated, .patch)
+- Files created/modified:
+  - Created `internal/cmd/businessprofile_info_categories.go` with 2 commands (list, batch-get)
+  - Created `internal/cmd/businessprofile_info_categories_test.go` with 3 test functions
+  - Created `internal/cmd/businessprofile_info_chains.go` with 2 commands (get, search)
+  - Created `internal/cmd/businessprofile_info_chains_test.go` with 4 test functions
+  - Created `internal/cmd/businessprofile_info_locations.go` with 5 commands (create, delete, get-google-updated, patch, google-locations search)
+  - Created `internal/cmd/businessprofile_info_locations_test.go` with 5 test functions
+  - Modified `internal/cmd/businessprofile.go` to register Categories, Chains, GoogleLocations, InfoLocations subcommands
+- Tests added: 12 test cases covering all category, chain, google-locations, and location operations
+- Commands available:
+  - `gog business-profile categories list` - list business categories by region
+  - `gog business-profile categories batch-get` - get multiple categories by name
+  - `gog business-profile chains get` - get chain details
+  - `gog business-profile chains search` - search for chains by name
+  - `gog business-profile google-locations` - search for Google locations
+  - `gog business-profile info-locations create` - create a location under an account
+  - `gog business-profile info-locations delete` - delete a location (confirmDestructive)
+  - `gog business-profile info-locations get-google-updated` - get Google-updated version
+  - `gog business-profile info-locations patch` - patch a location (flagProvided updateMask)
+- Features:
+  - Full address composition from individual flags
+  - Primary category and phone number composition
+  - flagProvided pattern for location patch updateMask
+  - confirmDestructive for location delete
+  - Auto-prefix for resource names
+  - Pagination support for categories list
+  - JSON and text output formats
+
+### Task 33: MyBusiness Business Information — Attributes ✅ COMPLETED
+- Branch: phase/3-business-apis
+- Files created:
+  - `internal/cmd/businessprofile_info_attributes.go` — 4 commands
+  - `internal/cmd/businessprofile_info_attributes_test.go` — 5 tests
+- Files modified:
+  - `internal/cmd/businessprofile.go` — added Attributes and LocationAttrs fields
+- Commands added:
+  - `gog business-profile attributes list` — list attribute metadata
+  - `gog business-profile location-attributes get` — get attributes for a location
+  - `gog business-profile location-attributes get-google-updated` — get Google-updated attributes
+  - `gog business-profile location-attributes update` — update attributes with @filepath JSON support
+- Features:
+  - @filepath support for JSON input (--attributes-json @file.json)
+  - AttributeMask for partial updates
+  - Pagination support for attribute list
+
+## Phase 3 Complete
+- All 5 tasks (29-33) completed
+- 28 methods implemented across Business Profile APIs
+- mybusinessaccountmanagement: accounts, admins, invitations, location admins, transfer
+- mybusinessbusinessinformation: categories, chains, google-locations, locations, attributes

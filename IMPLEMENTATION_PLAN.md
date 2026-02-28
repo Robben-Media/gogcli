@@ -391,7 +391,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 > Branch: `phase/3-business-apis` | PR → build branch
 
 ### Task 29: MyBusiness Account Management — Accounts
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/mybusinessaccountmanagement-gaps.md
 - **Description**: Add `gog mybusiness accounts create/get/patch`. Patch uses flagProvided for updateMask.
@@ -402,7 +402,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog mybusiness accounts get --help`
 
 ### Task 30: MyBusiness Account Management — Account admins and invitations
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/mybusinessaccountmanagement-gaps.md
 - **Description**: Add account admins (`gog mybusiness account-admins create/delete/list/patch`) and invitations (`gog mybusiness account-invitations accept/decline/list`). No pagination on admin list or invitation list endpoints.
@@ -415,7 +415,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog mybusiness account-admins list --help`
 
 ### Task 31: MyBusiness Account Management — Location admins and transfer
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/mybusinessaccountmanagement-gaps.md
 - **Description**: Add `gog mybusiness location-admins create/delete/list/patch` and `gog mybusiness locations transfer` (confirmDestructive — transfers ownership). No pagination on location admin list.
@@ -426,7 +426,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog mybusiness location-admins list --help`
 
 ### Task 32: MyBusiness Business Information — Categories, chains, locations
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/mybusinessbusinessinformation-gaps.md
 - **Description**: Add reference data commands (`gog mybusiness-info categories batch-get/list`, `gog mybusiness-info chains get/search`, `gog mybusiness-info google-locations search`) and location operations (`gog mybusiness-info locations create/delete/get-google-updated/patch`).
@@ -441,7 +441,7 @@ Adding 588 missing Google API methods to gogcli across 19 APIs to achieve full D
 - **Verification**: `make ci` passes, `gog mybusiness-info categories list --help`
 
 ### Task 33: MyBusiness Business Information — Attributes
-- **Status**: pending
+- **Status**: completed
 - **Depends on**: none
 - **Spec**: specs/features/mybusinessbusinessinformation-gaps.md
 - **Description**: Add attributes commands: `gog mybusiness-info attributes list`, `gog mybusiness-info location-attributes get/get-google-updated/update`. Update accepts `--attributes-json` with `@filepath` support.

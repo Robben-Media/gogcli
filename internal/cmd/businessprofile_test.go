@@ -61,7 +61,7 @@ func TestExecute_BusinessProfileAccounts_JSON(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "business-profile", "accounts"}); err != nil {
+			if err := Execute([]string{"--json", "--account", "a@b.com", "business-profile", "accounts", "list"}); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
 		})
@@ -180,7 +180,7 @@ func TestExecute_BusinessProfileLocations_JSON(t *testing.T) {
 }
 
 func TestExecute_BusinessProfileAccounts_NoAccount(t *testing.T) {
-	err := Execute([]string{"--json", "business-profile", "accounts"})
+	err := Execute([]string{"--json", "business-profile", "accounts", "list"})
 	if err == nil {
 		t.Fatalf("expected error")
 	}
