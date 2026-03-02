@@ -51,6 +51,9 @@ func (c *AADataStreamsCreateCmd) Run(ctx context.Context, flags *RootFlags) erro
 
 	switch c.Type {
 	case "WEB_DATA_STREAM":
+		if c.WebURI == "" {
+			return usage("--web-default-uri required for WEB_DATA_STREAM")
+		}
 		ds.WebStreamData = &analyticsadmin.GoogleAnalyticsAdminV1betaDataStreamWebStreamData{
 			DefaultUri: c.WebURI,
 		}
