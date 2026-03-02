@@ -208,6 +208,7 @@ var serviceInfoByService = map[Service]serviceInfo{
 		scopes: []string{
 			"https://www.googleapis.com/auth/analytics.readonly",
 			"https://www.googleapis.com/auth/analytics.edit",
+			"https://www.googleapis.com/auth/analytics.manage.users",
 		},
 		user: true,
 		apis: []string{"Analytics Data API", "Analytics Admin API"},
