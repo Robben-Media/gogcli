@@ -205,9 +205,12 @@ var serviceInfoByService = map[Service]serviceInfo{
 		apis: []string{"BigQuery API"},
 	},
 	ServiceAnalytics: {
-		scopes: []string{"https://www.googleapis.com/auth/analytics.readonly"},
-		user:   true,
-		apis:   []string{"Analytics Data API", "Analytics Admin API"},
+		scopes: []string{
+			"https://www.googleapis.com/auth/analytics.readonly",
+			"https://www.googleapis.com/auth/analytics.edit",
+		},
+		user: true,
+		apis: []string{"Analytics Data API", "Analytics Admin API"},
 	},
 	ServiceSearchConsole: {
 		scopes: []string{
@@ -536,6 +539,10 @@ func scopesForServiceWithOptions(service Service, opts ScopeOptions) ([]string, 
 
 		return Scopes(service)
 	case ServiceAnalytics:
+		if opts.Readonly {
+			return []string{"https://www.googleapis.com/auth/analytics.readonly"}, nil
+		}
+
 		return Scopes(service)
 	case ServiceSearchConsole:
 		if opts.Readonly {

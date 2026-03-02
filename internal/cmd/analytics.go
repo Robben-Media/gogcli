@@ -31,6 +31,7 @@ type AnalyticsCmd struct {
 	Accounts           AnalyticsAccountsCmd           `cmd:"" name:"accounts" group:"Read" help:"List accounts"`
 	Dimensions         AnalyticsDimensionsCmd         `cmd:"" name:"dimensions" group:"Read" help:"List available dimensions for a property"`
 	Metrics            AnalyticsMetricsCmd            `cmd:"" name:"metrics" group:"Read" help:"List available metrics for a property"`
+	Admin              AnalyticsAdminCmd              `cmd:"" name:"admin" group:"Admin" help:"GA4 Admin operations (data streams, secrets, etc.)"`
 }
 
 const analyticsPropertyPrefix = "properties/"
