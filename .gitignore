@@ -40,3 +40,4 @@ bin/
 
 # Node (optional dev scripts)
 node_modules/
+hooks/

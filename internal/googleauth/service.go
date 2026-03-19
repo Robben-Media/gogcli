@@ -221,9 +221,14 @@ var serviceInfoByService = map[Service]serviceInfo{
 		apis: []string{"Search Console API"},
 	},
 	ServiceTagManager: {
-		scopes: []string{"https://www.googleapis.com/auth/tagmanager.readonly"},
-		user:   true,
-		apis:   []string{"Tag Manager API v2"},
+		scopes: []string{
+			"https://www.googleapis.com/auth/tagmanager.readonly",
+			"https://www.googleapis.com/auth/tagmanager.edit.containers",
+			"https://www.googleapis.com/auth/tagmanager.edit.containerversions",
+			"https://www.googleapis.com/auth/tagmanager.publish",
+		},
+		user: true,
+		apis: []string{"Tag Manager API v2"},
 	},
 	ServiceBusinessProfile: {
 		scopes: []string{"https://www.googleapis.com/auth/business.manage"},

@@ -17,7 +17,10 @@ type AnalyticsAdminCmd struct {
 // Stubs for resources not yet implemented (PR 2).
 
 type AAAccountsCmd struct{}
-type AAPropertiesCmd struct{}
+type AAPropertiesCmd struct {
+	Create AAPropertiesCreateCmd `cmd:"" name:"create" help:"Create a GA4 property"`
+	List   AAPropertiesListCmd   `cmd:"" name:"list" help:"List GA4 properties for an account"`
+}
 type AAConversionEventsCmd struct{}
 type AACustomDimensionsCmd struct{}
 type AACustomMetricsCmd struct{}
