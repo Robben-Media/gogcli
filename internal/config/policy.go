@@ -19,6 +19,7 @@ type Policy struct {
 
 var (
 	errInvalidPolicyName   = errors.New("invalid policy name")
+	errInvalidPolicyAction = errors.New("invalid policy action")
 	errPolicyMissingTarget = errors.New("policy requires --account and/or --client")
 	errPolicyMissingRules  = errors.New("policy requires --allow and/or --deny")
 	errPolicyExists        = errors.New("policy already exists")
@@ -55,6 +56,13 @@ func NormalizePolicy(cfg Policy) (Policy, error) {
 	cfg.Allow = normalizePolicyActions(cfg.Allow)
 	cfg.Deny = normalizePolicyActions(cfg.Deny)
 
+	if err := validatePolicyActions(cfg.Allow); err != nil {
+		return Policy{}, err
+	}
+	if err := validatePolicyActions(cfg.Deny); err != nil {
+		return Policy{}, err
+	}
+
 	if cfg.Account == "" && cfg.Client == "" {
 		return Policy{}, errPolicyMissingTarget
 	}
@@ -84,6 +92,16 @@ func normalizePolicyActions(actions []string) []string {
 	}
 	slices.Sort(out)
 	return out
+}
+
+func validatePolicyActions(actions []string) error {
+	for _, action := range actions {
+		service, rest, ok := strings.Cut(action, ":")
+		if !ok || strings.TrimSpace(service) == "" || strings.TrimSpace(rest) == "" {
+			return fmt.Errorf("%w: %q (use service:command form)", errInvalidPolicyAction, action)
+		}
+	}
+	return nil
 }
 
 func UpsertPolicy(cfg *File, policy Policy, replace bool) error {

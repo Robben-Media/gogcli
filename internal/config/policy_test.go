@@ -44,6 +44,16 @@ func TestNormalizePolicy_RequiresTargetAndRules(t *testing.T) {
 	}
 }
 
+func TestNormalizePolicy_RejectsInvalidActions(t *testing.T) {
+	if _, err := NormalizePolicy(Policy{
+		Name:    "x",
+		Account: "a@b.com",
+		Deny:    []string{"send"},
+	}); !errors.Is(err, errInvalidPolicyAction) {
+		t.Fatalf("expected invalid action, got %v", err)
+	}
+}
+
 func TestUpsertDeleteGetPolicy(t *testing.T) {
 	var cfg File
 	err := UpsertPolicy(&cfg, Policy{

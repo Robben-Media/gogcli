@@ -48,6 +48,50 @@ func TestPolicyEnforcement_DeniesBlockedGmailAction(t *testing.T) {
 	}
 }
 
+func TestPolicyEnforcement_ImplicitAllowlistDenyDoesNotBlameOnePolicy(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	err := config.WriteConfig(config.File{
+		Policies: []config.Policy{
+			{
+				Name:    "allow-read",
+				Account: "jdjb78@gmail.com",
+				Allow:   []string{"gmail:read"},
+			},
+			{
+				Name:    "allow-labels",
+				Account: "jdjb78@gmail.com",
+				Allow:   []string{"gmail:labels.create"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("WriteConfig: %v", err)
+	}
+
+	errText := captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			if err := Execute([]string{
+				"--account", "jdjb78@gmail.com",
+				"gmail", "send",
+				"--to", "x@y.com",
+				"--subject", "hello",
+				"--body", "body",
+			}); err == nil {
+				t.Fatalf("expected gmail send to be denied")
+			}
+		})
+	})
+
+	if !strings.Contains(errText, "no policy allows gmail:send for jdjb78@gmail.com") {
+		t.Fatalf("missing implicit deny message: %q", errText)
+	}
+	if strings.Contains(errText, `policy "allow-read" denied`) || strings.Contains(errText, `policy "allow-labels" denied`) {
+		t.Fatalf("unexpected blame in implicit deny: %q", errText)
+	}
+}
+
 func TestPolicyEnforcement_AllowsReadLikeAction(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
@@ -89,6 +133,33 @@ func TestCommandActionID_FlattensGmailSettingsAndAliases(t *testing.T) {
 	}
 	if got := commandActionID(kctx); got != "gmail:filters.delete" {
 		t.Fatalf("unexpected action id: %q", got)
+	}
+}
+
+func TestPolicyCommandsBypassPolicyEnforcement(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	err := config.WriteConfig(config.File{
+		Policies: []config.Policy{{
+			Name:    "lockdown",
+			Account: "jdjb78@gmail.com",
+			Deny:    []string{"policy:*"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("WriteConfig: %v", err)
+	}
+
+	stdout := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--account", "jdjb78@gmail.com", "policy", "list"}); err != nil {
+				t.Fatalf("policy list: %v", err)
+			}
+		})
+	})
+	if !strings.Contains(stdout, "lockdown") {
+		t.Fatalf("expected policy list to bypass enforcement, got %q", stdout)
 	}
 }
 

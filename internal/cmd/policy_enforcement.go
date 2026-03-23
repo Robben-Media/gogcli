@@ -23,6 +23,12 @@ var commandServiceAliases = map[string]string{
 	"yt":       "youtube",
 }
 
+type policyDecision struct {
+	Denied            bool
+	DeniedBy          config.Policy
+	ImplicitAllowlist bool
+}
+
 func enforceCommandPolicies(kctx *kong.Context, flags *RootFlags) error {
 	cfg, err := config.ReadConfig()
 	if err != nil {
@@ -37,6 +43,9 @@ func enforceCommandPolicies(kctx *kong.Context, flags *RootFlags) error {
 		return nil
 	}
 	service, _, _ := strings.Cut(action, ":")
+	if service == "policy" {
+		return nil
+	}
 	if !hasPolicyForService(cfg.Policies, service) {
 		return nil
 	}
@@ -50,19 +59,22 @@ func enforceCommandPolicies(kctx *kong.Context, flags *RootFlags) error {
 		return err
 	}
 
-	policy, denied := evaluatePolicies(cfg.Policies, action, account, client)
-	if !denied {
+	decision := evaluatePolicies(cfg.Policies, action, account, client)
+	if !decision.Denied {
 		return nil
 	}
 
 	target := account
-	if policy.Client != "" {
+	if decision.DeniedBy.Client != "" {
 		target = fmt.Sprintf("%s (client %s)", target, client)
 	}
-	if policy.Reason != "" {
-		return usagef("policy %q denied %s for %s: %s", policy.Name, action, target, policy.Reason)
+	if decision.ImplicitAllowlist {
+		return usagef("no policy allows %s for %s", action, target)
 	}
-	return usagef("policy %q denied %s for %s", policy.Name, action, target)
+	if decision.DeniedBy.Reason != "" {
+		return usagef("policy %q denied %s for %s: %s", decision.DeniedBy.Name, action, target, decision.DeniedBy.Reason)
+	}
+	return usagef("policy %q denied %s for %s", decision.DeniedBy.Name, action, target)
 }
 
 func hasPolicyForService(policies []config.Policy, service string) bool {
@@ -77,7 +89,7 @@ func hasPolicyForService(policies []config.Policy, service string) bool {
 	return false
 }
 
-func evaluatePolicies(policies []config.Policy, action string, account string, client string) (config.Policy, bool) {
+func evaluatePolicies(policies []config.Policy, action string, account string, client string) policyDecision {
 	var candidates []config.Policy
 	bestSpecificity := -1
 	for _, policy := range policies {
@@ -95,35 +107,31 @@ func evaluatePolicies(policies []config.Policy, action string, account string, c
 		}
 	}
 	if len(candidates) == 0 {
-		return config.Policy{}, false
+		return policyDecision{}
 	}
 
 	for _, policy := range candidates {
 		if matchesAnyAction(policy.Deny, action) {
-			return policy, true
+			return policyDecision{Denied: true, DeniedBy: policy}
 		}
 	}
 
-	var allowlistPolicy config.Policy
 	hasAllowlist := false
 	for _, policy := range candidates {
 		if len(policy.Allow) == 0 {
 			continue
 		}
-		if !hasAllowlist {
-			allowlistPolicy = policy
-			hasAllowlist = true
-		}
+		hasAllowlist = true
 		if matchesAnyAction(policy.Allow, action) {
-			return config.Policy{}, false
+			return policyDecision{}
 		}
 	}
 
 	if hasAllowlist {
-		return allowlistPolicy, true
+		return policyDecision{Denied: true, ImplicitAllowlist: true}
 	}
 
-	return config.Policy{}, false
+	return policyDecision{}
 }
 
 func policyApplies(policy config.Policy, account string, client string) bool {
