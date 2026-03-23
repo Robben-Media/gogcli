@@ -64,6 +64,7 @@ type CLI struct {
 	TagManager      TagManagerCmd         `cmd:"" aliases:"gtm" help:"Google Tag Manager"`
 	BusinessProfile BusinessProfileCmd    `cmd:"" aliases:"gbp,business" help:"Google Business Profile"`
 	Config          ConfigCmd             `cmd:"" help:"Manage configuration"`
+	Policy          PolicyCmd             `cmd:"" help:"Manage command safety policies"`
 	VersionCmd      VersionCmd            `cmd:"" name:"version" help:"Print version"`
 	Completion      CompletionCmd         `cmd:"" help:"Generate shell completion scripts"`
 	Complete        CompletionInternalCmd `cmd:"" name:"__complete" hidden:"" help:"Internal completion helper"`
@@ -99,6 +100,10 @@ func Execute(args []string) (err error) {
 	}
 
 	if err = enforceEnabledCommands(kctx, cli.EnableCommands); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, errfmt.Format(err))
+		return err
+	}
+	if err = enforceCommandPolicies(kctx, &cli.RootFlags); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, errfmt.Format(err))
 		return err
 	}
