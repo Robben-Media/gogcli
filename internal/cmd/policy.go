@@ -18,8 +18,8 @@ type PolicyCmd struct {
 
 type PolicyCreateCmd struct {
 	Name   string `arg:"" help:"Policy name"`
-	Allow  string `name:"allow" help:"Allowed action IDs (comma-separated)"`
-	Deny   string `name:"deny" help:"Denied action IDs (comma-separated)"`
+	Allow  string `name:"allow" help:"Allowed action IDs (comma-separated). Special shorthands 'gmail:read' and 'gmail:reply' are Gmail-only."`
+	Deny   string `name:"deny" help:"Denied action IDs (comma-separated). Special shorthands 'gmail:read' and 'gmail:reply' are Gmail-only."`
 	Reason string `name:"reason" help:"Why this policy exists"`
 }
 

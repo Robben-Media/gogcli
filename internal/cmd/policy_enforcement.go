@@ -65,7 +65,7 @@ func enforceCommandPolicies(kctx *kong.Context, flags *RootFlags) error {
 	}
 
 	target := account
-	if decision.DeniedBy.Client != "" {
+	if client != "" {
 		target = fmt.Sprintf("%s (client %s)", target, client)
 	}
 	if decision.ImplicitAllowlist {
@@ -196,6 +196,10 @@ func matchesAnyAction(patterns []string, action string) bool {
 	return false
 }
 
+// policyActionMatches supports exact action IDs plus a small set of shorthands.
+// The `read` and `reply` expansions are Gmail-only convenience aliases:
+// `gmail:read` expands to common read-only Gmail actions, and `gmail:reply`
+// expands to send actions used for replies.
 func policyActionMatches(pattern string, action string) bool {
 	pattern = strings.ToLower(strings.TrimSpace(pattern))
 	action = strings.ToLower(strings.TrimSpace(action))

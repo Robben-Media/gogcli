@@ -92,6 +92,42 @@ func TestPolicyEnforcement_ImplicitAllowlistDenyDoesNotBlameOnePolicy(t *testing
 	}
 }
 
+func TestPolicyEnforcement_ImplicitAllowlistDenyIncludesClientContext(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	err := config.WriteConfig(config.File{
+		Policies: []config.Policy{{
+			Name:    "allow-read",
+			Account: "jdjb78@gmail.com",
+			Client:  "personal",
+			Allow:   []string{"gmail:read"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("WriteConfig: %v", err)
+	}
+
+	errText := captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			if err := Execute([]string{
+				"--account", "jdjb78@gmail.com",
+				"--client", "personal",
+				"gmail", "send",
+				"--to", "x@y.com",
+				"--subject", "hello",
+				"--body", "body",
+			}); err == nil {
+				t.Fatalf("expected gmail send to be denied")
+			}
+		})
+	})
+
+	if !strings.Contains(errText, "no policy allows gmail:send for jdjb78@gmail.com (client personal)") {
+		t.Fatalf("missing client context in implicit deny: %q", errText)
+	}
+}
+
 func TestPolicyEnforcement_AllowsReadLikeAction(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
