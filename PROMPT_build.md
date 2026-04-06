@@ -35,7 +35,7 @@ Every iteration:
    ```
 2. Read `IMPLEMENTATION_PLAN.md` for task status
 3. Read `AGENTS.md` for build commands, patterns, and coding conventions
-4. Read `progress.txt` for context from previous iterations
+4. Read `progess.md` for context from previous iterations
 5. Check current branch — ensure you're on the correct phase branch
 6. Find the highest-priority task with status "pending" whose dependencies are all "complete"
 
@@ -65,7 +65,7 @@ git checkout -b phase/N-[name]
 **Closing a phase** (when ALL tasks in a phase are complete):
 1. Run `make ci`
 2. Open PR from phase branch → build branch
-3. Note the PR URL in `progress.txt`
+3. Note the PR URL in `progess.md`
 
 ## Implementing the Task
 
@@ -127,7 +127,7 @@ Co-authored-by: factory-droid[bot] <138933559+factory-droid[bot]@users.noreply.g
 ## On Success
 
 1. Update task status to "complete" in `IMPLEMENTATION_PLAN.md`
-2. Append to `progress.txt` using this template:
+2. Append to `progess.md` using this template:
    ```
    ## Task [N] - [Timestamp]
    ### Completed: [Task Name]
@@ -168,7 +168,7 @@ Co-authored-by: factory-droid[bot] <138933559+factory-droid[bot]@users.noreply.g
      echo "PR #$PR_EXISTS already exists - commits pushed"
    fi
    ```
-5. If this was the last task in a phase, note the PR URL in `progress.txt`
+5. If this was the last task in a phase, note the PR URL in `progess.md`
 
 ## Rules
 
