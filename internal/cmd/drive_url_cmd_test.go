@@ -21,6 +21,7 @@ func TestDriveURLCmd_TextAndJSON(t *testing.T) {
 	origNew := newDriveService
 	t.Cleanup(func() { newDriveService = origNew })
 
+	requests := map[string]int{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var id string
 		switch {
@@ -32,6 +33,7 @@ func TestDriveURLCmd_TextAndJSON(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
+		requests[id]++
 		var web string
 		switch id {
 		case "id1":
@@ -85,8 +87,12 @@ func TestDriveURLCmd_TextAndJSON(t *testing.T) {
 	if !strings.Contains(gotText, "id2\thttps://drive.google.com/file/d/id2/view") {
 		t.Fatalf("missing id2 fallback line: %q", gotText)
 	}
+	if requests["id1"] != 1 || requests["id2"] != 1 {
+		t.Fatalf("unexpected text-mode request counts: %#v", requests)
+	}
 
 	// JSON mode writes to os.Stdout via outfmt.WriteJSON.
+	clear(requests)
 	jsonOut := captureStdout(t, func() {
 		u2, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
 		if uiErr != nil {
@@ -118,5 +124,8 @@ func TestDriveURLCmd_TextAndJSON(t *testing.T) {
 	}
 	if parsed.URLs[1].ID != "id2" || parsed.URLs[1].URL != "https://drive.google.com/file/d/id2/view" {
 		t.Fatalf("unexpected id2: %#v", parsed.URLs[1])
+	}
+	if requests["id1"] != 1 || requests["id2"] != 1 {
+		t.Fatalf("unexpected json-mode request counts: %#v", requests)
 	}
 }

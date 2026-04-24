@@ -723,26 +723,19 @@ func (c *DriveURLCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
+	urls := make([]map[string]string, 0, len(c.FileIDs))
 	for _, id := range c.FileIDs {
 		link, err := driveWebLink(ctx, svc, id)
 		if err != nil {
 			return err
 		}
 		if outfmt.IsJSON(ctx) {
-			// collected below
+			urls = append(urls, map[string]string{"id": id, "url": link})
 		} else {
 			u.Out().Printf("%s\t%s", id, link)
 		}
 	}
 	if outfmt.IsJSON(ctx) {
-		urls := make([]map[string]string, 0, len(c.FileIDs))
-		for _, id := range c.FileIDs {
-			link, err := driveWebLink(ctx, svc, id)
-			if err != nil {
-				return err
-			}
-			urls = append(urls, map[string]string{"id": id, "url": link})
-		}
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"urls": urls})
 	}
 	return nil
