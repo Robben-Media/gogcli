@@ -24,6 +24,7 @@ var (
 	errPolicyMissingRules  = errors.New("policy requires --allow and/or --deny")
 	errPolicyExists        = errors.New("policy already exists")
 	errPolicyNotFound      = errors.New("policy not found")
+	errNilConfig           = errors.New("nil config")
 )
 
 var policyNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
@@ -33,6 +34,7 @@ func NormalizePolicyName(raw string) (string, error) {
 	if !policyNamePattern.MatchString(name) {
 		return "", fmt.Errorf("%w: %q", errInvalidPolicyName, raw)
 	}
+
 	return name, nil
 }
 
@@ -41,6 +43,7 @@ func NormalizePolicy(cfg Policy) (Policy, error) {
 	if err != nil {
 		return Policy{}, err
 	}
+
 	cfg.Name = name
 
 	cfg.Account = strings.ToLower(strings.TrimSpace(cfg.Account))
@@ -49,8 +52,10 @@ func NormalizePolicy(cfg Policy) (Policy, error) {
 		if err != nil {
 			return Policy{}, err
 		}
+
 		cfg.Client = normalizedClient
 	}
+
 	cfg.Reason = strings.TrimSpace(cfg.Reason)
 
 	cfg.Allow = normalizePolicyActions(cfg.Allow)
@@ -59,6 +64,7 @@ func NormalizePolicy(cfg Policy) (Policy, error) {
 	if err := validatePolicyActions(cfg.Allow); err != nil {
 		return Policy{}, err
 	}
+
 	if err := validatePolicyActions(cfg.Deny); err != nil {
 		return Policy{}, err
 	}
@@ -66,6 +72,7 @@ func NormalizePolicy(cfg Policy) (Policy, error) {
 	if cfg.Account == "" && cfg.Client == "" {
 		return Policy{}, errPolicyMissingTarget
 	}
+
 	if len(cfg.Allow) == 0 && len(cfg.Deny) == 0 {
 		return Policy{}, errPolicyMissingRules
 	}
@@ -77,20 +84,27 @@ func normalizePolicyActions(actions []string) []string {
 	if len(actions) == 0 {
 		return nil
 	}
+
 	seen := map[string]struct{}{}
+
 	out := make([]string, 0, len(actions))
+
 	for _, action := range actions {
 		action = strings.ToLower(strings.TrimSpace(action))
 		if action == "" {
 			continue
 		}
+
 		if _, ok := seen[action]; ok {
 			continue
 		}
+
 		seen[action] = struct{}{}
 		out = append(out, action)
 	}
+
 	slices.Sort(out)
+
 	return out
 }
 
@@ -101,12 +115,13 @@ func validatePolicyActions(actions []string) error {
 			return fmt.Errorf("%w: %q (use service:command form)", errInvalidPolicyAction, action)
 		}
 	}
+
 	return nil
 }
 
 func UpsertPolicy(cfg *File, policy Policy, replace bool) error {
 	if cfg == nil {
-		return errors.New("nil config")
+		return fmt.Errorf("%w", errNilConfig)
 	}
 
 	normalized, err := NormalizePolicy(policy)
@@ -118,16 +133,21 @@ func UpsertPolicy(cfg *File, policy Policy, replace bool) error {
 		if cfg.Policies[i].Name != normalized.Name {
 			continue
 		}
+
 		if !replace {
 			return fmt.Errorf("%w: %s", errPolicyExists, normalized.Name)
 		}
+
 		cfg.Policies[i] = normalized
 		sortPolicies(cfg)
+
 		return nil
 	}
 
 	cfg.Policies = append(cfg.Policies, normalized)
+
 	sortPolicies(cfg)
+
 	return nil
 }
 
@@ -136,17 +156,19 @@ func GetPolicy(cfg File, name string) (Policy, bool) {
 	if err != nil {
 		return Policy{}, false
 	}
+
 	for _, policy := range cfg.Policies {
 		if policy.Name == normalized {
 			return policy, true
 		}
 	}
+
 	return Policy{}, false
 }
 
 func DeletePolicy(cfg *File, name string) error {
 	if cfg == nil {
-		return errors.New("nil config")
+		return fmt.Errorf("%w", errNilConfig)
 	}
 
 	normalized, err := NormalizePolicyName(name)
@@ -158,7 +180,9 @@ func DeletePolicy(cfg *File, name string) error {
 		if cfg.Policies[i].Name != normalized {
 			continue
 		}
+
 		cfg.Policies = append(cfg.Policies[:i], cfg.Policies[i+1:]...)
+
 		return nil
 	}
 

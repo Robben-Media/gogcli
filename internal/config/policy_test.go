@@ -56,6 +56,7 @@ func TestNormalizePolicy_RejectsInvalidActions(t *testing.T) {
 
 func TestUpsertDeleteGetPolicy(t *testing.T) {
 	var cfg File
+
 	err := UpsertPolicy(&cfg, Policy{
 		Name:    "b",
 		Account: "a@b.com",
@@ -64,6 +65,7 @@ func TestUpsertDeleteGetPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpsertPolicy first: %v", err)
 	}
+
 	err = UpsertPolicy(&cfg, Policy{
 		Name:    "a",
 		Account: "a@b.com",
