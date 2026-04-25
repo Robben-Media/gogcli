@@ -30,6 +30,7 @@ func TestNormalizePolicy(t *testing.T) {
 	if len(policy.Allow) != 2 || policy.Allow[0] != "gmail:labels.create" || policy.Allow[1] != "gmail:search" {
 		t.Fatalf("unexpected allow: %#v", policy.Allow)
 	}
+
 	if policy.Reason != "keep it safe" {
 		t.Fatalf("unexpected reason: %q", policy.Reason)
 	}
@@ -39,6 +40,7 @@ func TestNormalizePolicy_RequiresTargetAndRules(t *testing.T) {
 	if _, err := NormalizePolicy(Policy{Name: "x", Deny: []string{"gmail:send"}}); !errors.Is(err, errPolicyMissingTarget) {
 		t.Fatalf("expected missing target, got %v", err)
 	}
+
 	if _, err := NormalizePolicy(Policy{Name: "x", Account: "a@b.com"}); !errors.Is(err, errPolicyMissingRules) {
 		t.Fatalf("expected missing rules, got %v", err)
 	}
@@ -94,6 +96,7 @@ func TestUpsertDeleteGetPolicy(t *testing.T) {
 	if err := DeletePolicy(&cfg, "a"); err != nil {
 		t.Fatalf("DeletePolicy: %v", err)
 	}
+
 	if len(cfg.Policies) != 1 || cfg.Policies[0].Name != "b" {
 		t.Fatalf("unexpected policies after delete: %#v", cfg.Policies)
 	}
