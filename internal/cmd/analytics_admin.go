@@ -16,11 +16,13 @@ type AnalyticsAdminCmd struct {
 
 // Stubs for resources not yet implemented (PR 2).
 
-type AAAccountsCmd struct{}
-type AAPropertiesCmd struct{}
-type AAConversionEventsCmd struct{}
-type AACustomDimensionsCmd struct{}
-type AACustomMetricsCmd struct{}
-type AAFirebaseLinksCmd struct{}
-type AAGoogleAdsLinksCmd struct{}
-type AAKeyEventsCmd struct{}
+type (
+	AAAccountsCmd         struct{}
+	AAPropertiesCmd       struct{}
+	AAConversionEventsCmd struct{}
+	AACustomDimensionsCmd struct{}
+	AACustomMetricsCmd    struct{}
+	AAFirebaseLinksCmd    struct{}
+	AAGoogleAdsLinksCmd   struct{}
+	AAKeyEventsCmd        struct{}
+)

@@ -22,7 +22,7 @@ type AADataStreamsCmd struct {
 	Delete AADataStreamsDeleteCmd `cmd:"" name:"delete" help:"Delete a data stream"`
 	Get    AADataStreamsGetCmd    `cmd:"" name:"get" help:"Get a data stream"`
 	List   AADataStreamsListCmd   `cmd:"" name:"list" help:"List data streams for a property"`
-	Patch  AADataStreamsPatchCmd `cmd:"" name:"patch" help:"Update a data stream"`
+	Patch  AADataStreamsPatchCmd  `cmd:"" name:"patch" help:"Update a data stream"`
 }
 
 // --- create ---
