@@ -62,7 +62,7 @@ func (c *AuthKeyringCmd) Run(ctx context.Context) error {
 		return usagef("too many args: %q %q", c.Backend, c.Backend2)
 	}
 
-	if backend == "default" {
+	if backend == aclScopeTypeDefault {
 		backend = "auto"
 	}
 

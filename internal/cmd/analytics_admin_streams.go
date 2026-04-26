@@ -22,7 +22,7 @@ type AADataStreamsCmd struct {
 	Delete AADataStreamsDeleteCmd `cmd:"" name:"delete" help:"Delete a data stream"`
 	Get    AADataStreamsGetCmd    `cmd:"" name:"get" help:"Get a data stream"`
 	List   AADataStreamsListCmd   `cmd:"" name:"list" help:"List data streams for a property"`
-	Patch  AADataStreamsPatchCmd `cmd:"" name:"patch" help:"Update a data stream"`
+	Patch  AADataStreamsPatchCmd  `cmd:"" name:"patch" help:"Update a data stream"`
 }
 
 // --- create ---
@@ -111,8 +111,8 @@ func (c *AADataStreamsDeleteCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	name := normalizeStreamName(c.Property, c.Stream)
-	if err := confirmDestructive(ctx, flags, fmt.Sprintf("delete data stream %s", name)); err != nil {
-		return err
+	if cerr := confirmDestructive(ctx, flags, fmt.Sprintf("delete data stream %s", name)); cerr != nil {
+		return cerr
 	}
 
 	svc, err := newAnalyticsAdminService(ctx, account)
@@ -353,8 +353,8 @@ func (c *AAMpSecretsDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	name := normalizeMpSecretName(c.Property, c.Stream, c.Secret)
-	if err := confirmDestructive(ctx, flags, fmt.Sprintf("delete measurement protocol secret %s", name)); err != nil {
-		return err
+	if cerr := confirmDestructive(ctx, flags, fmt.Sprintf("delete measurement protocol secret %s", name)); cerr != nil {
+		return cerr
 	}
 
 	svc, err := newAnalyticsAdminService(ctx, account)

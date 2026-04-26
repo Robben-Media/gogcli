@@ -9,16 +9,18 @@ import (
 	"github.com/steipete/gogcli/internal/config"
 )
 
+const serviceGmail = "gmail"
+
 var commandServiceAliases = map[string]string{
 	"bq":       "bigquery",
 	"business": "businessprofile",
-	"email":    "gmail",
+	"email":    serviceGmail,
 	"ga":       "analytics",
 	"ga4":      "analytics",
 	"gbp":      "businessprofile",
 	"gsc":      "searchconsole",
 	"gtm":      "tagmanager",
-	"mail":     "gmail",
+	"mail":     serviceGmail,
 	"sc":       "searchconsole",
 	"yt":       "youtube",
 }
@@ -173,7 +175,7 @@ func commandActionID(kctx *kong.Context) string {
 
 	service := normalizeCommandService(parts[0])
 	segments := parts[1:]
-	if service == "gmail" && len(segments) > 1 && segments[0] == "settings" {
+	if service == serviceGmail && len(segments) > 1 && segments[0] == "settings" {
 		segments = segments[1:]
 	}
 	return service + ":" + strings.Join(segments, ".")
@@ -245,7 +247,7 @@ func policyActionMatches(pattern string, action string) bool {
 }
 
 func isReadLikeAction(service string, actionRest string) bool {
-	if service != "gmail" {
+	if service != serviceGmail {
 		return false
 	}
 	last := actionRest
@@ -287,13 +289,11 @@ func normalizePolicyAction(raw string) string {
 		rest = strings.ReplaceAll(rest, "..", ".")
 	}
 	rest = strings.Trim(rest, ".")
-	if service == "gmail" {
+	if service == serviceGmail {
 		if rest == "settings" {
 			rest = "*"
 		}
-		if strings.HasPrefix(rest, "settings.") {
-			rest = strings.TrimPrefix(rest, "settings.")
-		}
+		rest = strings.TrimPrefix(rest, "settings.")
 	}
 	if rest == "" {
 		return service + ":*"
