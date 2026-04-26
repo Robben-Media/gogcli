@@ -1,233 +1,292 @@
 # gogcli Audit Report
 
-Date: 2026-04-23
-Mode: Audit report only
-Repository state checked with: `git status --short`
-Verification run: `go test ./...` (passed)
-Behavior sampled with: `go run ./cmd/gog --help`, `go run ./cmd/gog version --json`, `go run ./cmd/gog auth --help`
+Date: 2026-04-26
+Branch: `ai-audit/gogcli-latest`
+Mode: Audit report only; no source changes performed
 
-Best-practice references used:
-- [Command Line Interface Guidelines](https://clig.dev/)
+## Audit Scope
+
+Reviewed repository structure, core CLI entrypoints, output/error helpers, completions, config commands, build/test targets, and representative command behavior.
+
+Commands run:
+
+- `git status --short`
+- `go test ./...`
+- `go run ./cmd/gog --help`
+- `go run ./cmd/gog version --json`
+- `go run ./cmd/gog --plain config list`
+- `go run ./cmd/gog --plain config keys`
+- `go run ./cmd/gog config list --json`
+- `go run ./cmd/gog completion zsh`
+- `go run ./cmd/gog completion fish`
+
+Web references used for comparison:
+
+- [GitHub CLI formatting docs](https://cli.github.com/manual/gh_help_formatting)
 - [Cobra shell completion guide](https://cobra.dev/docs/how-to-guides/shell-completion/)
-- [kubectl version reference](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_version/)
+- [gofmt command docs](https://pkg.go.dev/cmd/gofmt)
+- [goimports docs](https://pkg.go.dev/golang.org/x/tools/cmd/goimports)
+- [gofumpt README](https://github.com/mvdan/gofumpt)
 
 ## 1. Prioritized Improvements
 
-### 1. Eliminate duplicate Drive API calls in `drive url` JSON mode
+### 1. CI does not validate the TypeScript email-tracking worker
+
 - Priority: High
-- Why it matters: This command currently doubles API traffic in JSON mode, which adds latency and makes automation slower for larger file lists.
-- Exact location: `internal/cmd/drive.go:714-748`
-- What is wrong: `DriveURLCmd.Run` resolves each file link once in the initial loop and then resolves every file again when building the JSON payload. Text mode does one lookup per file; JSON mode does two.
-- Recommended improvement: Collect `{id,url}` results during the first loop and reuse that slice for both text and JSON output paths.
-- Expected impact: Lower latency, fewer Drive API requests, lower quota usage, no user-visible behavior change.
+- Why it matters: the repo ships and tests a non-Go worker under `internal/tracking/worker`, but the advertised full gate does not execute that worker's lint/build/test path. Regressions in the worker can land while `make ci` still passes.
+- Exact location:
+  - [Makefile](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/Makefile:79)
+  - [Makefile](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/Makefile:89)
+  - [Makefile](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/Makefile:91)
+  - [internal/tracking/worker/package.json](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/internal/tracking/worker/package.json:1)
+- What is wrong:
+  - `ci` runs `pnpm-gate fmt-check lint test`.
+  - `pnpm-gate` only checks for a root `package.json`, `package.json5`, or `package.yaml`.
+  - This repo has no root `package.json`, so `pnpm-gate` skips.
+  - The actual worker package lives at `internal/tracking/worker/package.json` and only runs via the separate `worker-ci` target, which `ci` does not call.
+- Recommended improvement: make `ci` include `worker-ci`, or change `pnpm-gate` to detect and run the worker package explicitly.
+- Expected impact: better release confidence and fewer silent regressions in the tracking feature.
 - Estimated risk: Low
 - Safe to automate: Yes
 
-### 2. Make `make fmt-check` non-mutating
+### 2. `make fmt-check` mutates the worktree instead of acting like a check
+
 - Priority: High
-- Why it matters: The current “check” target rewrites files before diffing them. That is surprising in local automation and a poor fit for CI gates.
-- Exact location: `Makefile:71-74`
-- What is wrong: `fmt-check` runs `goimports -w .` and `gofumpt -w .`, which mutates the working tree. A formatting check should fail when formatting is needed, not edit files as a side effect.
-- Recommended improvement: Switch `fmt-check` to non-writing checks, for example by comparing formatter output against the tree or using list/diff modes.
-- Expected impact: Safer CI/local automation, fewer accidental dirty worktrees, clearer separation between `fmt` and `fmt-check`.
+- Why it matters: a target named `fmt-check` should be safe in CI and pre-push flows. Today it rewrites files in place, which is surprising for contributors and awkward for automation.
+- Exact location:
+  - [Makefile](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/Makefile:71)
+- What is wrong:
+  - `fmt-check` runs `goimports -w .` and `gofumpt -w .`, which write changes.
+  - It then uses `git diff --exit-code` to fail if formatting changed.
+  - This means a "check" target modifies the checkout before failing.
+- Recommended improvement: convert `fmt-check` into a non-mutating verification target, for example by using `gofmt -d`/`-l`-style output plus non-write modes for the configured formatters.
+- Expected impact: safer CI, cleaner local automation, and less accidental worktree churn.
 - Estimated risk: Low
 - Safe to automate: Yes
 
-### 3. Stop reinstalling pinned tools on every `make fmt`, `make lint`, and `make ci`
+### 3. `config list --plain` violates the documented plain-output contract
+
 - Priority: Medium
-- Why it matters: Every formatter/lint/test workflow currently pays repeated `go install` cost, which slows local iteration and automation.
-- Exact location: `Makefile:61-77`
-- What is wrong: `tools` is `.PHONY`, so `make fmt`, `make lint`, and `make ci` reinstall `gofumpt`, `goimports`, and `golangci-lint` on every invocation.
-- Recommended improvement: Replace the phony `tools` target with file targets under `.tools/` or a stamp target keyed by the pinned versions.
-- Expected impact: Faster local loops and CI runs without changing tool versions or lint behavior.
+- Why it matters: the repository promises that `--plain` is stable TSV on stdout. `config list --plain` currently emits human-oriented labeled lines, which is inconsistent for scripts and agents.
+- Exact location:
+  - [README.md](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/README.md:255)
+  - [internal/cmd/config_cmd.go](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/internal/cmd/config_cmd.go:128)
+- What is wrong:
+  - `README.md` says `--plain` is stable TSV.
+  - `ConfigListCmd.Run` only special-cases JSON; non-JSON mode prints:
+    - `Config file: /...`
+    - `key: value`
+  - Actual command output from `go run ./cmd/gog --plain config list` is human-readable, not TSV.
+- Recommended improvement: add an explicit plain-mode branch for `config list`, such as `path\t<path>` and `key\tvalue`, or another documented stable tab-separated schema.
+- Expected impact: makes the config surface consistent with the rest of the CLI’s scripting story.
 - Estimated risk: Low
 - Safe to automate: Yes
 
-### 4. Remove config/keyring discovery from parser construction on every invocation
+### 4. Zsh completion is a Bash compatibility shim, not shell-native completion
+
 - Priority: Medium
-- Why it matters: Help rendering and parser setup should be cheap and reliable. Right now parser creation eagerly performs config-path and keyring-backend discovery.
-- Exact location: `internal/cmd/root.go:184-237`
-- What is wrong: `Execute` calls `newParser(helpDescription())`, and `helpDescription()` immediately calls `config.ConfigPath()` and `secrets.ResolveKeyringBackendInfo()`. That means help, completion, and parse-error paths all perform filesystem/config/keyring work before command execution.
-- Recommended improvement: Keep parser construction pure and lazy-load the config/keyring block only when top-level help actually prints, or cache/guard that lookup behind a dedicated helper.
-- Expected impact: Cheaper help/completion paths, fewer surprising failures in basic CLI discovery, easier future testing.
-- Estimated risk: Low
+- Why it matters: completion quality is part of CLI usability. The current zsh path works by enabling Bash completion emulation, which is less idiomatic and usually less capable than native zsh completion.
+- Exact location:
+  - [internal/cmd/completion_scripts.go](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/internal/cmd/completion_scripts.go:37)
+  - [internal/cmd/completion_test.go](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/internal/cmd/completion_test.go:9)
+- What is wrong:
+  - `zshCompletionScript()` prepends `bashcompinit` and then concatenates the Bash script verbatim, including the Bash shebang.
+  - Tests only assert presence of markers like `bashcompinit`; they do not protect a native zsh contract.
+  - Compared with modern CLI completion patterns, native per-shell scripts are the norm.
+- Recommended improvement: generate a native zsh completion wrapper or full native zsh script, and tighten tests around shell-specific output instead of marker strings alone.
+- Expected impact: better completion reliability for zsh users and less shell-specific glue.
+- Estimated risk: Medium
 - Safe to automate: Yes
 
-### 5. Improve top-level help discoverability with examples and a support/docs link
+### 5. Contributor/setup guidance is out of sync with the repository layout
+
 - Priority: Medium
-- Why it matters: The current help is clean, but it makes first-use discovery harder than necessary for such a broad multi-service CLI.
-- Exact location: `internal/cmd/root.go:214-237`, `internal/cmd/help_printer.go:23-52`
-- What is wrong: `gog --help` shows usage, flags, commands, build, and config, but no examples, no docs URL, and no clear support path. CLIG recommends examples first and a web docs/support path in top-level help.
-- Recommended improvement: Add 2-3 high-value examples and a docs/support URL to the top-level help text without changing command names or output contracts.
-- Expected impact: Better first-run usability and lower setup friction, especially for a large command surface.
+- Why it matters: install/setup friction slows contributors and automation. The repo guidance names files and workflows that do not exist in this checkout.
+- Exact location:
+  - [AGENTS.md](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/AGENTS.md:8)
+  - [AGENTS.md](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/AGENTS.md:15)
+- What is wrong:
+  - `AGENTS.md` references `scripts/gog.mjs`, but that file is absent.
+  - `AGENTS.md` says `pnpm gog …` is available, but there is no root `package.json`.
+  - That creates a mismatch between contributor instructions and the actual repo.
+- Recommended improvement: update contributor-facing guidance so it only describes runnable paths that exist in the repository.
+- Expected impact: lower onboarding friction and fewer dead-end setup attempts.
 - Estimated risk: Low
 - Safe to automate: Yes
 
-### 6. Split oversized command files only with human review
+### 6. The global machine-output contract is only partially enforced command by command
+
 - Priority: Low
-- Why it matters: Very large command files are harder to reason about, review, and extend safely.
-- Exact location: `internal/cmd/docs.go` (1227 lines), `internal/cmd/auth.go` (1103 lines), `internal/cmd/drive.go` (1044 lines)
-- What is wrong: Core command families are concentrated in large files with mixed concerns, which increases the cost of future changes and raises merge/conflict risk.
-- Recommended improvement: Incrementally split by subdomain/output helper/validation helper, while preserving CLI shape and output formats.
-- Expected impact: Better maintainability and easier targeted testing.
+- Why it matters: `gog` positions itself as script-friendly, but the implementation still relies on each command to opt into plain/JSON behavior individually. That scales poorly as the command surface grows.
+- Exact location:
+  - [internal/cmd/root.go](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/internal/cmd/root.go:119)
+  - [internal/outfmt/outfmt.go](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/internal/outfmt/outfmt.go:12)
+  - [internal/cmd/config_cmd.go](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/internal/cmd/config_cmd.go:128)
+- What is wrong:
+  - Root mode selection is centralized, but rendering policy is distributed across many commands.
+  - The `config list --plain` inconsistency is a symptom of that design.
+- Recommended improvement: build a small output-contract checklist or shared helpers for common shapes so new commands cannot silently drift from JSON/plain expectations.
+- Expected impact: fewer format regressions as the CLI grows.
 - Estimated risk: Medium
 - Safe to automate: No
 
-### 7. Add a regression test for `drive url` request count
-- Priority: Low
-- Why it matters: There is already output coverage for `DriveURLCmd`, but no guard against duplicate per-file lookups in JSON mode.
-- Exact location: `internal/cmd/drive_url_cmd_test.go:20-122`
-- What is wrong: Existing tests validate returned URLs but do not assert how many HTTP calls are made.
-- Recommended improvement: Extend the existing httptest server to count requests and assert one lookup per file in both text and JSON modes.
-- Expected impact: Prevents the current performance issue from reappearing after it is fixed.
-- Estimated risk: Low
-- Safe to automate: Yes
-
-### 8. Consider normalizing `version --json` fallback semantics
-- Priority: Low
-- Why it matters: Text mode uses `VersionString()` and falls back to `dev`; JSON mode emits `strings.TrimSpace(version)` directly.
-- Exact location: `internal/cmd/version.go:18-46`
-- What is wrong: If the embedded version were ever empty, text and JSON outputs would disagree (`dev` vs `""`).
-- Recommended improvement: Reuse the same normalized version value for both text and JSON payloads.
-- Expected impact: More predictable scripting semantics in untagged/dev builds.
-- Estimated risk: Low
-- Safe to automate: Yes
-
-## 2. Quick Wins vs Larger Refactors
+## 2. Quick Wins Vs Larger Refactors
 
 ### Quick Wins
-- Remove duplicate link resolution in `internal/cmd/drive.go:714-748`.
-- Make `fmt-check` non-mutating in `Makefile:71-74`.
-- Cache or file-target the `.tools` installs in `Makefile:61-77`.
-- Move config/keyring discovery out of eager parser construction in `internal/cmd/root.go:184-237`.
-- Add examples and docs/support URL to help generation in `internal/cmd/root.go` and `internal/cmd/help_printer.go`.
-- Add request-count coverage to `internal/cmd/drive_url_cmd_test.go:20-122`.
-- Normalize version fallback handling in `internal/cmd/version.go:18-46`.
+
+- Fix `make ci` so it runs `worker-ci` or otherwise validates `internal/tracking/worker`.
+- Make `fmt-check` non-mutating.
+- Add a real plain-mode formatter for `config list`.
+- Replace the zsh Bash shim with a thinner native zsh completion path and strengthen completion tests.
+- Correct stale contributor/setup guidance in `AGENTS.md`.
 
 ### Larger Refactors
-- Split `internal/cmd/docs.go`, `internal/cmd/auth.go`, and `internal/cmd/drive.go` into smaller subdomain-focused files.
-- Centralize repeated command helpers for pagination/output/validation across `internal/cmd/`.
-- Revisit help generation architecture if the team wants richer docs/examples per subcommand instead of a minimal top-level augmentation.
+
+- Build a shared output-contract layer so command authors declare rows/objects once and get consistent default/plain/JSON rendering automatically.
+- Audit the entire command tree for plain-mode parity against the documented "stable TSV" promise.
+- Introduce shell-script validation in CI for generated completion output across Bash, zsh, Fish, and PowerShell.
 
 ## 3. Do Not Change List
 
-### Parseable output contracts
-- Keep `--json` and `--plain` behavior stable.
-- Why: The repository is explicitly built around parseable stdout, and current root flags plus tests in `internal/outfmt/` and many command tests depend on this.
+These areas look intentional, stable, and worth preserving unless there is a strong compatibility reason to revisit them.
 
-### Stdout vs stderr split
-- Keep machine-readable success output on stdout and hints/no-results/errors on stderr.
-- Why: This matches CLIG guidance for composable tools and is already followed throughout `internal/cmd/` and `internal/cmd/root.go`.
+- Root `--json` / `--plain` / stderr split:
+  - [internal/cmd/root.go](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/internal/cmd/root.go:119)
+  - [internal/ui/ui.go](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/internal/ui/ui.go:21)
+  - Why: the repo consistently treats stdout as the data channel and stderr as the human-hint/error channel. That is the right baseline for automation.
+- Exit code handling for parse/usage failures:
+  - [internal/cmd/root.go](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/internal/cmd/root.go:159)
+  - [internal/cmd/execute_version_exitcodes_test.go](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/internal/cmd/execute_version_exitcodes_test.go:60)
+  - Why: the current `ExitError` wrapping and exit code `2` coverage give scripts a stable failure mode.
+- Account auto-selection and alias resolution:
+  - [internal/cmd/account.go](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/internal/cmd/account.go:11)
+  - Why: the fallback order is practical for both humans and agents and already integrates config aliases, env vars, defaults, and stored tokens.
+- Version/build metadata pattern:
+  - [internal/cmd/version.go](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/internal/cmd/version.go:12)
+  - [Makefile](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/Makefile:13)
+  - Why: injecting version/commit/date via `ldflags` is conventional and already test-covered.
+- Policy and top-level command restrictions:
+  - [internal/cmd/enabled_commands.go](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/internal/cmd/enabled_commands.go:9)
+  - [internal/cmd/policy_enforcement.go](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/internal/cmd/policy_enforcement.go:28)
+  - Why: this is a differentiating safety feature for agent/sandbox use. Improvements should preserve current semantics.
 
-### Destructive command safety model
-- Keep `--force` and `--no-input` semantics stable.
-- Why: `internal/cmd/confirm.go` enforces safe non-interactive behavior, and many destructive commands rely on that contract.
+## 4. Execution Plan
 
-### Existing command names and aliases
-- Keep top-level commands and aliases stable, including `gmail/mail/email`, `youtube/yt`, `analytics/ga/ga4`, `search-console/gsc/sc`, and `business-profile/gbp/business`.
-- Why: This CLI already has a broad surface area and automation value depends on command stability.
-
-### Keyring/config behavior
-- Keep the current config file and keyring backend semantics stable.
-- Why: Auth storage is security-sensitive and already has targeted coverage in `internal/secrets/`, `internal/config/`, and auth command tests.
-
-### Exit-code behavior
-- Keep success as `0`, parse/usage errors as `2`, and command/runtime failures non-zero.
-- Why: `cmd/gog/main.go`, `internal/cmd/exit.go`, and tests already encode this contract for scripts.
-
-## 4. Task Plan
+Only items marked `Safe to automate: Yes` are turned into tasks below.
 
 ### Task 1
-- Title: Remove duplicate Drive URL lookups in JSON mode
-- Why: Fixes a real per-file performance bug with no intended behavior change.
-- Files/modules: `internal/cmd/drive.go`, `internal/cmd/drive_url_cmd_test.go`
+
+- Title: Include the tracking worker in the default CI gate
+- Why: `make ci` currently reports success without validating `internal/tracking/worker`.
+- Files/modules:
+  - [Makefile](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/Makefile:79)
+  - [internal/tracking/worker/package.json](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/internal/tracking/worker/package.json:1)
 - Risk: Low
-- Expected impact: Fewer Drive API requests, faster automation, preserved output shape.
+- Expected impact: closes a real test/lint/build gap for the shipped worker feature.
 - Steps:
-  1. Refactor `DriveURLCmd.Run` to collect resolved URLs once.
-  2. Reuse the collected results for both text and JSON output branches.
-  3. Extend the existing test server to assert one lookup per file in JSON mode.
-- Validation: `go test ./internal/cmd -run TestDriveURLCmd_TextAndJSON`
-- Do not change: command name, arguments, JSON schema, text output rows, fallback URL behavior.
+  1. Decide whether `ci` should call `worker-ci` directly or whether `pnpm-gate` should discover the worker package.
+  2. Update the Makefile so the default full gate executes the worker checks.
+  3. Add or adjust tests/docs only as needed to reflect the new gate behavior.
+- Validation:
+  - `make ci`
+  - Confirm worker lint/build/test execute instead of being skipped by the root-package check.
+- Do not change:
+  - Existing Go test behavior
+  - Worker scripts in `internal/tracking/worker/package.json`
 
 ### Task 2
-- Title: Make `fmt-check` a true read-only formatter gate
-- Why: The current target dirties the worktree and is unsafe for automation.
-- Files/modules: `Makefile`
+
+- Title: Make `fmt-check` a true read-only verification target
+- Why: contributors and automation should be able to run a check target without modifying the checkout.
+- Files/modules:
+  - [Makefile](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/Makefile:71)
 - Risk: Low
-- Expected impact: Cleaner CI/local automation and clearer target semantics.
+- Expected impact: safer local and CI workflows.
 - Steps:
-  1. Replace write-mode formatter invocations in `fmt-check`.
-  2. Make the target fail when formatting is needed instead of rewriting files.
-  3. Verify `fmt` still performs the actual formatting path.
-- Validation: Run `make fmt-check` in a clean tree and on a deliberately misformatted file in a throwaway branch/worktree.
-- Do not change: pinned formatter versions, `fmt` behavior, `make ci` structure.
+  1. Replace write-mode formatter invocations in `fmt-check` with non-mutating checks.
+  2. Keep `fmt` as the mutating formatter target.
+  3. Verify failure output still makes formatting drift obvious.
+- Validation:
+  - Run `make fmt-check` on a clean tree and confirm no files change.
+  - Intentionally create formatting drift and confirm the target fails without rewriting files.
+- Do not change:
+  - The `fmt` target
+  - Formatter tool versions or import-local prefix behavior
 
 ### Task 3
-- Title: Cache `.tools` installs instead of reinstalling on every run
-- Why: Reduces repeated setup cost across `fmt`, `lint`, and `ci`.
-- Files/modules: `Makefile`
+
+- Title: Make `config list --plain` emit stable TSV
+- Why: the current output breaks the repo’s plain-mode contract.
+- Files/modules:
+  - [internal/cmd/config_cmd.go](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/internal/cmd/config_cmd.go:128)
+  - [README.md](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/README.md:255)
 - Risk: Low
-- Expected impact: Faster local loops and CI without changing tooling versions.
+- Expected impact: better scripting ergonomics and fewer command-specific exceptions.
 - Steps:
-  1. Convert `tools` into file-backed targets or a versioned stamp under `.tools/`.
-  2. Make `fmt`, `fmt-check`, and `lint` depend on those artifacts directly.
-  3. Preserve the current pinned versions and install locations.
-- Validation: Run `make lint` twice and confirm the second invocation skips reinstall work.
-- Do not change: tool versions, install directory, formatter/linter command lines.
+  1. Add a plain-mode branch to `ConfigListCmd.Run`.
+  2. Emit a documented, stable tab-separated schema.
+  3. Add command tests that lock down both default and plain output.
+- Validation:
+  - `go test ./internal/cmd`
+  - `go run ./cmd/gog --plain config list`
+  - Confirm stdout is stable TSV and stderr stays clean.
+- Do not change:
+  - Existing JSON payload shape for `config list`
+  - Existing default human-readable output unless needed for shared code paths
 
 ### Task 4
-- Title: Defer help-only config and keyring discovery
-- Why: Keeps parser creation cheap and avoids config/keyring work in discovery paths.
-- Files/modules: `internal/cmd/root.go`, `internal/cmd/root_more_test.go`
-- Risk: Low
-- Expected impact: Faster `--help`, completion, and parse-error paths; fewer incidental failures.
+
+- Title: Replace zsh Bash-emulation completion with a native zsh path
+- Why: the current zsh completion is functional but not idiomatic and only lightly tested.
+- Files/modules:
+  - [internal/cmd/completion_scripts.go](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/internal/cmd/completion_scripts.go:37)
+  - [internal/cmd/completion_test.go](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/internal/cmd/completion_test.go:9)
+- Risk: Medium
+- Expected impact: better zsh UX and more trustworthy completion generation.
 - Steps:
-  1. Move config/keyring lookup out of eager `helpDescription()` parser setup.
-  2. Compute the config block only when top-level help is rendered.
-  3. Update tests to cover the new help path.
-- Validation: `go test ./internal/cmd -run 'TestHelpDescription|TestMainHelpDoesNotExit'` and verify `go run ./cmd/gog --help`.
-- Do not change: displayed config file path text, displayed keyring backend text, normal help layout.
+  1. Replace the `bashcompinit` shim with a native zsh completion implementation or a tighter zsh wrapper.
+  2. Expand tests so they verify shell-specific structure rather than marker presence alone.
+  3. Confirm Bash, Fish, and PowerShell outputs remain unchanged.
+- Validation:
+  - `go test ./internal/cmd`
+  - `go run ./cmd/gog completion zsh`
+  - Manual spot-check in zsh if available.
+- Do not change:
+  - `__complete` protocol
+  - Existing Bash/Fish/PowerShell completion behavior
 
 ### Task 5
-- Title: Add examples and docs/support URL to top-level help
-- Why: Current help is serviceable but not especially discoverable for first-run users.
-- Files/modules: `internal/cmd/root.go`, `internal/cmd/help_printer.go`, related help tests
+
+- Title: Remove stale contributor/setup guidance
+- Why: current repo guidance references non-existent files/workflows.
+- Files/modules:
+  - [AGENTS.md](/Users/jeremydjohnson/.codex/worktrees/2bd6/gogcli/AGENTS.md:8)
 - Risk: Low
-- Expected impact: Better CLI usability and lower setup friction.
+- Expected impact: fewer dead-end setup attempts for contributors and agents.
 - Steps:
-  1. Add 2-3 representative examples to the top-level help text.
-  2. Add a docs/support URL to the help footer or description block.
-  3. Update help printer tests to lock the new output in place.
-- Validation: `go test ./internal/cmd -run Help` and verify `go run ./cmd/gog --help`.
-- Do not change: command names, flag names, command ordering, parseable output contracts.
+  1. Remove or correct references to `scripts/gog.mjs`.
+  2. Remove or correct references to `pnpm gog …` if that path is no longer supported.
+  3. Re-verify that documented commands match the current tree.
+- Validation:
+  - `rg -n "gog.mjs|pnpm gog" AGENTS.md README.md docs specs`
+  - Manual existence check for any mentioned scripts.
+- Do not change:
+  - Actual build/test commands that currently work
+  - User-facing CLI behavior
 
-### Task 6
-- Title: Normalize version fallback semantics across text and JSON
-- Why: Keeps scripting output consistent if embedded version metadata is absent.
-- Files/modules: `internal/cmd/version.go`, `internal/cmd/version_test.go`, `internal/cmd/misc_more_test.go`
-- Risk: Low
-- Expected impact: More predictable version output across build contexts.
-- Steps:
-  1. Normalize the version string once in `VersionCmd.Run`.
-  2. Reuse that normalized value for JSON output.
-  3. Add a test covering the empty-version fallback case.
-- Validation: `go test ./internal/cmd -run Version`
-- Do not change: current JSON keys, text format when version metadata is present.
+## Final Section
 
-## 5. Top 3 Tasks to Execute First
+### Top 3 Tasks to Execute First
 
-1. Remove duplicate Drive URL lookups in JSON mode.
-2. Make `fmt-check` a true read-only formatter gate.
-3. Cache `.tools` installs instead of reinstalling on every run.
+1. Include the tracking worker in the default CI gate.
+2. Make `fmt-check` a true read-only verification target.
+3. Make `config list --plain` emit stable TSV.
 
-## 6. Tasks Excluded
+### Tasks Excluded
 
-- Task: Split `internal/cmd/docs.go`, `internal/cmd/auth.go`, and `internal/cmd/drive.go`
-  - Reason: Valuable, but not a small independent PR and too likely to create merge/review churn.
-
-- Task: Redesign help output into a larger docs system
-  - Reason: The small examples/docs-link improvement is safe; a full help architecture rewrite is not.
-
-- Task: Change command names, aliases, output schemas, auth storage, or destructive-command semantics
-  - Reason: These are core workflow contracts and should remain stable.
+- Task: Build a shared output-contract layer across the full command tree.
+  - Reason: useful, but this crosses too many commands to be a safe small automation PR.
+- Task: Full plain-mode parity audit for every command.
+  - Reason: broad surface area and likely to uncover behavior choices that need human review.
+- Task: Redesign help/build/config presentation globally.
+  - Reason: current help behavior is mostly sound; only narrow inconsistencies were worth prioritizing.
