@@ -64,23 +64,19 @@ func TestNormalizePolicy_RejectsInvalidActions(t *testing.T) {
 func TestUpsertDeleteGetPolicy(t *testing.T) {
 	var cfg File
 
-	err := UpsertPolicy(&cfg, Policy{
+	if err := UpsertPolicy(&cfg, Policy{
 		Name:    "b",
 		Account: "a@b.com",
 		Deny:    []string{"gmail:send"},
-	}, false)
-
-	if err != nil {
+	}, false); err != nil {
 		t.Fatalf("UpsertPolicy first: %v", err)
 	}
 
-	err = UpsertPolicy(&cfg, Policy{
+	if err := UpsertPolicy(&cfg, Policy{
 		Name:    "a",
 		Account: "a@b.com",
 		Allow:   []string{"gmail:read"},
-	}, false)
-
-	if err != nil {
+	}, false); err != nil {
 		t.Fatalf("UpsertPolicy second: %v", err)
 	}
 
