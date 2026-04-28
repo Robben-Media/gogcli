@@ -69,6 +69,7 @@ func TestUpsertDeleteGetPolicy(t *testing.T) {
 		Account: "a@b.com",
 		Deny:    []string{"gmail:send"},
 	}, false)
+
 	if err != nil {
 		t.Fatalf("UpsertPolicy first: %v", err)
 	}
@@ -78,6 +79,7 @@ func TestUpsertDeleteGetPolicy(t *testing.T) {
 		Account: "a@b.com",
 		Allow:   []string{"gmail:read"},
 	}, false)
+
 	if err != nil {
 		t.Fatalf("UpsertPolicy second: %v", err)
 	}

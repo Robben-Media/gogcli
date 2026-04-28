@@ -114,7 +114,6 @@ func normalizePolicyActions(actions []string) []string {
 
 func validatePolicyActions(actions []string) error {
 	for _, action := range actions {
-
 		service, rest, ok := strings.Cut(action, ":")
 
 		if !ok || strings.TrimSpace(service) == "" || strings.TrimSpace(rest) == "" {
