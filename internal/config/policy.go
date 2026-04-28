@@ -122,6 +122,7 @@ func validatePolicyActions(actions []string) error {
 func UpsertPolicy(cfg *File, policy Policy, replace bool) error {
 	if cfg == nil {
 		return fmt.Errorf("%w", errNilConfig)
+		return errNilConfig
 	}
 
 	normalized, err := NormalizePolicy(policy)
@@ -169,6 +170,7 @@ func GetPolicy(cfg File, name string) (Policy, bool) {
 func DeletePolicy(cfg *File, name string) error {
 	if cfg == nil {
 		return fmt.Errorf("%w", errNilConfig)
+		return errNilConfig
 	}
 
 	normalized, err := NormalizePolicyName(name)

@@ -21,6 +21,8 @@ func resolveClientOverride(flags *RootFlags, cmdClient string) string {
 //nolint:unparam // cmdClient is variably passed by callers
 func resolveClientForEmail(email string, flags *RootFlags, cmdClient string) (string, error) {
 	override := resolveClientOverride(flags, cmdClient)
+func resolveClientForEmail(email string, flags *RootFlags) (string, error) {
+	override := resolveClientOverride(flags, "")
 	return authclient.ResolveClientWithOverride(email, override)
 }
 

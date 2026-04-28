@@ -274,7 +274,7 @@ func (c *AuthTokensDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if err != nil {
 		return err
 	}
-	client, err := resolveClientForEmail(email, flags, "")
+	client, err := resolveClientForEmail(email, flags)
 	if err != nil {
 		return err
 	}
@@ -626,7 +626,7 @@ func (c *AuthStatusCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if flags != nil {
 		if a, err := requireAccount(flags); err == nil {
 			account = a
-			resolvedClient, resolveErr := resolveClientForEmail(account, flags, "")
+			resolvedClient, resolveErr := resolveClientForEmail(account, flags)
 			if resolveErr != nil {
 				return resolveErr
 			}
@@ -951,7 +951,7 @@ func (c *AuthRemoveCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if err != nil {
 		return err
 	}
-	client, err := resolveClientForEmail(email, flags, "")
+	client, err := resolveClientForEmail(email, flags)
 	if err != nil {
 		return err
 	}
