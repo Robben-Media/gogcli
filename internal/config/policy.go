@@ -31,6 +31,7 @@ var policyNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
 func NormalizePolicyName(raw string) (string, error) {
 	name := strings.ToLower(strings.TrimSpace(raw))
+
 	if !policyNamePattern.MatchString(name) {
 		return "", fmt.Errorf("%w: %q", errInvalidPolicyName, raw)
 	}
@@ -47,6 +48,7 @@ func NormalizePolicy(cfg Policy) (Policy, error) {
 	cfg.Name = name
 
 	cfg.Account = strings.ToLower(strings.TrimSpace(cfg.Account))
+
 	if strings.TrimSpace(cfg.Client) != "" {
 		normalizedClient, err := NormalizeClientNameOrDefault(cfg.Client)
 		if err != nil {
@@ -59,6 +61,7 @@ func NormalizePolicy(cfg Policy) (Policy, error) {
 	cfg.Reason = strings.TrimSpace(cfg.Reason)
 
 	cfg.Allow = normalizePolicyActions(cfg.Allow)
+
 	cfg.Deny = normalizePolicyActions(cfg.Deny)
 
 	if err := validatePolicyActions(cfg.Allow); err != nil {
@@ -91,6 +94,7 @@ func normalizePolicyActions(actions []string) []string {
 
 	for _, action := range actions {
 		action = strings.ToLower(strings.TrimSpace(action))
+
 		if action == "" {
 			continue
 		}
@@ -110,7 +114,9 @@ func normalizePolicyActions(actions []string) []string {
 
 func validatePolicyActions(actions []string) error {
 	for _, action := range actions {
+
 		service, rest, ok := strings.Cut(action, ":")
+
 		if !ok || strings.TrimSpace(service) == "" || strings.TrimSpace(rest) == "" {
 			return fmt.Errorf("%w: %q (use service:command form)", errInvalidPolicyAction, action)
 		}
@@ -140,6 +146,7 @@ func UpsertPolicy(cfg *File, policy Policy, replace bool) error {
 		}
 
 		cfg.Policies[i] = normalized
+
 		sortPolicies(cfg)
 
 		return nil
