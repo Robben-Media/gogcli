@@ -40,14 +40,12 @@ func TestNormalizePolicy(t *testing.T) {
 }
 
 func TestNormalizePolicy_RequiresTarget(t *testing.T) {
-
 	if _, err := NormalizePolicy(Policy{Name: "x", Deny: []string{"gmail:send"}}); !errors.Is(err, errPolicyMissingTarget) {
 		t.Fatalf("expected missing target, got %v", err)
 	}
 }
 
 func TestNormalizePolicy_RequiresRules(t *testing.T) {
-
 	if _, err := NormalizePolicy(Policy{Name: "x", Account: "a@b.com"}); !errors.Is(err, errPolicyMissingRules) {
 		t.Fatalf("expected missing rules, got %v", err)
 	}
