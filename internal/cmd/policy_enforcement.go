@@ -56,7 +56,7 @@ func enforceCommandPolicies(kctx *kong.Context, flags *RootFlags) error {
 	if err != nil {
 		return err
 	}
-	client, err := resolveClientForEmail(account, flags, "")
+	client, err := resolveClientForEmail(account, flags)
 	if err != nil {
 		return err
 	}
