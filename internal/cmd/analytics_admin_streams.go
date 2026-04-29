@@ -111,8 +111,6 @@ func (c *AADataStreamsDeleteCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	name := normalizeStreamName(c.Property, c.Stream)
-	if cerr := confirmDestructive(ctx, flags, fmt.Sprintf("delete data stream %s", name)); cerr != nil {
-		return cerr
 	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("delete data stream %s", name)); confirmErr != nil {
 		return confirmErr
 	}
@@ -355,8 +353,6 @@ func (c *AAMpSecretsDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	name := normalizeMpSecretName(c.Property, c.Stream, c.Secret)
-	if cerr := confirmDestructive(ctx, flags, fmt.Sprintf("delete measurement protocol secret %s", name)); cerr != nil {
-		return cerr
 	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("delete measurement protocol secret %s", name)); confirmErr != nil {
 		return confirmErr
 	}
