@@ -69,9 +69,18 @@ fmt: tools
 	@$(GOFUMPT) -w .
 
 fmt-check: tools
-	@$(GOIMPORTS) -local github.com/steipete/gogcli -w .
-	@$(GOFUMPT) -w .
-	@git diff --exit-code -- '*.go' go.mod go.sum
+	@files="$$($(GOIMPORTS) -local github.com/steipete/gogcli -l .)"; \
+	if [ -n "$$files" ]; then \
+		echo "goimports needs changes:" >&2; \
+		echo "$$files" >&2; \
+		exit 1; \
+	fi
+	@files="$$($(GOFUMPT) -l .)"; \
+	if [ -n "$$files" ]; then \
+		echo "gofumpt needs changes:" >&2; \
+		echo "$$files" >&2; \
+		exit 1; \
+	fi
 
 lint: tools
 	@$(GOLANGCI_LINT) run
