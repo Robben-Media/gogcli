@@ -10,8 +10,6 @@ import (
 	"github.com/steipete/gogcli/internal/ui"
 )
 
-const defaultAttachmentName = "attachment"
-
 type attachmentInfo struct {
 	Filename     string
 	Size         int64

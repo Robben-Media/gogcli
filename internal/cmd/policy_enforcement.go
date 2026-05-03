@@ -9,8 +9,6 @@ import (
 	"github.com/steipete/gogcli/internal/config"
 )
 
-const serviceGmail = "gmail"
-
 var commandServiceAliases = map[string]string{
 	"bq":       "bigquery",
 	"business": "businessprofile",
