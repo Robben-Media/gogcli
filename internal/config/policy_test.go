@@ -39,11 +39,13 @@ func TestNormalizePolicy(t *testing.T) {
 	}
 }
 
-func TestNormalizePolicy_RequiresTargetAndRules(t *testing.T) {
+func TestNormalizePolicy_RequiresTarget(t *testing.T) {
 	if _, err := NormalizePolicy(Policy{Name: "x", Deny: []string{"gmail:send"}}); !errors.Is(err, errPolicyMissingTarget) {
 		t.Fatalf("expected missing target, got %v", err)
 	}
+}
 
+func TestNormalizePolicy_RequiresRules(t *testing.T) {
 	if _, err := NormalizePolicy(Policy{Name: "x", Account: "a@b.com"}); !errors.Is(err, errPolicyMissingRules) {
 		t.Fatalf("expected missing rules, got %v", err)
 	}
@@ -62,21 +64,19 @@ func TestNormalizePolicy_RejectsInvalidActions(t *testing.T) {
 func TestUpsertDeleteGetPolicy(t *testing.T) {
 	var cfg File
 
-	err := UpsertPolicy(&cfg, Policy{
+	if err := UpsertPolicy(&cfg, Policy{
 		Name:    "b",
 		Account: "a@b.com",
 		Deny:    []string{"gmail:send"},
-	}, false)
-	if err != nil {
+	}, false); err != nil {
 		t.Fatalf("UpsertPolicy first: %v", err)
 	}
 
-	err = UpsertPolicy(&cfg, Policy{
+	if err := UpsertPolicy(&cfg, Policy{
 		Name:    "a",
 		Account: "a@b.com",
 		Allow:   []string{"gmail:read"},
-	}, false)
-	if err != nil {
+	}, false); err != nil {
 		t.Fatalf("UpsertPolicy second: %v", err)
 	}
 
