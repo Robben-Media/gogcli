@@ -57,6 +57,34 @@ func TestExecute_VersionCommand_JSON(t *testing.T) {
 	}
 }
 
+func TestExecute_VersionFlag_JSON(t *testing.T) {
+	origV, origC, origD := version, commit, date
+	t.Cleanup(func() {
+		version = origV
+		commit = origC
+		date = origD
+	})
+	version = "1.2.3"
+	commit = "abc123"
+	date = "2025-12-26T00:00:00Z"
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--version", "--json"}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
+		t.Fatalf("json parse: %v\nout=%q", err, out)
+	}
+	if parsed["version"] != "1.2.3" || parsed["commit"] != "abc123" || parsed["date"] != "2025-12-26T00:00:00Z" {
+		t.Fatalf("unexpected json: %#v", parsed)
+	}
+}
+
 func TestExecute_ExitCodes(t *testing.T) {
 	err := Execute([]string{"--nope"})
 	if err == nil {
