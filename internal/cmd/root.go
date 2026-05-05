@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/alecthomas/kong"
@@ -256,6 +257,9 @@ func newUsageError(err error) error {
 
 func hasVersionFlag(args []string) bool {
 	for _, arg := range args {
+		if arg == "--" {
+			return false
+		}
 		if arg == "--version" {
 			return true
 		}
@@ -269,6 +273,9 @@ func outputModeFromVersionArgs(args []string) (outfmt.Mode, error) {
 	plainOut := envMode.Plain
 
 	for _, arg := range args {
+		if arg == "--" {
+			break
+		}
 		switch {
 		case arg == "--json":
 			jsonOut = true
@@ -293,12 +300,5 @@ func outputModeFromVersionArgs(args []string) (outfmt.Mode, error) {
 }
 
 func parseFlagBool(value string) (bool, error) {
-	switch strings.TrimSpace(value) {
-	case "1", "t", "T", "true", "TRUE", "True":
-		return true, nil
-	case "0", "f", "F", "false", "FALSE", "False":
-		return false, nil
-	default:
-		return false, fmt.Errorf("invalid bool value %q", value)
-	}
+	return strconv.ParseBool(strings.TrimSpace(value))
 }

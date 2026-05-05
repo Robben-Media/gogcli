@@ -85,6 +85,50 @@ func TestExecute_VersionFlag_JSON(t *testing.T) {
 	}
 }
 
+func TestExecute_VersionFlag_StopsAtSeparator(t *testing.T) {
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			err := Execute([]string{"--", "--version"})
+			if err == nil {
+				t.Fatalf("expected error")
+			}
+			if ExitCode(err) != 2 {
+				t.Fatalf("expected exit code 2, got %d (err=%v)", ExitCode(err), err)
+			}
+		})
+	})
+	if out != "" {
+		t.Fatalf("expected no version output, got %q", out)
+	}
+}
+
+func TestExecute_VersionFlag_ModeStopsAtSeparator(t *testing.T) {
+	origV, origC, origD := version, commit, date
+	t.Cleanup(func() {
+		version = origV
+		commit = origC
+		date = origD
+	})
+	version = "1.2.3"
+	commit = "abc123"
+	date = ""
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--version", "--", "--json"}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	if strings.HasPrefix(strings.TrimSpace(out), "{") {
+		t.Fatalf("expected text output, got JSON: %q", out)
+	}
+	if !strings.Contains(out, "1.2.3") {
+		t.Fatalf("unexpected out=%q", out)
+	}
+}
+
 func TestExecute_ExitCodes(t *testing.T) {
 	err := Execute([]string{"--nope"})
 	if err == nil {
