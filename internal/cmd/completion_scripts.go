@@ -19,7 +19,11 @@ func completionScript(shell string) (string, error) {
 
 func bashCompletionScript() string {
 	return `#!/usr/bin/env bash
+` + bashCompletionBody()
+}
 
+func bashCompletionBody() string {
+	return `
 _gog_complete() {
   local IFS=$'\n'
   local completions
@@ -39,7 +43,7 @@ func zshCompletionScript() string {
 
 autoload -Uz bashcompinit
 bashcompinit
-` + bashCompletionScript()
+` + bashCompletionBody()
 }
 
 func fishCompletionScript() string {

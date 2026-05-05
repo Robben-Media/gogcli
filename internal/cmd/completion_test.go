@@ -32,3 +32,22 @@ func TestCompletionCmd(t *testing.T) {
 		})
 	}
 }
+
+func TestZshCompletionScriptShape(t *testing.T) {
+	out := captureStdout(t, func() {
+		cmd := &CompletionCmd{Shell: "zsh"}
+		if err := cmd.Run(context.Background()); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+	})
+
+	if !strings.HasPrefix(out, "#compdef gog\n\n") {
+		t.Fatalf("expected zsh compdef header, got %q", out)
+	}
+	if strings.Contains(out, "#!/usr/bin/env bash") {
+		t.Fatalf("zsh completion should not include a bash shebang, got %q", out)
+	}
+	if !strings.Contains(out, "bashcompinit\n\n_gog_complete()") {
+		t.Fatalf("expected zsh wrapper to initialize bash completions before helper, got %q", out)
+	}
+}
