@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/alecthomas/kong"
 
@@ -32,6 +34,7 @@ type RootFlags struct {
 	EnableCommands string `help:"Comma-separated list of enabled top-level commands (restricts CLI)" default:"${enabled_commands}"`
 	JSON           bool   `help:"Output JSON to stdout (best for scripting)" default:"${json}"`
 	Plain          bool   `help:"Output stable, parseable text to stdout (TSV; no colors)" default:"${plain}"`
+	Version        bool   `help:"Print version and exit"`
 	Force          bool   `help:"Skip confirmations for destructive commands"`
 	NoInput        bool   `help:"Never prompt; fail instead (useful for CI)"`
 	Verbose        bool   `help:"Enable verbose logging"`
@@ -39,8 +42,6 @@ type RootFlags struct {
 
 type CLI struct {
 	RootFlags `embed:""`
-
-	Version kong.VersionFlag `help:"Print version and exit"`
 
 	Auth            AuthCmd               `cmd:"" help:"Auth and credentials"`
 	Groups          GroupsCmd             `cmd:"" help:"Google Groups"`
@@ -76,6 +77,15 @@ func Execute(args []string) (err error) {
 	parser, cli, err := newParser(helpDescription())
 	if err != nil {
 		return err
+	}
+
+	if hasVersionFlag(args) {
+		mode, innerErr := outputModeFromVersionArgs(args)
+		if innerErr != nil {
+			return newUsageError(innerErr)
+		}
+		ctx := outfmt.WithMode(context.Background(), mode)
+		return (&VersionCmd{}).Run(ctx)
 	}
 
 	defer func() {
@@ -243,4 +253,52 @@ func newUsageError(err error) error {
 		return nil
 	}
 	return &ExitError{Code: 2, Err: err}
+}
+
+func hasVersionFlag(args []string) bool {
+	for _, arg := range args {
+		if arg == "--" {
+			return false
+		}
+		if arg == "--version" {
+			return true
+		}
+	}
+	return false
+}
+
+func outputModeFromVersionArgs(args []string) (outfmt.Mode, error) {
+	envMode := outfmt.FromEnv()
+	jsonOut := envMode.JSON
+	plainOut := envMode.Plain
+
+	for _, arg := range args {
+		if arg == "--" {
+			break
+		}
+		switch {
+		case arg == "--json":
+			jsonOut = true
+		case arg == "--plain":
+			plainOut = true
+		case strings.HasPrefix(arg, "--json="):
+			v, err := parseFlagBool(strings.TrimPrefix(arg, "--json="))
+			if err != nil {
+				return outfmt.Mode{}, err
+			}
+			jsonOut = v
+		case strings.HasPrefix(arg, "--plain="):
+			v, err := parseFlagBool(strings.TrimPrefix(arg, "--plain="))
+			if err != nil {
+				return outfmt.Mode{}, err
+			}
+			plainOut = v
+		}
+	}
+
+	return outfmt.FromFlags(jsonOut, plainOut)
+}
+
+func parseFlagBool(value string) (bool, error) {
+	return strconv.ParseBool(strings.TrimSpace(value))
 }
