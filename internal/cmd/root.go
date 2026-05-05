@@ -80,9 +80,9 @@ func Execute(args []string) (err error) {
 	}
 
 	if hasVersionFlag(args) {
-		mode, err := outputModeFromVersionArgs(args)
-		if err != nil {
-			return newUsageError(err)
+		mode, innerErr := outputModeFromVersionArgs(args)
+		if innerErr != nil {
+			return newUsageError(innerErr)
 		}
 		ctx := outfmt.WithMode(context.Background(), mode)
 		return (&VersionCmd{}).Run(ctx)
