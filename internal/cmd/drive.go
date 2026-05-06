@@ -466,7 +466,7 @@ func (c *DriveDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("empty fileId")
 	}
 
-	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("delete drive file %s", fileID)); confirmErr != nil {
+	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("trash drive file %s", fileID)); confirmErr != nil {
 		return confirmErr
 	}
 
@@ -475,16 +475,20 @@ func (c *DriveDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	if err := svc.Files.Delete(fileID).SupportsAllDrives(true).Context(ctx).Do(); err != nil {
+	if _, err := svc.Files.Update(fileID, &drive.File{Trashed: true}).
+		SupportsAllDrives(true).
+		Fields("id, trashed").
+		Context(ctx).
+		Do(); err != nil {
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{
-			"deleted": true,
+			"trashed": true,
 			"id":      fileID,
 		})
 	}
-	u.Out().Printf("deleted\ttrue")
+	u.Out().Printf("trashed\ttrue")
 	u.Out().Printf("id\t%s", fileID)
 	return nil
 }
