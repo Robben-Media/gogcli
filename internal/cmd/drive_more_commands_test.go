@@ -43,7 +43,7 @@ func TestDriveDeleteMovesFileToTrash(t *testing.T) {
 		}
 		sawTrashPatch = true
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"id": "id1", "trashed": true})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "id1", "trashed": false})
 	}))
 	defer srv.Close()
 
@@ -72,8 +72,8 @@ func TestDriveDeleteMovesFileToTrash(t *testing.T) {
 	if !sawTrashPatch {
 		t.Fatalf("expected trash patch request")
 	}
-	if !strings.Contains(out, `"trashed": true`) {
-		t.Fatalf("expected JSON output to report trashed=true, got %s", out)
+	if !strings.Contains(out, `"trashed": false`) {
+		t.Fatalf("expected JSON output to report API trashed value, got %s", out)
 	}
 }
 
