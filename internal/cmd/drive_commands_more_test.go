@@ -219,7 +219,7 @@ func TestDriveCommands_MoreCoverage(t *testing.T) {
 	}
 
 	out = run("--json", "--force", "--account", "a@b.com", "drive", "delete", "file1")
-	if !strings.Contains(out, "\"deleted\"") {
+	if !strings.Contains(out, "\"trashed\"") {
 		t.Fatalf("unexpected delete json: %q", out)
 	}
 }

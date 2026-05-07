@@ -18,6 +18,65 @@ import (
 	"github.com/steipete/gogcli/internal/ui"
 )
 
+func TestDriveDeleteMovesFileToTrash(t *testing.T) {
+	origNew := newDriveService
+	t.Cleanup(func() { newDriveService = origNew })
+
+	var sawTrashPatch bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/files/id1") {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method == http.MethodDelete {
+			t.Fatalf("drive delete must trash with PATCH, not permanently delete with DELETE")
+		}
+		if r.Method != http.MethodPatch {
+			t.Fatalf("expected PATCH, got %s", r.Method)
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if body["trashed"] != true {
+			t.Fatalf("expected trashed=true body, got %#v", body)
+		}
+		sawTrashPatch = true
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "id1", "trashed": false})
+	}))
+	defer srv.Close()
+
+	svc, err := drive.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newDriveService = func(context.Context, string) (*drive.Service, error) { return svc, nil }
+
+	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
+	if uiErr != nil {
+		t.Fatalf("ui.New: %v", uiErr)
+	}
+	ctx := outfmt.WithMode(ui.WithUI(context.Background(), u), outfmt.Mode{JSON: true})
+
+	out := captureStdout(t, func() {
+		cmd := &DriveDeleteCmd{}
+		if runErr := runKong(t, cmd, []string{"id1"}, ctx, &RootFlags{Account: "a@b.com", Force: true}); runErr != nil {
+			t.Fatalf("delete: %v", runErr)
+		}
+	})
+	if !sawTrashPatch {
+		t.Fatalf("expected trash patch request")
+	}
+	if !strings.Contains(out, `"trashed": false`) {
+		t.Fatalf("expected JSON output to report API trashed value, got %s", out)
+	}
+}
+
 func TestDriveGetDownloadUploadURL_JSON(t *testing.T) {
 	origNew := newDriveService
 	origDownload := driveDownload
