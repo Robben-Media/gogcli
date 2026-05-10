@@ -29,9 +29,9 @@ Commands run:
 
 Web references used for comparison:
 
-- Cobra shell completion guide: https://cobra.dev/docs/how-to-guides/shell-completion/
-- Google Cloud SDK scripting guide: https://cloud.google.com/sdk/docs/scripting-gcloud
-- Command Line Interface Guidelines: https://clig.dev/
+- [Cobra shell completion guide](https://cobra.dev/docs/how-to-guides/shell-completion/)
+- [Google Cloud SDK scripting guide](https://cloud.google.com/sdk/docs/scripting-gcloud)
+- [Command Line Interface Guidelines](https://clig.dev/)
 
 ## 1. Prioritized Improvements
 
