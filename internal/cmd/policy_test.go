@@ -75,6 +75,56 @@ func TestPolicyCreateListGetDelete(t *testing.T) {
 	})
 }
 
+func TestPolicyList_PlainTSV(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	if err := config.WriteConfig(config.File{
+		Policies: []config.Policy{{
+			Name:    "safe",
+			Account: "jdjb78@gmail.com",
+			Client:  "personal",
+			Allow:   []string{"gmail:read", "gmail:labels.create"},
+			Deny:    []string{"gmail:send"},
+		}},
+	}); err != nil {
+		t.Fatalf("WriteConfig: %v", err)
+	}
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--plain", "policy", "list"}); err != nil {
+				t.Fatalf("policy list: %v", err)
+			}
+		})
+	})
+
+	if strings.Contains(out, "No policies") {
+		t.Fatalf("expected TSV plain output, got %q", out)
+	}
+	if !strings.Contains(out, "NAME\tACCOUNT\tCLIENT\tALLOW\tDENY\n") ||
+		!strings.Contains(out, "safe\tjdjb78@gmail.com\tpersonal\t2\t1\n") {
+		t.Fatalf("unexpected plain policy output: %q", out)
+	}
+}
+
+func TestPolicyList_PlainEmptyTSV(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--plain", "policy", "list"}); err != nil {
+				t.Fatalf("policy list: %v", err)
+			}
+		})
+	})
+
+	if out != "NAME\tACCOUNT\tCLIENT\tALLOW\tDENY\n" {
+		t.Fatalf("unexpected empty plain policy output: %q", out)
+	}
+}
+
 func TestPolicyCreate_OverwriteRequiresForce(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())

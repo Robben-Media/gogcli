@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/steipete/gogcli/internal/config"
@@ -101,5 +102,34 @@ func TestConfigCmd_JSONEmptyValues(t *testing.T) {
 	}
 	if get.Value != "" {
 		t.Fatalf("expected empty value, got %q", get.Value)
+	}
+}
+
+func TestConfigList_PlainTSV(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	if err := config.WriteConfig(config.File{
+		KeyringBackend:  "file",
+		DefaultTimezone: "UTC",
+	}); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--plain", "config", "list"}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	if strings.Contains(out, "Config file:") || strings.Contains(out, ": ") {
+		t.Fatalf("expected TSV plain output, got %q", out)
+	}
+	if !strings.Contains(out, "KEY\tVALUE\n") ||
+		!strings.Contains(out, "timezone\tUTC\n") ||
+		!strings.Contains(out, "keyring_backend\tfile\n") {
+		t.Fatalf("unexpected plain config output: %q", out)
 	}
 }
