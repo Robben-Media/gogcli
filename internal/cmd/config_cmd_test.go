@@ -124,8 +124,11 @@ func TestConfigList_PlainTSV(t *testing.T) {
 		})
 	})
 
-	if strings.Contains(out, "Config file:") || strings.Contains(out, ": ") {
+	if strings.Contains(out, "Config file:") {
 		t.Fatalf("expected TSV plain output, got %q", out)
+	}
+	if strings.Contains(out, "path\t") {
+		t.Fatalf("expected only settable config keys in plain output, got %q", out)
 	}
 	if !strings.Contains(out, "KEY\tVALUE\n") ||
 		!strings.Contains(out, "timezone\tUTC\n") ||
