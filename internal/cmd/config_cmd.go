@@ -142,6 +142,14 @@ func (c *ConfigListCmd) Run(ctx context.Context) error {
 		return outfmt.WriteJSON(os.Stdout, payload)
 	}
 
+	if outfmt.IsPlain(ctx) {
+		fmt.Fprintln(os.Stdout, "KEY\tVALUE")
+		for _, key := range keys {
+			fmt.Fprintf(os.Stdout, "%s\t%s\n", key, config.GetValue(cfg, key))
+		}
+		return nil
+	}
+
 	fmt.Fprintf(os.Stdout, "Config file: %s\n", path)
 	for _, key := range keys {
 		value := config.GetValue(cfg, key)

@@ -106,7 +106,7 @@ func (c *PolicyListCmd) Run(ctx context.Context) error {
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"policies": cfg.Policies})
 	}
-	if len(cfg.Policies) == 0 {
+	if len(cfg.Policies) == 0 && !outfmt.IsPlain(ctx) {
 		fmt.Fprintln(os.Stdout, "No policies")
 		return nil
 	}
