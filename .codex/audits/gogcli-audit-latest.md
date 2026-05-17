@@ -1,129 +1,121 @@
 # gogcli Audit Report
 
-Date: 2026-05-10
+Date: 2026-05-17
 Branch: `ai-audit/gogcli-latest`
 Mode: Audit report only; no source changes performed
 
 ## Audit Scope
 
-Reviewed current `origin/main` (`fbc9eb2`) after re-anchoring the stale local audit branch so the eventual PR can remain report-only. The previous Top 3 audit tasks are already landed on `main`:
-
-- `d66bd36` / PR #20: `fmt-check` is now read-only.
-- `98b7013` / PR #21: global `--version --json` now emits JSON.
-- `6cf9a9e` / PR #22: zsh completion no longer embeds the Bash shebang.
+Audited current `origin/main` at `8ecc57c` (`fix(cli): make plain config and policy output TSV`) while keeping the report-only PR branch `ai-audit/gogcli-latest`. The previous audit's `--plain config list` and `--plain policy list` findings are now landed on `main` and were not carried forward as open work.
 
 Commands run:
 
+- `git worktree list`
 - `git status --short --branch`
-- `git fetch origin main --prune`
+- `git log --oneline --decorate --max-count=20 --all -- .codex/audits/gogcli-audit-latest.md Makefile internal/cmd/root.go internal/cmd/config_cmd.go internal/cmd/policy.go internal/cmd/completion_scripts.go README.md go.mod`
+- `git log --oneline --decorate --max-count=12 origin/main`
 - `git diff --name-status origin/main...HEAD`
-- `git log --oneline --decorate --max-count=20 --all -- Makefile internal/cmd/root.go internal/cmd/version.go internal/cmd/completion_scripts.go internal/cmd/completion_test.go .codex/audits/gogcli-audit-latest.md`
 - `go run ./cmd/gog --help`
 - `go run ./cmd/gog --version --json`
 - `go run ./cmd/gog version --json --plain`
+- `go run ./cmd/gog --version --json --plain`
 - `go run ./cmd/gog --plain config list`
 - `go run ./cmd/gog --plain policy list`
-- `go run ./cmd/gog completion zsh | sed -n '1,24p'`
+- `go run ./cmd/gog config keys`
+- `go run ./cmd/gog completion zsh | sed -n '1,30p'`
 - `go list -m -u all`
 - `go test ./...`
 
 Web references used for comparison:
 
-- [Cobra shell completion guide](https://cobra.dev/docs/how-to-guides/shell-completion/)
-- [Google Cloud SDK scripting guide](https://cloud.google.com/sdk/docs/scripting-gcloud)
-- [Command Line Interface Guidelines](https://clig.dev/)
+- Command Line Interface Guidelines: https://clig.dev/
+- Google Cloud SDK scripting guide: https://cloud.google.com/sdk/docs/scripting-gcloud
+- Cobra shell completion guide: https://cobra.dev/docs/how-to-guides/shell-completion/
+- Heroku CLI style guide: https://devcenter.heroku.com/articles/cli-style-guide
 
 ## 1. Prioritized Improvements
 
-### 1. Print output-mode usage errors to stderr
+### 1. Print invalid output-mode errors to stderr
 
 - Priority: High
-- Why it matters: invalid CLI usage should be visible without relying on the caller to print returned errors. Scripts should be able to trust the non-zero exit code, and humans should see a clear reason on stderr.
+- Why it matters: invalid CLI usage should produce a visible `gog` error on stderr. Scripts should be able to trust the non-zero exit code, and humans should not have to infer the cause from an empty stderr stream.
 - Exact location:
-  - `internal/cmd/root.go:82-85`
-  - `internal/cmd/root.go:129-131`
+  - `internal/cmd/root.go:82-86`
+  - `internal/cmd/root.go:129-132`
   - `internal/outfmt/outfmt.go:21-24`
   - `cmd/gog/main.go:9-12`
+  - `internal/cmd/root_test.go:64-104`
+  - `internal/cmd/execute_version_exitcodes_test.go:9-130`
 - What is wrong:
   - `outfmt.FromFlags(true, true)` returns `invalid output mode (cannot combine --json and --plain)`.
-  - `Execute()` wraps that as exit code 2 but returns before the UI/stderr formatter is available.
-  - `main()` only exits with `cmd.ExitCode(err)`, so the direct binary path can fail silently.
-  - Observed command: `go run ./cmd/gog version --json --plain` exits 2; the only visible text is the Go tool wrapper's `exit status 2`, not a `gog` error message.
-- Recommended improvement: format and print `newUsageError(err)` to stderr before returning in both the global version fast path and normal output-mode parse path. Add coverage that captures stderr for `--json --plain`.
-- Expected impact: better CLI usability, easier agent/debug workflows, and a consistent usage-error surface.
+  - The normal command path wraps the error at `root.go:129-132` and returns without printing it.
+  - The global version fast path wraps the error at `root.go:82-86` and also returns without printing it.
+  - `main()` only exits with `cmd.ExitCode(err)`, so the direct binary path is silent.
+  - Observed commands on `origin/main`:
+    - `go run ./cmd/gog version --json --plain` exits 2 and only shows the Go wrapper text `exit status 2`.
+    - `go run ./cmd/gog --version --json --plain` has the same behavior.
+- Recommended improvement: format and print `newUsageError(err)` to stderr before returning in both output-mode parse paths. Add focused regression coverage that captures stderr for `version --json --plain` and `--version --json --plain`.
+- Expected impact: clearer CLI failures, better agent/debug workflows, and consistency with CLI guidance that diagnostics belong on stderr while successful data stays on stdout.
 - Estimated risk: Low
 - Safe to automate: Yes
 
-### 2. `--plain config list` violates the advertised TSV contract
+### 2. Short-circuit `--version` before building help/config state
 
 - Priority: Medium
-- Why it matters: root help advertises `--plain` as stable, parseable TSV. `config list` is a common setup/diagnostic command, and its current plain output still uses prose labels and colon separators.
+- Why it matters: `gog --version` should be one of the cheapest and safest discovery commands. It should not depend on config-path or keyring-backend resolution.
 - Exact location:
-  - `internal/cmd/root.go:36`
-  - `internal/cmd/config_cmd.go:128-149`
-  - `internal/cmd/config_cmd_test.go:10-88`
+  - `internal/cmd/root.go:76-88`
+  - `internal/cmd/root.go:228-247`
+  - `internal/cmd/version.go:35-47`
+  - `internal/cmd/execute_version_exitcodes_test.go:9-130`
 - What is wrong:
-  - Observed command: `go run ./cmd/gog --plain config list`
-  - Current output includes `Config file: ...` and `timezone: ...` lines.
-  - JSON parity is tested, but there is no plain-mode schema test for `config list`.
-- Recommended improvement: add an explicit plain-mode branch that emits a stable TSV shape, such as `KEY\tVALUE` rows plus a separate `path` row or a documented `SOURCE\tKEY\tVALUE` schema. Preserve default human text.
-- Expected impact: simpler scripting around config inspection without breaking default text output.
+  - `Execute()` calls `newParser(helpDescription())` before checking `hasVersionFlag(args)`.
+  - `helpDescription()` reads `config.ConfigPath()` and `secrets.ResolveKeyringBackendInfo()`.
+  - As a result, the global `--version` path performs local config/keyring discovery before printing static build metadata.
+- Recommended improvement: move the `hasVersionFlag(args)` fast path before `newParser(helpDescription())`. Keep the existing `--` separator behavior tested in `execute_version_exitcodes_test.go`.
+- Expected impact: lower setup friction, fewer surprising local-state dependencies for `--version`, and a smaller surface for failures in first-run or restricted environments.
 - Estimated risk: Low
 - Safe to automate: Yes
 
-### 3. `--plain policy list` has a prose empty state
+### 3. Help generation reads config and keyring state before command execution
 
 - Priority: Medium
-- Why it matters: policy state is part of the agent-safety surface. Automation should not need a special parser for the empty state.
-- Exact location:
-  - `internal/cmd/policy.go:98-120`
-  - `internal/cmd/policy_test.go:10-64`
-- What is wrong:
-  - Observed command: `go run ./cmd/gog --plain policy list`
-  - Empty state prints `No policies`.
-  - Non-empty text uses `tableWriter(ctx)`, so plain mode is TSV-like once rows exist; only the empty path breaks the contract.
-- Recommended improvement: when `outfmt.IsPlain(ctx)` and no policies exist, emit the same header with zero data rows or emit no rows, and test that behavior. Preserve `No policies` for default human text.
-- Expected impact: less brittle safety-policy automation.
-- Estimated risk: Low
-- Safe to automate: Yes
-
-### 4. Help generation reads config and keyring state before command execution
-
-- Priority: Medium
-- Why it matters: `--help` should be the safest discovery command. Today it reads local config/keyring backend state before parsing any command, which makes help output machine-specific and couples discovery UX to config health.
+- Why it matters: `--help` should be deterministic discovery output. Current help includes machine-specific config and keyring details, so help output varies by environment and depends on local storage resolution.
 - Exact location:
   - `internal/cmd/root.go:76-80`
-  - `internal/cmd/root.go:231-247`
+  - `internal/cmd/root.go:228-247`
   - `internal/secrets/store.go` via `secrets.ResolveKeyringBackendInfo()`
-  - `internal/cmd/root_test.go:19-31`
+  - `internal/cmd/root_test.go:20-37`
 - What is wrong:
-  - `Execute()` always calls `newParser(helpDescription())`.
-  - `helpDescription()` calls `config.ConfigPath()` and `secrets.ResolveKeyringBackendInfo()`.
-  - The test currently asserts config/keyring details are present in help, locking in the coupling.
-- Recommended improvement: move local state details to an explicit diagnostics command or lazy help section, then keep baseline help static and deterministic.
-- Expected impact: lower help latency, less surprising help output, and fewer failure modes for first-time users.
+  - `Execute()` always constructs the parser with `helpDescription()`.
+  - `helpDescription()` embeds `Config:\n  file: ...\n  keyring backend: ...` in top-level help.
+  - `TestExecute_Help` asserts that config and keyring details are present, locking in the coupling.
+  - Observed command: `go run ./cmd/gog --help` prints `/Users/jeremydjohnson/Library/Application Support/gogcli/config.json` and `keyring backend: file (source: config)`.
+- Recommended improvement: move local-state details to an explicit diagnostic command or a narrower config/auth help surface, then keep top-level help static and deterministic.
+- Expected impact: cleaner help output, lower help latency, fewer environment-specific snapshots in tests and docs.
 - Estimated risk: Medium
 - Safe to automate: No
 
-### 5. Tool installation is coupled to every formatter check
+### 4. `fmt-check` still installs tools before checking formatting
 
 - Priority: Medium
-- Why it matters: `fmt-check` is now read-only, but it still depends on the phony `tools` target. That means a verification command can trigger `go install` for formatter/linter binaries before it checks formatting.
+- Why it matters: `fmt-check` is read-only now, but it still bootstraps formatter binaries on every invocation because `tools` is phony. Repeated verification can trigger unnecessary `go install` work and network/setup friction.
 - Exact location:
   - `Makefile:61-65`
-  - `Makefile:71-83`
+  - `Makefile:67-83`
 - What is wrong:
-  - `tools` is phony and always runs when invoked as a prerequisite.
-  - `fmt-check` therefore mixes tool bootstrapping with verification.
-- Recommended improvement: split tool bootstrapping from checks with file targets or version-stamped binaries, or add a lightweight missing-tool check that tells contributors to run `make tools`.
-- Expected impact: faster local verification and less network/setup friction in repeated automation runs.
+  - `tools` is listed as phony and is a prerequisite of `fmt-check`.
+  - `fmt-check` therefore mixes verification with tool installation.
+  - The command is no longer source-mutating, which is good, but it is still not a pure local check.
+- Recommended improvement: split bootstrap from verification with version-stamped tool targets or a missing-tool error that tells contributors to run `make tools`.
+- Expected impact: faster local and automation checks after the first setup, fewer network-dependent verification failures.
 - Estimated risk: Medium
 - Safe to automate: No
 
-### 6. Retry transport returns raw exhausted retry responses despite typed retry errors
+### 5. Retry transport has typed retry/quota errors that are not surfaced on retry exhaustion
 
 - Priority: Low
-- Why it matters: richer error types exist, but the transport mostly returns raw HTTP responses after retry exhaustion. That makes retry/quota observability depend on each caller decoding status codes consistently.
+- Why it matters: the codebase defines richer error types, but exhausted retry states return raw HTTP responses. That makes rate-limit and quota observability depend on every caller handling status codes consistently.
 - Exact location:
   - `internal/googleapi/transport.go:82-112`
   - `internal/googleapi/errors.go:28-59`
@@ -131,37 +123,41 @@ Web references used for comparison:
   - `RateLimitError` and `QuotaExceededError` exist.
   - `RetryTransport.RoundTrip()` returns the final `429` or `5xx` response with `nil` error after max retries.
   - Only the circuit-breaker state is surfaced as a typed transport error.
-- Recommended improvement: decide whether the transport contract should remain HTTP-native or promote exhausted retry states into typed errors, then wire callers/tests around that explicit contract.
+- Recommended improvement: decide whether the transport contract should stay HTTP-native or promote exhausted retry states into typed errors, then update callers/tests around that explicit contract.
 - Expected impact: clearer retry semantics and better observability for quota/rate-limit failures.
 - Estimated risk: Medium
 - Safe to automate: No
 
-### 7. Direct and security-sensitive dependencies have newer upstream releases
+### 6. Direct and security-sensitive dependencies have newer upstream releases
 
 - Priority: Low
-- Why it matters: no breakage was observed, but the CLI depends on parser, Google API, OAuth, and crypto/network packages that have newer versions available.
+- Why it matters: tests pass, but core parser, Google API, OAuth, crypto, and network dependencies have newer releases available.
 - Exact location:
-  - `go.mod:5-17`
+  - `go.mod:5-14`
+  - `go.mod:38-48`
 - What is wrong:
-  - `go list -m -u all` reports updates including `github.com/alecthomas/kong v1.13.0 -> v1.15.0`, `google.golang.org/api v0.260.0 -> v0.278.0`, `golang.org/x/oauth2 v0.34.0 -> v0.36.0`, `golang.org/x/crypto v0.47.0 -> v0.51.0`, and `golang.org/x/net v0.49.0 -> v0.54.0`.
-- Recommended improvement: run a bounded dependency refresh in a dedicated PR with full tests and focused smoke checks for auth/help/parsing.
+  - `go list -m -u all` reports updates including `github.com/alecthomas/kong v1.13.0 -> v1.15.0`, `google.golang.org/api v0.260.0 -> v0.279.0`, `golang.org/x/oauth2 v0.34.0 -> v0.36.0`, `golang.org/x/crypto v0.47.0 -> v0.51.0`, `golang.org/x/net v0.49.0 -> v0.54.0`, and `google.golang.org/grpc v1.78.0 -> v1.81.1`.
+- Recommended improvement: run a bounded dependency refresh in a dedicated PR with full tests and focused smoke checks for auth, help, parsing, and Google client construction.
 - Expected impact: maintenance headroom and current upstream fixes.
 - Estimated risk: Medium
 - Safe to automate: No
 
-### 8. README documents parseable output as JSON-only
+### 7. README's high-level scripting examples still emphasize JSON over `--plain`
 
 - Priority: Low
-- Why it matters: the CLI help advertises both JSON and plain TSV modes, but the README feature list only calls out JSON mode. Users may miss the lower-friction TSV mode for shell pipelines.
+- Why it matters: `--plain` is now a clearer contract after the latest config/policy fixes, but the top feature summary and primary scripting pattern still point users almost exclusively toward JSON.
 - Exact location:
   - `README.md:6`
   - `README.md:30`
-  - `internal/cmd/root.go:35-36`
+  - `README.md:255-260`
+  - `README.md:1118-1127`
+  - `README.md:1249-1250`
 - What is wrong:
-  - README says `JSON-first output` and `Parseable output - JSON mode for scripting and automation`.
-  - It does not mention `--plain`, despite the root help promising stable parseable TSV.
-- Recommended improvement: add a small README example for `--plain` after the plain-mode behavior is made consistent for config/policy surfaces.
-- Expected impact: clearer documentation for shell users without changing runtime behavior.
+  - The detailed Output section documents `--plain`.
+  - The high-level feature bullet still says only `JSON mode for scripting and automation`.
+  - The "Useful pattern" section only shows `gog --json ... | jq .`, with no `--plain` example for `cut`, `awk`, or shell pipelines.
+- Recommended improvement: update the feature bullet and add one short `--plain` pipeline example near the existing JSON scripting example.
+- Expected impact: better discoverability for shell users without changing runtime behavior.
 - Estimated risk: Low
 - Safe to automate: Yes
 
@@ -169,43 +165,46 @@ Web references used for comparison:
 
 ### Quick Wins
 
-- Print invalid output-mode errors to stderr and add stderr regression coverage.
-- Add `--plain config list` TSV output while preserving default text and JSON.
-- Make `--plain policy list` empty output machine-parseable while preserving default text.
-- Add README mention/examples for `--plain` after the behavior gaps are fixed.
+- Print invalid output-mode errors to stderr and add stderr regression tests.
+- Move the global `--version` fast path before parser/help construction.
+- Add a small README `--plain` scripting example now that config/policy plain-mode behavior is covered by tests.
 
 ### Larger Refactors
 
 - Decouple top-level help generation from config/keyring inspection.
 - Separate tool bootstrapping from verification targets in the Makefile.
-- Decide and document the retry transport contract before changing typed retry/quota errors.
+- Decide and document the retry transport contract before changing typed retry/quota behavior.
 - Refresh direct dependencies with full regression and smoke coverage.
 
 ## 3. Do Not Change List
 
 - Stdout/stderr split:
-  - Keep successful data on stdout and errors/hints/progress on stderr.
-  - Why: this matches the scripting guidance from gcloud and clig.dev and is already reflected in `internal/cmd/root.go:105-166` plus `internal/cmd/output_helpers.go:13-20`.
+  - Keep successful data on stdout and diagnostics/errors/progress on stderr.
+  - Why: this is already reflected in `internal/cmd/root.go:105-166`, `internal/cmd/output_helpers.go:13-20`, README output docs, and modern CLI scripting guidance.
 
 - Existing JSON payload shapes:
-  - Do not change `version`, `config`, or `policy` JSON fields while fixing plain-mode behavior.
+  - Do not change `version`, `config`, `policy`, auth, or service JSON fields while fixing stderr or version-fast-path behavior.
   - Why: JSON mode is the safest existing automation contract.
 
-- Default human text for config and policy commands:
-  - Keep prose output for default mode unless a separate product decision changes it.
-  - Why: the proposed fixes should target `--plain`, not surprise interactive users.
+- `--plain config list` and `--plain policy list` TSV contracts:
+  - Keep the newly landed `KEY\tVALUE` and `NAME\tACCOUNT\tCLIENT\tALLOW\tDENY` shapes.
+  - Why: `origin/main` now has tests at `internal/cmd/config_cmd_test.go:108-138` and `internal/cmd/policy_test.go:78-126`.
 
-- Mutating `fmt` target:
+- Default human text:
+  - Preserve default prose/table output unless a separate product decision changes it.
+  - Why: the open issues are about machine and discovery paths, not interactive text.
+
+- Mutating formatter command:
   - Keep `make fmt` as the write-mode formatter.
-  - Why: PR #20 already made `fmt-check` read-only; the explicit formatter command remains useful.
+  - Why: `fmt-check` should be verification-only, but the explicit formatter remains useful.
 
 - Completion command and internal `__complete` protocol:
   - Keep `completion <shell>` and `__complete` behavior stable.
-  - Why: zsh completion was fixed in PR #22, and shell-specific changes should not replace the internal completion contract.
+  - Why: zsh completion was recently fixed, and shell completion changes should be isolated from this audit's top tasks.
 
-- Config path/keyring behavior:
-  - Do not change where config, credentials, tokens, or keyring backend settings live during help cleanup.
-  - Why: auth/config storage is security-sensitive and should not be bundled with help text refactoring.
+- Config path, credential, token, and keyring storage semantics:
+  - Do not change where config, OAuth clients, refresh tokens, or keyring backend settings live during help/version cleanup.
+  - Why: auth/config storage is security-sensitive and should not be bundled with discovery-output cleanup.
 
 - Safety policies, `--force`, and `--no-input`:
   - Preserve destructive-command confirmation and persisted policy semantics.
@@ -218,17 +217,17 @@ Only items marked `Safe to automate: Yes` are turned into tasks below.
 ### Task 1
 
 - Title: Print invalid output-mode errors to stderr
-- Why: `--json --plain` currently returns exit code 2 without a `gog` stderr explanation on the direct binary path.
+- Why: `--json --plain` currently returns exit code 2 without a visible `gog` error on stderr.
 - Files/modules:
   - `internal/cmd/root.go`
-  - `internal/cmd/root_test.go` or a focused execute test file
-  - `cmd/gog/main.go` only if the cleaner fix belongs at the process boundary
+  - `internal/cmd/root_test.go`
+  - `internal/cmd/execute_version_exitcodes_test.go`
 - Risk: Low
 - Expected impact: clearer CLI failures and better automation diagnostics.
 - Steps:
-  1. Route `outfmt.FromFlags` errors through the same stderr formatter used for parse and command errors.
-  2. Cover both `gog version --json --plain` and `gog --version --json --plain`, because the global version fast path has separate parsing.
-  3. Assert exit code 2, empty stdout, and non-empty stderr containing the invalid mode message.
+  1. Print `errfmt.Format(newUsageError(err))` to stderr before returning from the normal `outfmt.FromFlags` error path.
+  2. Do the same in the global `--version` fast path when `outputModeFromVersionArgs` returns an error.
+  3. Add regression tests for both `gog version --json --plain` and `gog --version --json --plain`.
 - Validation:
   - `go test ./internal/cmd`
   - `go run ./cmd/gog version --json --plain`
@@ -236,88 +235,69 @@ Only items marked `Safe to automate: Yes` are turned into tasks below.
 - Do not change:
   - Exit code 2 for usage errors
   - Valid `--json` or `--plain` output
+  - JSON payload shapes
 
 ### Task 2
 
-- Title: Add TSV output for `--plain config list`
-- Why: `config list` currently emits prose labels under `--plain`, despite the root help promising stable TSV.
+- Title: Make global `--version` independent of help/config state
+- Why: `gog --version` currently builds parser help text, which reads config and keyring state before printing static build metadata.
 - Files/modules:
-  - `internal/cmd/config_cmd.go`
-  - `internal/cmd/config_cmd_test.go`
+  - `internal/cmd/root.go`
+  - `internal/cmd/execute_version_exitcodes_test.go`
 - Risk: Low
-- Expected impact: scriptable config inspection without special colon parsing.
+- Expected impact: lower first-run/setup friction and a safer discovery command for restricted environments.
 - Steps:
-  1. Add an `outfmt.IsPlain(ctx)` branch before default text output.
-  2. Emit a simple stable schema and document it in the test name/assertions.
-  3. Add tests proving default text and JSON stay unchanged.
+  1. Move the `hasVersionFlag(args)` fast path before `newParser(helpDescription())`.
+  2. Preserve existing `--` separator behavior from `TestExecute_VersionFlag_StopsAtSeparator` and `TestExecute_VersionFlag_ModeStopsAtSeparator`.
+  3. Add or adjust a regression test proving global version output still supports `--json` and does not require parser construction.
 - Validation:
-  - `go test ./internal/cmd -run Config`
-  - `go run ./cmd/gog --plain config list`
-  - `go run ./cmd/gog --json config list`
+  - `go test ./internal/cmd -run Version`
+  - `go run ./cmd/gog --version`
+  - `go run ./cmd/gog --version --json`
+  - `go run ./cmd/gog -- --version`
 - Do not change:
-  - `config get`, `config keys`, `config path`
-  - JSON field names
-  - Default human text mode
+  - `version` subcommand behavior
+  - `--version` precedence before normal command execution
+  - Config/keyring storage behavior
 
 ### Task 3
 
-- Title: Make empty `--plain policy list` parseable
-- Why: `policy list` emits TSV when rows exist but prints `No policies` for the empty plain-mode state.
-- Files/modules:
-  - `internal/cmd/policy.go`
-  - `internal/cmd/policy_test.go`
-- Risk: Low
-- Expected impact: predictable safety-policy automation in empty and non-empty states.
-- Steps:
-  1. Branch on `outfmt.IsPlain(ctx)` before printing the default empty-state prose.
-  2. Emit the same TSV header with zero rows, or another deliberately documented stable empty representation.
-  3. Add tests for empty plain mode and one-policy plain mode.
-- Validation:
-  - `go test ./internal/cmd -run Policy`
-  - `go run ./cmd/gog --plain policy list`
-  - `go run ./cmd/gog policy list`
-- Do not change:
-  - JSON list shape
-  - Default empty-state text
-  - Policy creation/deletion semantics
-
-### Task 4
-
-- Title: Document `--plain` after plain-mode gaps are fixed
-- Why: the README currently advertises parseable output as JSON-only even though the CLI has a TSV-oriented `--plain` mode.
+- Title: Add a README `--plain` scripting example
+- Why: `--plain` is now documented and tested, but the top-level scripting copy still emphasizes JSON almost exclusively.
 - Files/modules:
   - `README.md`
 - Risk: Low
-- Expected impact: better discoverability for shell users.
+- Expected impact: better discoverability for shell users and agents using TSV pipelines.
 - Steps:
-  1. Wait until Tasks 2 and 3 are landed.
-  2. Add one concise README mention/example for `--plain`.
-  3. Keep the example on a command whose plain output is stable.
+  1. Update the high-level parseable-output feature bullet to mention JSON and stable TSV.
+  2. Add one short `--plain` pipeline example near the existing JSON `jq` pattern.
+  3. Keep the existing JSON examples and output contract language intact.
 - Validation:
-  - Markdown review
-  - Run the documented example locally if it does not require auth
+  - `rg -n -- '--plain|--json|Parseable output' README.md`
+  - `go test ./...`
 - Do not change:
-  - Install instructions
-  - Auth workflow instructions
-  - Claims about unsupported commands
+  - Runtime behavior
+  - Installation instructions
+  - OAuth/auth setup steps
 
 ## Final Section
 
 Top 3 Tasks to Execute First:
 
 1. Print invalid output-mode errors to stderr.
-2. Add TSV output for `--plain config list`.
-3. Make empty `--plain policy list` parseable.
+2. Make global `--version` independent of help/config state.
+3. Add a README `--plain` scripting example.
 
 Tasks Excluded:
 
-- Task: Decouple help generation from config/keyring inspection.
-  - Reason: Medium-risk UX and test-contract change; needs product decision on whether config diagnostics belong in help.
-- Task: Separate tool bootstrapping from verification targets.
-  - Reason: Makefile/DX behavior change could disrupt contributors; should be designed with maintainer preference.
-- Task: Promote exhausted retry responses to typed errors.
-  - Reason: Cross-cutting transport contract decision; not safe as an automated cleanup.
-- Task: Refresh dependencies.
-  - Reason: Requires compatibility review across parser, auth, Google API, and transitive packages.
-- Task: Replace `--json`/`--plain` with a single `--output` flag.
-  - Reason: Unnecessary breaking CLI change; current flags are stable and only need targeted consistency fixes.
+- Task: Decouple top-level help from config/keyring inspection.
+  - Reason: useful, but it changes established help content and the existing test contract; it needs human review.
+
+- Task: Make `fmt-check` independent from tool installation.
+  - Reason: Makefile/tool bootstrapping changes are small but affect contributor and CI setup behavior.
+
+- Task: Change retry exhaustion to typed errors.
+  - Reason: the transport/caller contract must be decided first.
+
+- Task: Refresh direct and transitive dependencies.
+  - Reason: dependency updates need a dedicated PR with broader smoke coverage.
