@@ -56,7 +56,8 @@ jobs:
         run: pnpm -C internal/tracking/worker test
 
   darwin-cgo-build:
-    runs-on: blacksmith-4vcpu-macos-sonoma
+    runs-on: macos-latest
+    timeout-minutes: 15
     needs: lint
     steps:
       - uses: actions/checkout@v4
