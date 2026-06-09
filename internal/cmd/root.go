@@ -82,7 +82,7 @@ func Execute(args []string) (err error) {
 	if hasVersionFlag(args) {
 		mode, innerErr := outputModeFromVersionArgs(args)
 		if innerErr != nil {
-			return newUsageError(innerErr)
+			return reportPreUIError(newUsageError(innerErr))
 		}
 		ctx := outfmt.WithMode(context.Background(), mode)
 		return (&VersionCmd{}).Run(ctx)
@@ -128,7 +128,7 @@ func Execute(args []string) (err error) {
 
 	mode, err := outfmt.FromFlags(cli.JSON, cli.Plain)
 	if err != nil {
-		return newUsageError(err)
+		return reportPreUIError(newUsageError(err))
 	}
 
 	ctx := context.Background()
@@ -146,7 +146,7 @@ func Execute(args []string) (err error) {
 		Color:  uiColor,
 	})
 	if err != nil {
-		return err
+		return reportPreUIError(err)
 	}
 	ctx = ui.WithUI(ctx, u)
 
@@ -253,6 +253,14 @@ func newUsageError(err error) error {
 		return nil
 	}
 	return &ExitError{Code: 2, Err: err}
+}
+
+func reportPreUIError(err error) error {
+	if err == nil {
+		return nil
+	}
+	_, _ = fmt.Fprintln(os.Stderr, errfmt.Format(err))
+	return err
 }
 
 func hasVersionFlag(args []string) bool {

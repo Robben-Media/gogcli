@@ -87,6 +87,53 @@ func TestExecute_UnknownFlag(t *testing.T) {
 	}
 }
 
+func TestExecute_ConflictingOutputModesReportsStderr(t *testing.T) {
+	errText := captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			err := Execute([]string{"--json", "--plain", "version"})
+			if err == nil {
+				t.Fatalf("expected error")
+			}
+			if ExitCode(err) != 2 {
+				t.Fatalf("expected exit code 2, got %d (err=%v)", ExitCode(err), err)
+			}
+		})
+	})
+	if !strings.Contains(errText, "invalid output mode") {
+		t.Fatalf("expected stderr diagnostic, got %q", errText)
+	}
+}
+
+func TestExecute_VersionConflictingOutputModesReportsStderr(t *testing.T) {
+	errText := captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			err := Execute([]string{"--version", "--json", "--plain"})
+			if err == nil {
+				t.Fatalf("expected error")
+			}
+			if ExitCode(err) != 2 {
+				t.Fatalf("expected exit code 2, got %d (err=%v)", ExitCode(err), err)
+			}
+		})
+	})
+	if !strings.Contains(errText, "invalid output mode") {
+		t.Fatalf("expected stderr diagnostic, got %q", errText)
+	}
+}
+
+func TestExecute_InvalidColorReportsStderr(t *testing.T) {
+	errText := captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			if err := Execute([]string{"--color", "nope", "version"}); err == nil {
+				t.Fatalf("expected error")
+			}
+		})
+	})
+	if !strings.Contains(errText, "invalid --color") {
+		t.Fatalf("expected stderr diagnostic, got %q", errText)
+	}
+}
+
 func TestNewUsageError(t *testing.T) {
 	if newUsageError(nil) != nil {
 		t.Fatalf("expected nil for nil error")
