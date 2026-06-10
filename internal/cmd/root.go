@@ -27,6 +27,8 @@ const (
 	boolFalse  = "false"
 )
 
+var rootHelpDescription = helpDescription
+
 type RootFlags struct {
 	Color          string `help:"Color output: auto|always|never" default:"${color}"`
 	Account        string `help:"Account email for API commands (gmail/calendar/chat/classroom/drive/docs/slides/contacts/tasks/people/sheets)"`
@@ -165,8 +167,6 @@ func Execute(args []string) (err error) {
 	_, _ = fmt.Fprintln(os.Stderr, errfmt.Format(err))
 	return err
 }
-
-var rootHelpDescription = helpDescription
 
 func wrapParseError(err error) error {
 	if err == nil {
