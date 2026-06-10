@@ -74,11 +74,6 @@ type CLI struct {
 type exitPanic struct{ code int }
 
 func Execute(args []string) (err error) {
-	parser, cli, err := newParser(helpDescription())
-	if err != nil {
-		return err
-	}
-
 	if hasVersionFlag(args) {
 		mode, innerErr := outputModeFromVersionArgs(args)
 		if innerErr != nil {
@@ -86,6 +81,11 @@ func Execute(args []string) (err error) {
 		}
 		ctx := outfmt.WithMode(context.Background(), mode)
 		return (&VersionCmd{}).Run(ctx)
+	}
+
+	parser, cli, err := newParser(rootHelpDescription())
+	if err != nil {
+		return err
 	}
 
 	defer func() {
@@ -165,6 +165,8 @@ func Execute(args []string) (err error) {
 	_, _ = fmt.Fprintln(os.Stderr, errfmt.Format(err))
 	return err
 }
+
+var rootHelpDescription = helpDescription
 
 func wrapParseError(err error) error {
 	if err == nil {

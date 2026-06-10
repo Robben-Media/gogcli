@@ -85,6 +85,29 @@ func TestExecute_VersionFlag_JSON(t *testing.T) {
 	}
 }
 
+func TestExecute_VersionFlag_DoesNotBuildHelpDescription(t *testing.T) {
+	origHelpDescription := rootHelpDescription
+	t.Cleanup(func() { rootHelpDescription = origHelpDescription })
+
+	called := false
+	rootHelpDescription = func() string {
+		called = true
+		return helpDescription()
+	}
+
+	_ = captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--version"}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	if called {
+		t.Fatalf("global --version built help description")
+	}
+}
+
 func TestExecute_VersionFlag_StopsAtSeparator(t *testing.T) {
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
