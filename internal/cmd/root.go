@@ -27,6 +27,8 @@ const (
 	boolFalse  = "false"
 )
 
+var rootHelpDescription = helpDescription
+
 type RootFlags struct {
 	Color          string `help:"Color output: auto|always|never" default:"${color}"`
 	Account        string `help:"Account email for API commands (gmail/calendar/chat/classroom/drive/docs/slides/contacts/tasks/people/sheets)"`
@@ -74,11 +76,6 @@ type CLI struct {
 type exitPanic struct{ code int }
 
 func Execute(args []string) (err error) {
-	parser, cli, err := newParser(helpDescription())
-	if err != nil {
-		return err
-	}
-
 	if hasVersionFlag(args) {
 		mode, innerErr := outputModeFromVersionArgs(args)
 		if innerErr != nil {
@@ -86,6 +83,11 @@ func Execute(args []string) (err error) {
 		}
 		ctx := outfmt.WithMode(context.Background(), mode)
 		return (&VersionCmd{}).Run(ctx)
+	}
+
+	parser, cli, err := newParser(rootHelpDescription())
+	if err != nil {
+		return err
 	}
 
 	defer func() {
