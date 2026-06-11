@@ -3,10 +3,13 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strconv"
 	"text/tabwriter"
+
+	"google.golang.org/api/calendar/v3"
 
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/ui"
@@ -36,6 +39,12 @@ func (c *CalendarColorsCmd) Run(ctx context.Context, flags *RootFlags) error {
 			"event":    colors.Event,
 			"calendar": colors.Calendar,
 		})
+	}
+
+	if outfmt.IsPlain(ctx) {
+		printColorRows(os.Stdout, "event", colors.Event)
+		printColorRows(os.Stdout, "calendar", colors.Calendar)
+		return nil
 	}
 
 	if len(colors.Event) == 0 && len(colors.Calendar) == 0 {
@@ -87,4 +96,28 @@ func (c *CalendarColorsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	return nil
+}
+
+func printColorRows(w io.Writer, kind string, colors map[string]calendar.ColorDefinition) {
+	ids := sortedColorIDs(colors)
+	for _, id := range ids {
+		c := colors[id]
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", kind, id, c.Background, c.Foreground)
+	}
+}
+
+func sortedColorIDs(colors map[string]calendar.ColorDefinition) []string {
+	numeric := make([]int, 0, len(colors))
+	for id := range colors {
+		if num, err := strconv.Atoi(id); err == nil {
+			numeric = append(numeric, num)
+		}
+	}
+	sort.Ints(numeric)
+
+	ids := make([]string, 0, len(numeric))
+	for _, num := range numeric {
+		ids = append(ids, strconv.Itoa(num))
+	}
+	return ids
 }

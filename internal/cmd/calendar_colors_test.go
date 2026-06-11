@@ -180,6 +180,71 @@ func TestCalendarColorsCmd_TableOutput(t *testing.T) {
 	}
 }
 
+func TestCalendarColorsCmd_PlainOutputStableTSV(t *testing.T) {
+	origNew := newCalendarService
+	t.Cleanup(func() { newCalendarService = origNew })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/colors") && r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"event": map[string]any{
+					"10": map[string]string{
+						"background": "#51b749",
+						"foreground": "#1d1d1d",
+					},
+					"2": map[string]string{
+						"background": "#7ae7bf",
+						"foreground": "#1d1d1d",
+					},
+				},
+				"calendar": map[string]any{
+					"2": map[string]string{
+						"background": "#d06b64",
+						"foreground": "#1d1d1d",
+					},
+					"1": map[string]string{
+						"background": "#ac725e",
+						"foreground": "#1d1d1d",
+					},
+				},
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	svc, err := calendar.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newCalendarService = func(context.Context, string) (*calendar.Service, error) { return svc, nil }
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--plain", "--account", "a@b.com", "calendar", "colors"}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	want := strings.Join([]string{
+		"event\t2\t#7ae7bf\t#1d1d1d",
+		"event\t10\t#51b749\t#1d1d1d",
+		"calendar\t1\t#ac725e\t#1d1d1d",
+		"calendar\t2\t#d06b64\t#1d1d1d",
+		"",
+	}, "\n")
+	if out != want {
+		t.Fatalf("plain output mismatch:\nwant %q\ngot  %q", want, out)
+	}
+}
+
 func TestCalendarColorsCmd_EmptyColors(t *testing.T) {
 	origNew := newCalendarService
 	t.Cleanup(func() { newCalendarService = origNew })
