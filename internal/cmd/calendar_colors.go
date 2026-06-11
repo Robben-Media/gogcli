@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strconv"
@@ -97,7 +98,7 @@ func (c *CalendarColorsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	return nil
 }
 
-func printColorRows(w *os.File, kind string, colors map[string]calendar.ColorDefinition) {
+func printColorRows(w io.Writer, kind string, colors map[string]calendar.ColorDefinition) {
 	ids := sortedColorIDs(colors)
 	for _, id := range ids {
 		c := colors[id]
