@@ -48,12 +48,12 @@ Current-state notes:
 - Priority: High
 - Why it matters: A CLI should make suggested follow-up commands executable. `gog` prints a next-page hint for BigQuery list commands, and JSON output includes `nextPageToken`, but the command help exposes no page-token input. Users can discover that another page exists but cannot fetch it through the CLI.
 - Exact location:
-  - `internal/cmd/bigquery.go:117` (`BigqueryDatasetsCmd`)
-  - `internal/cmd/bigquery.go:157` (`printNextPageHint(u, resp.NextPageToken)` for datasets)
-  - `internal/cmd/bigquery.go:164` (`BigqueryTablesCmd`)
-  - `internal/cmd/bigquery.go:219` (`printNextPageHint(u, resp.NextPageToken)` for tables)
-  - `internal/cmd/bigquery.go:266` (`BigqueryJobsCmd`)
-  - `internal/cmd/bigquery.go:320` (`printNextPageHint(u, resp.NextPageToken)` for jobs)
+  - `internal/cmd/bigquery.go:111` (`BigqueryDatasetsCmd`)
+  - `internal/cmd/bigquery.go:159` (`printNextPageHint(u, resp.NextPageToken)` for datasets)
+  - `internal/cmd/bigquery.go:165` (`BigqueryTablesCmd`)
+  - `internal/cmd/bigquery.go:218` (`printNextPageHint(u, resp.NextPageToken)` for tables)
+  - `internal/cmd/bigquery.go:281` (`BigqueryJobsCmd`)
+  - `internal/cmd/bigquery.go:348` (`printNextPageHint(u, resp.NextPageToken)` for jobs)
   - `internal/cmd/output_helpers.go:21` (`printNextPageHint`)
 - What is wrong:
   - `BigqueryDatasetsCmd`, `BigqueryTablesCmd`, and `BigqueryJobsCmd` have `Max` but no `Page`/`PageToken` field.
