@@ -18,6 +18,9 @@ func TestExecute_BigqueryDatasets_JSON(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/datasets") && r.Method == http.MethodGet {
+			if got := r.URL.Query().Get("pageToken"); got != "page2" {
+				t.Fatalf("pageToken=%q", got)
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"datasets": []map[string]any{
@@ -50,7 +53,7 @@ func TestExecute_BigqueryDatasets_JSON(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "bigquery", "datasets", "--project", "proj1"}); err != nil {
+			if err := Execute([]string{"--json", "--account", "a@b.com", "bigquery", "datasets", "--project", "proj1", "--page", "page2"}); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
 		})
@@ -86,6 +89,9 @@ func TestExecute_BigqueryTables_JSON(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/tables") && r.Method == http.MethodGet {
+			if got := r.URL.Query().Get("pageToken"); got != "page2" {
+				t.Fatalf("pageToken=%q", got)
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"tables": []map[string]any{
@@ -119,7 +125,7 @@ func TestExecute_BigqueryTables_JSON(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "bigquery", "tables", "--project", "proj1", "--dataset", "my_dataset"}); err != nil {
+			if err := Execute([]string{"--json", "--account", "a@b.com", "bigquery", "tables", "--project", "proj1", "--dataset", "my_dataset", "--page", "page2"}); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
 		})
@@ -249,6 +255,9 @@ func TestExecute_BigqueryJobs_JSON(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/jobs") && r.Method == http.MethodGet {
+			if got := r.URL.Query().Get("pageToken"); got != "page2" {
+				t.Fatalf("pageToken=%q", got)
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"jobs": []map[string]any{
@@ -288,7 +297,7 @@ func TestExecute_BigqueryJobs_JSON(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "bigquery", "jobs", "--project", "proj1"}); err != nil {
+			if err := Execute([]string{"--json", "--account", "a@b.com", "bigquery", "jobs", "--project", "proj1", "--page", "page2"}); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
 		})

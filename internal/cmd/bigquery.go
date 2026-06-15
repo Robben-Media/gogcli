@@ -111,6 +111,7 @@ func (c *BigqueryQueryCmd) Run(ctx context.Context, flags *RootFlags) error {
 type BigqueryDatasetsCmd struct {
 	Project string `name:"project" required:"" help:"Google Cloud project ID"`
 	Max     int64  `name:"max" aliases:"limit" help:"Max results" default:"50"`
+	Page    string `name:"page" help:"Page token"`
 }
 
 func (c *BigqueryDatasetsCmd) Run(ctx context.Context, flags *RootFlags) error {
@@ -129,7 +130,11 @@ func (c *BigqueryDatasetsCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	resp, err := svc.Datasets.List(project).MaxResults(c.Max).Do()
+	call := svc.Datasets.List(project).MaxResults(c.Max)
+	if page := strings.TrimSpace(c.Page); page != "" {
+		call = call.PageToken(page)
+	}
+	resp, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("list datasets: %w", err)
 	}
@@ -166,6 +171,7 @@ type BigqueryTablesCmd struct {
 	Project string `name:"project" required:"" help:"Google Cloud project ID"`
 	Dataset string `name:"dataset" required:"" help:"Dataset ID"`
 	Max     int64  `name:"max" aliases:"limit" help:"Max results" default:"50"`
+	Page    string `name:"page" help:"Page token"`
 }
 
 func (c *BigqueryTablesCmd) Run(ctx context.Context, flags *RootFlags) error {
@@ -188,7 +194,11 @@ func (c *BigqueryTablesCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	resp, err := svc.Tables.List(project, dataset).MaxResults(c.Max).Do()
+	call := svc.Tables.List(project, dataset).MaxResults(c.Max)
+	if page := strings.TrimSpace(c.Page); page != "" {
+		call = call.PageToken(page)
+	}
+	resp, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("list tables: %w", err)
 	}
@@ -281,6 +291,7 @@ func (c *BigquerySchemaCmd) Run(ctx context.Context, flags *RootFlags) error {
 type BigqueryJobsCmd struct {
 	Project     string `name:"project" required:"" help:"Google Cloud project ID"`
 	Max         int64  `name:"max" aliases:"limit" help:"Max results" default:"20"`
+	Page        string `name:"page" help:"Page token"`
 	StateFilter string `name:"state-filter" help:"Filter by job state: running, done, pending"`
 }
 
@@ -301,6 +312,9 @@ func (c *BigqueryJobsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	call := svc.Jobs.List(project).MaxResults(c.Max)
+	if page := strings.TrimSpace(c.Page); page != "" {
+		call = call.PageToken(page)
+	}
 	stateFilter := strings.TrimSpace(c.StateFilter)
 	if stateFilter != "" {
 		call = call.StateFilter(stateFilter)
