@@ -88,6 +88,17 @@ func (c *AADataStreamsCreateCmd) Run(ctx context.Context, flags *RootFlags) erro
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"dataStream": resp})
 	}
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		measurementID := ""
+		if resp.WebStreamData != nil {
+			measurementID = resp.WebStreamData.MeasurementId
+		}
+		fmt.Fprintln(w, "NAME\tMEASUREMENT_ID")
+		fmt.Fprintf(w, "%s\t%s\n", resp.Name, measurementID)
+		return nil
+	}
 
 	u := ui.FromContext(ctx)
 	u.Out().Printf("Created data stream: %s", resp.Name)
@@ -127,6 +138,13 @@ func (c *AADataStreamsDeleteCmd) Run(ctx context.Context, flags *RootFlags) erro
 
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"deleted": true, "name": name})
+	}
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		fmt.Fprintln(w, "DELETED\tNAME")
+		fmt.Fprintf(w, "true\t%s\n", name)
+		return nil
 	}
 
 	u := ui.FromContext(ctx)
@@ -280,6 +298,13 @@ func (c *AADataStreamsPatchCmd) Run(ctx context.Context, flags *RootFlags, kctx 
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"dataStream": resp})
 	}
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		fmt.Fprintln(w, "NAME")
+		fmt.Fprintf(w, "%s\n", resp.Name)
+		return nil
+	}
 
 	u := ui.FromContext(ctx)
 	u.Out().Printf("Updated data stream: %s", resp.Name)
@@ -331,6 +356,13 @@ func (c *AAMpSecretsCreateCmd) Run(ctx context.Context, flags *RootFlags) error 
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"measurementProtocolSecret": resp})
 	}
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		fmt.Fprintln(w, "NAME\tSECRET_VALUE")
+		fmt.Fprintf(w, "%s\t%s\n", resp.Name, resp.SecretValue)
+		return nil
+	}
 
 	u := ui.FromContext(ctx)
 	u.Out().Printf("Created secret: %s", resp.Name)
@@ -369,6 +401,13 @@ func (c *AAMpSecretsDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"deleted": true, "name": name})
+	}
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		fmt.Fprintln(w, "DELETED\tNAME")
+		fmt.Fprintf(w, "true\t%s\n", name)
+		return nil
 	}
 
 	u := ui.FromContext(ctx)
@@ -512,6 +551,13 @@ func (c *AAMpSecretsPatchCmd) Run(ctx context.Context, flags *RootFlags, kctx *k
 
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"measurementProtocolSecret": resp})
+	}
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		fmt.Fprintln(w, "NAME")
+		fmt.Fprintf(w, "%s\n", resp.Name)
+		return nil
 	}
 
 	u := ui.FromContext(ctx)
