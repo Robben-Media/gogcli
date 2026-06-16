@@ -246,6 +246,46 @@ func TestExecute_AADataStreamsCreate_Plain(t *testing.T) {
 	}
 }
 
+func TestExecute_AADataStreamsCreate_Plain_NonWeb(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.HasSuffix(r.URL.Path, "/dataStreams") && r.Method == http.MethodPost {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"name":        "properties/123/dataStreams/790",
+				"type":        "ANDROID_APP_DATA_STREAM",
+				"displayName": "Android App",
+				"androidAppStreamData": map[string]any{
+					"packageName": "com.example.app",
+				},
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+	setupAnalyticsServices(t, srv)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain", "--account", "a@b.com",
+				"analytics", "admin", "data-streams", "create",
+				"--property", "123",
+				"--type", "ANDROID_APP_DATA_STREAM",
+				"--display-name", "Android App",
+				"--package-name", "com.example.app",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	const want = "NAME\nproperties/123/dataStreams/790\n"
+	if out != want {
+		t.Fatalf("plain output mismatch:\nwant %q\ngot  %q", want, out)
+	}
+}
+
 func TestExecute_AADataStreamsGet_JSON(t *testing.T) {
 	srv := analyticsAdminStreamsTestServer()
 	defer srv.Close()

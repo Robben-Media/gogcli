@@ -91,12 +91,13 @@ func (c *AADataStreamsCreateCmd) Run(ctx context.Context, flags *RootFlags) erro
 	if outfmt.IsPlain(ctx) {
 		w, flush := tableWriter(ctx)
 		defer flush()
-		measurementID := ""
-		if resp.WebStreamData != nil {
-			measurementID = resp.WebStreamData.MeasurementId
+		if resp.WebStreamData == nil {
+			fmt.Fprintln(w, "NAME")
+			fmt.Fprintf(w, "%s\n", resp.Name)
+			return nil
 		}
 		fmt.Fprintln(w, "NAME\tMEASUREMENT_ID")
-		fmt.Fprintf(w, "%s\t%s\n", resp.Name, measurementID)
+		fmt.Fprintf(w, "%s\t%s\n", resp.Name, resp.WebStreamData.MeasurementId)
 		return nil
 	}
 
