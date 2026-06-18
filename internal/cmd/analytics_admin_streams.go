@@ -254,7 +254,7 @@ func (c *AADataStreamsListCmd) Run(ctx context.Context, flags *RootFlags) error 
 		}
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", ds.Name, ds.Type, ds.DisplayName, mid)
 	}
-	printNextPageHint(u, resp.NextPageToken)
+	printNextPageHintWithFlag(u, "--page-token", resp.NextPageToken)
 	return nil
 }
 
@@ -507,7 +507,7 @@ func (c *AAMpSecretsListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	for _, s := range resp.MeasurementProtocolSecrets {
 		fmt.Fprintf(w, "%s\t%s\t%s\n", s.Name, s.DisplayName, s.SecretValue)
 	}
-	printNextPageHint(u, resp.NextPageToken)
+	printNextPageHintWithFlag(u, "--page-token", resp.NextPageToken)
 	return nil
 }
 
