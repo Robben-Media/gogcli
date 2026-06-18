@@ -19,8 +19,12 @@ func tableWriter(ctx context.Context) (io.Writer, func()) {
 }
 
 func printNextPageHint(u *ui.UI, nextPageToken string) {
+	printNextPageHintWithFlag(u, "--page", nextPageToken)
+}
+
+func printNextPageHintWithFlag(u *ui.UI, flagName string, nextPageToken string) {
 	if u == nil || nextPageToken == "" {
 		return
 	}
-	u.Err().Printf("# Next page: --page %s", nextPageToken)
+	u.Err().Printf("# Next page: %s %s", flagName, nextPageToken)
 }

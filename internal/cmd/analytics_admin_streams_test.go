@@ -29,7 +29,7 @@ func analyticsAdminStreamsTestServer() *httptest.Server {
 						"updateTime": "2026-01-01T00:00:00Z",
 					},
 				},
-				"nextPageToken": "",
+				"nextPageToken": "npt",
 			})
 			return
 
@@ -95,7 +95,7 @@ func analyticsAdminStreamsTestServer() *httptest.Server {
 						"secretValue": "secret_abc123",
 					},
 				},
-				"nextPageToken": "",
+				"nextPageToken": "npt",
 			})
 			return
 
@@ -177,6 +177,31 @@ func TestExecute_AADataStreamsList_JSON(t *testing.T) {
 	}
 	if parsed.DataStreams[0].WebStreamData.MeasurementId != "G-ABC123" {
 		t.Fatalf("unexpected measurement ID: %q", parsed.DataStreams[0].WebStreamData.MeasurementId)
+	}
+}
+
+func TestExecute_AADataStreamsList_NextPageHintUsesPageToken(t *testing.T) {
+	srv := analyticsAdminStreamsTestServer()
+	defer srv.Close()
+	setupAnalyticsServices(t, srv)
+
+	errOut := captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			if err := Execute([]string{
+				"--account", "a@b.com",
+				"analytics", "admin", "data-streams", "list",
+				"--property", "123",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	if !strings.Contains(errOut, "# Next page: --page-token npt") {
+		t.Fatalf("expected page-token next-page hint, got stderr=%q", errOut)
+	}
+	if strings.Contains(errOut, "--page npt") {
+		t.Fatalf("expected no stale --page hint, got stderr=%q", errOut)
 	}
 }
 
@@ -496,6 +521,32 @@ func TestExecute_AAMpSecretsList_JSON(t *testing.T) {
 	}
 	if parsed.Secrets[0].SecretValue != "secret_abc123" {
 		t.Fatalf("unexpected secret value: %q", parsed.Secrets[0].SecretValue)
+	}
+}
+
+func TestExecute_AAMpSecretsList_NextPageHintUsesPageToken(t *testing.T) {
+	srv := analyticsAdminStreamsTestServer()
+	defer srv.Close()
+	setupAnalyticsServices(t, srv)
+
+	errOut := captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			if err := Execute([]string{
+				"--account", "a@b.com",
+				"analytics", "admin", "mp-secrets", "list",
+				"--property", "123",
+				"--stream", "456",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	if !strings.Contains(errOut, "# Next page: --page-token npt") {
+		t.Fatalf("expected page-token next-page hint, got stderr=%q", errOut)
+	}
+	if strings.Contains(errOut, "--page npt") {
+		t.Fatalf("expected no stale --page hint, got stderr=%q", errOut)
 	}
 }
 
