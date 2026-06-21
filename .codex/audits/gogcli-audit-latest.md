@@ -31,7 +31,7 @@ Web references used for comparison:
 
 Current-state notes:
 
-- The prior Top 3 from the 2026-06-14 audit have landed on `origin/main`: BigQuery page-token input (#32), Analytics Admin plain mutation output (#33), and Analytics Admin `--page-token` hints (#34).
+- The prior Top 3 from the 2026-06-14 audit report (a follow-up to the 2026-06-07 report) have landed on `origin/main`: BigQuery page-token input (#32), Analytics Admin plain mutation output (#33), and Analytics Admin `--page-token` hints (#34).
 - The current audit therefore excludes those stale tasks from the new Top 3.
 - The strongest remaining gaps are still functional: incomplete access to paged GA and Business Profile data, plus one misleading command help surface that can waste operator recovery time.
 
