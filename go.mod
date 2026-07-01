@@ -1,4 +1,4 @@
-module github.com/steipete/gogcli
+module github.com/Robben-Media/gogcli
 
 go 1.26.0
 

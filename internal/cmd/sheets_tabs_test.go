@@ -12,8 +12,8 @@ import (
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 
-	"github.com/steipete/gogcli/internal/outfmt"
-	"github.com/steipete/gogcli/internal/ui"
+	"github.com/Robben-Media/gogcli/internal/outfmt"
+	"github.com/Robben-Media/gogcli/internal/ui"
 )
 
 func TestExecute_SheetsSheetAdd_JSON(t *testing.T) {

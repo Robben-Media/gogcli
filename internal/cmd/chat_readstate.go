@@ -8,8 +8,8 @@ import (
 	"github.com/alecthomas/kong"
 	"google.golang.org/api/chat/v1"
 
-	"github.com/steipete/gogcli/internal/outfmt"
-	"github.com/steipete/gogcli/internal/ui"
+	"github.com/Robben-Media/gogcli/internal/outfmt"
+	"github.com/Robben-Media/gogcli/internal/ui"
 )
 
 // ChatNotificationSettingsCmd contains subcommands for space notification settings.

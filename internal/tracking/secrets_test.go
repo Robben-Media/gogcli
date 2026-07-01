@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/steipete/gogcli/internal/secrets"
+	"github.com/Robben-Media/gogcli/internal/secrets"
 )
 
 func setupTrackingKeyringEnv(t *testing.T) {

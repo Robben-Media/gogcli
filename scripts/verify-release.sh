@@ -115,8 +115,8 @@ if [[ "$linux_arm64_formula" != "$linux_arm64_expected" ]]; then
 fi
 
 brew update >/dev/null
-brew upgrade gogcli || brew install steipete/tap/gogcli
-brew test steipete/tap/gogcli
+brew upgrade gogcli || brew install itsjeremyjohnson/tap/gogcli
+brew test itsjeremyjohnson/tap/gogcli
 gog --version
 
 rm -rf "$tmp_assets_dir"

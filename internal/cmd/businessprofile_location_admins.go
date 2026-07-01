@@ -9,8 +9,8 @@ import (
 	"github.com/alecthomas/kong"
 	mybusinessaccountmanagement "google.golang.org/api/mybusinessaccountmanagement/v1"
 
-	"github.com/steipete/gogcli/internal/outfmt"
-	"github.com/steipete/gogcli/internal/ui"
+	"github.com/Robben-Media/gogcli/internal/outfmt"
+	"github.com/Robben-Media/gogcli/internal/ui"
 )
 
 // BusinessProfileLocationAdminsCmd is a parent for location admin subcommands.

@@ -14,8 +14,8 @@ import (
 
 	"golang.org/x/oauth2"
 
-	"github.com/steipete/gogcli/internal/config"
-	"github.com/steipete/gogcli/internal/secrets"
+	"github.com/Robben-Media/gogcli/internal/config"
+	"github.com/Robben-Media/gogcli/internal/secrets"
 )
 
 var errTestStoreBoom = errors.New("boom")

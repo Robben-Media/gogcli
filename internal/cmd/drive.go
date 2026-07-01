@@ -13,10 +13,10 @@ import (
 	"google.golang.org/api/drive/v3"
 	gapi "google.golang.org/api/googleapi"
 
-	"github.com/steipete/gogcli/internal/config"
-	"github.com/steipete/gogcli/internal/googleapi"
-	"github.com/steipete/gogcli/internal/outfmt"
-	"github.com/steipete/gogcli/internal/ui"
+	"github.com/Robben-Media/gogcli/internal/config"
+	"github.com/Robben-Media/gogcli/internal/googleapi"
+	"github.com/Robben-Media/gogcli/internal/outfmt"
+	"github.com/Robben-Media/gogcli/internal/ui"
 )
 
 var newDriveService = googleapi.NewDrive
@@ -466,7 +466,7 @@ func (c *DriveDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("empty fileId")
 	}
 
-	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("delete drive file %s", fileID)); confirmErr != nil {
+	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("trash drive file %s", fileID)); confirmErr != nil {
 		return confirmErr
 	}
 
@@ -475,16 +475,16 @@ func (c *DriveDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	if err := svc.Files.Delete(fileID).SupportsAllDrives(true).Context(ctx).Do(); err != nil {
+	if _, err := svc.Files.Update(fileID, &drive.File{Trashed: true}).SupportsAllDrives(true).Context(ctx).Do(); err != nil {
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{
-			"deleted": true,
+			"trashed": true,
 			"id":      fileID,
 		})
 	}
-	u.Out().Printf("deleted\ttrue")
+	u.Out().Printf("trashed\ttrue")
 	u.Out().Printf("id\t%s", fileID)
 	return nil
 }

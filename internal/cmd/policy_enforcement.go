@@ -6,7 +6,7 @@ import (
 
 	"github.com/alecthomas/kong"
 
-	"github.com/steipete/gogcli/internal/config"
+	"github.com/Robben-Media/gogcli/internal/config"
 )
 
 var commandServiceAliases = map[string]string{

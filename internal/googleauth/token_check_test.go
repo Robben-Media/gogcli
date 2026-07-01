@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/oauth2"
 
-	"github.com/steipete/gogcli/internal/config"
+	"github.com/Robben-Media/gogcli/internal/config"
 )
 
 func TestCheckRefreshTokenSuccess(t *testing.T) {

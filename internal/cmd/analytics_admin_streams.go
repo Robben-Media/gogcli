@@ -9,8 +9,8 @@ import (
 	"github.com/alecthomas/kong"
 	analyticsadmin "google.golang.org/api/analyticsadmin/v1beta"
 
-	"github.com/steipete/gogcli/internal/outfmt"
-	"github.com/steipete/gogcli/internal/ui"
+	"github.com/Robben-Media/gogcli/internal/outfmt"
+	"github.com/Robben-Media/gogcli/internal/ui"
 )
 
 // ---------------------------------------------------------------------------
@@ -22,7 +22,7 @@ type AADataStreamsCmd struct {
 	Delete AADataStreamsDeleteCmd `cmd:"" name:"delete" help:"Delete a data stream"`
 	Get    AADataStreamsGetCmd    `cmd:"" name:"get" help:"Get a data stream"`
 	List   AADataStreamsListCmd   `cmd:"" name:"list" help:"List data streams for a property"`
-	Patch  AADataStreamsPatchCmd `cmd:"" name:"patch" help:"Update a data stream"`
+	Patch  AADataStreamsPatchCmd  `cmd:"" name:"patch" help:"Update a data stream"`
 }
 
 // --- create ---

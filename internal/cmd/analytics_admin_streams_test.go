@@ -157,9 +157,9 @@ func TestExecute_AADataStreamsList_JSON(t *testing.T) {
 
 	var parsed struct {
 		DataStreams []struct {
-			Name        string `json:"name"`
-			Type        string `json:"type"`
-			DisplayName string `json:"displayName"`
+			Name          string `json:"name"`
+			Type          string `json:"type"`
+			DisplayName   string `json:"displayName"`
 			WebStreamData struct {
 				MeasurementId string `json:"measurementId"`
 			} `json:"webStreamData"`
@@ -202,8 +202,8 @@ func TestExecute_AADataStreamsCreate_JSON(t *testing.T) {
 
 	var parsed struct {
 		DataStream struct {
-			Name        string `json:"name"`
-			DisplayName string `json:"displayName"`
+			Name          string `json:"name"`
+			DisplayName   string `json:"displayName"`
 			WebStreamData struct {
 				MeasurementId string `json:"measurementId"`
 			} `json:"webStreamData"`

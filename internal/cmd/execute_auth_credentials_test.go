@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/steipete/gogcli/internal/config"
+	"github.com/Robben-Media/gogcli/internal/config"
 )
 
 func TestExecute_AuthCredentials_JSON(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 
 	"google.golang.org/api/bigquery/v2"
 
-	"github.com/steipete/gogcli/internal/googleauth"
+	"github.com/Robben-Media/gogcli/internal/googleauth"
 )
 
 func NewBigquery(ctx context.Context, email string) (*bigquery.Service, error) {

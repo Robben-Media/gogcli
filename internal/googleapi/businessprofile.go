@@ -7,7 +7,7 @@ import (
 	mybusinessaccountmanagement "google.golang.org/api/mybusinessaccountmanagement/v1"
 	mybusinessbusinessinformation "google.golang.org/api/mybusinessbusinessinformation/v1"
 
-	"github.com/steipete/gogcli/internal/googleauth"
+	"github.com/Robben-Media/gogcli/internal/googleauth"
 )
 
 func NewBusinessProfileInfo(ctx context.Context, email string) (*mybusinessbusinessinformation.Service, error) {

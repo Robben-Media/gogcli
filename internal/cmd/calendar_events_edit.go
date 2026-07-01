@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/api/calendar/v3"
 
-	"github.com/steipete/gogcli/internal/outfmt"
-	"github.com/steipete/gogcli/internal/ui"
+	"github.com/Robben-Media/gogcli/internal/outfmt"
+	"github.com/Robben-Media/gogcli/internal/ui"
 )
 
 // Calendar events operations - watch, import, instances, quick-add, move.

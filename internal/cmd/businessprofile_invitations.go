@@ -8,8 +8,8 @@ import (
 
 	mybusinessaccountmanagement "google.golang.org/api/mybusinessaccountmanagement/v1"
 
-	"github.com/steipete/gogcli/internal/outfmt"
-	"github.com/steipete/gogcli/internal/ui"
+	"github.com/Robben-Media/gogcli/internal/outfmt"
+	"github.com/Robben-Media/gogcli/internal/ui"
 )
 
 // BusinessProfileInvitationsCmd is a parent for account invitation subcommands.

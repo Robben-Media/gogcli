@@ -12,7 +12,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/steipete/gogcli/internal/config"
+	"github.com/Robben-Media/gogcli/internal/config"
 )
 
 type gmailWatchStore struct {

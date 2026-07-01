@@ -6,7 +6,7 @@ import (
 
 	"google.golang.org/api/youtube/v3"
 
-	"github.com/steipete/gogcli/internal/googleauth"
+	"github.com/Robben-Media/gogcli/internal/googleauth"
 )
 
 func NewYoutube(ctx context.Context, email string) (*youtube.Service, error) {

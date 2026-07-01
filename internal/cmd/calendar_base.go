@@ -1,6 +1,6 @@
 package cmd
 
-import "github.com/steipete/gogcli/internal/googleapi"
+import "github.com/Robben-Media/gogcli/internal/googleapi"
 
 var newCalendarService = googleapi.NewCalendar
 

@@ -6,7 +6,7 @@ import (
 
 	"google.golang.org/api/searchconsole/v1"
 
-	"github.com/steipete/gogcli/internal/googleauth"
+	"github.com/Robben-Media/gogcli/internal/googleauth"
 )
 
 func NewSearchConsole(ctx context.Context, email string) (*searchconsole.Service, error) {

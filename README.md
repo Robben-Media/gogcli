@@ -34,13 +34,13 @@ Fast, script-friendly CLI for Gmail, Calendar, Chat, Classroom, Drive, Docs, Sli
 ### Homebrew
 
 ```bash
-brew install steipete/tap/gogcli
+brew install itsjeremyjohnson/tap/gogcli
 ```
 
 ### Build from Source
 
 ```bash
-git clone https://github.com/steipete/gogcli.git
+git clone https://github.com/Robben-Media/gogcli.git
 cd gogcli
 make
 ```
@@ -1359,7 +1359,7 @@ Optional env:
 - `GOG_LIVE_SKIP=groups,keep`
 - `GOG_LIVE_AUTH=all,groups`
 - `GOG_LIVE_ALLOW_NONTEST=1`
-- `GOG_LIVE_EMAIL_TEST=steipete+gogtest@gmail.com`
+- `GOG_LIVE_EMAIL_TEST=jeremy+gogtest@robbenmedia.com`
 - `GOG_LIVE_GROUP_EMAIL=group@domain`
 - `GOG_LIVE_CLASSROOM_COURSE=<courseId>`
 - `GOG_LIVE_CLASSROOM_CREATE=1`
@@ -1391,7 +1391,7 @@ MIT
 
 ## Links
 
-- [GitHub Repository](https://github.com/steipete/gogcli)
+- [GitHub Repository](https://github.com/Robben-Media/gogcli)
 - [Gmail API Documentation](https://developers.google.com/gmail/api)
 - [Google Calendar API Documentation](https://developers.google.com/calendar)
 - [Google Drive API Documentation](https://developers.google.com/drive)

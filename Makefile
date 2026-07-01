@@ -13,7 +13,7 @@ CMD := ./cmd/gog
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT := $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo "")
 DATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
-LDFLAGS := -X github.com/steipete/gogcli/internal/cmd.version=$(VERSION) -X github.com/steipete/gogcli/internal/cmd.commit=$(COMMIT) -X github.com/steipete/gogcli/internal/cmd.date=$(DATE)
+LDFLAGS := -X github.com/Robben-Media/gogcli/internal/cmd.version=$(VERSION) -X github.com/Robben-Media/gogcli/internal/cmd.commit=$(COMMIT) -X github.com/Robben-Media/gogcli/internal/cmd.date=$(DATE)
 
 TOOLS_DIR := $(CURDIR)/.tools
 GOFUMPT := $(TOOLS_DIR)/gofumpt
@@ -65,11 +65,11 @@ tools:
 	@GOBIN=$(TOOLS_DIR) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0
 
 fmt: tools
-	@$(GOIMPORTS) -local github.com/steipete/gogcli -w .
+	@$(GOIMPORTS) -local github.com/Robben-Media/gogcli -w .
 	@$(GOFUMPT) -w .
 
 fmt-check: tools
-	@$(GOIMPORTS) -local github.com/steipete/gogcli -w .
+	@$(GOIMPORTS) -local github.com/Robben-Media/gogcli -w .
 	@$(GOFUMPT) -w .
 	@git diff --exit-code -- '*.go' go.mod go.sum
 

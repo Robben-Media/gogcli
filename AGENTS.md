@@ -17,7 +17,7 @@
 
 ## Coding Style & Naming Conventions
 
-- Formatting: `make fmt` (`goimports` local prefix `github.com/steipete/gogcli` + `gofumpt`).
+- Formatting: `make fmt` (`goimports` local prefix `github.com/Robben-Media/gogcli` + `gofumpt`).
 - Output: keep stdout parseable (`--json` / `--plain`); send human hints/progress to stderr.
 
 ## Testing Guidelines
