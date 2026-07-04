@@ -88,6 +88,18 @@ func (c *AADataStreamsCreateCmd) Run(ctx context.Context, flags *RootFlags) erro
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"dataStream": resp})
 	}
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		if resp.WebStreamData == nil {
+			fmt.Fprintln(w, "NAME")
+			fmt.Fprintf(w, "%s\n", resp.Name)
+			return nil
+		}
+		fmt.Fprintln(w, "NAME\tMEASUREMENT_ID")
+		fmt.Fprintf(w, "%s\t%s\n", resp.Name, resp.WebStreamData.MeasurementId)
+		return nil
+	}
 
 	u := ui.FromContext(ctx)
 	u.Out().Printf("Created data stream: %s", resp.Name)
@@ -127,6 +139,13 @@ func (c *AADataStreamsDeleteCmd) Run(ctx context.Context, flags *RootFlags) erro
 
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"deleted": true, "name": name})
+	}
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		fmt.Fprintln(w, "DELETED\tNAME")
+		fmt.Fprintf(w, "true\t%s\n", name)
+		return nil
 	}
 
 	u := ui.FromContext(ctx)
@@ -235,7 +254,7 @@ func (c *AADataStreamsListCmd) Run(ctx context.Context, flags *RootFlags) error 
 		}
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", ds.Name, ds.Type, ds.DisplayName, mid)
 	}
-	printNextPageHint(u, resp.NextPageToken)
+	printNextPageHintWithFlag(u, "--page-token", resp.NextPageToken)
 	return nil
 }
 
@@ -279,6 +298,13 @@ func (c *AADataStreamsPatchCmd) Run(ctx context.Context, flags *RootFlags, kctx 
 
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"dataStream": resp})
+	}
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		fmt.Fprintln(w, "NAME")
+		fmt.Fprintf(w, "%s\n", resp.Name)
+		return nil
 	}
 
 	u := ui.FromContext(ctx)
@@ -331,6 +357,13 @@ func (c *AAMpSecretsCreateCmd) Run(ctx context.Context, flags *RootFlags) error 
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"measurementProtocolSecret": resp})
 	}
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		fmt.Fprintln(w, "NAME\tSECRET_VALUE")
+		fmt.Fprintf(w, "%s\t%s\n", resp.Name, resp.SecretValue)
+		return nil
+	}
 
 	u := ui.FromContext(ctx)
 	u.Out().Printf("Created secret: %s", resp.Name)
@@ -369,6 +402,13 @@ func (c *AAMpSecretsDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"deleted": true, "name": name})
+	}
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		fmt.Fprintln(w, "DELETED\tNAME")
+		fmt.Fprintf(w, "true\t%s\n", name)
+		return nil
 	}
 
 	u := ui.FromContext(ctx)
@@ -467,7 +507,7 @@ func (c *AAMpSecretsListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	for _, s := range resp.MeasurementProtocolSecrets {
 		fmt.Fprintf(w, "%s\t%s\t%s\n", s.Name, s.DisplayName, s.SecretValue)
 	}
-	printNextPageHint(u, resp.NextPageToken)
+	printNextPageHintWithFlag(u, "--page-token", resp.NextPageToken)
 	return nil
 }
 
@@ -512,6 +552,13 @@ func (c *AAMpSecretsPatchCmd) Run(ctx context.Context, flags *RootFlags, kctx *k
 
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"measurementProtocolSecret": resp})
+	}
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		fmt.Fprintln(w, "NAME")
+		fmt.Fprintf(w, "%s\n", resp.Name)
+		return nil
 	}
 
 	u := ui.FromContext(ctx)

@@ -29,7 +29,7 @@ func analyticsAdminStreamsTestServer() *httptest.Server {
 						"updateTime": "2026-01-01T00:00:00Z",
 					},
 				},
-				"nextPageToken": "",
+				"nextPageToken": "npt",
 			})
 			return
 
@@ -95,7 +95,7 @@ func analyticsAdminStreamsTestServer() *httptest.Server {
 						"secretValue": "secret_abc123",
 					},
 				},
-				"nextPageToken": "",
+				"nextPageToken": "npt",
 			})
 			return
 
@@ -180,6 +180,31 @@ func TestExecute_AADataStreamsList_JSON(t *testing.T) {
 	}
 }
 
+func TestExecute_AADataStreamsList_NextPageHintUsesPageToken(t *testing.T) {
+	srv := analyticsAdminStreamsTestServer()
+	defer srv.Close()
+	setupAnalyticsServices(t, srv)
+
+	errOut := captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			if err := Execute([]string{
+				"--account", "a@b.com",
+				"analytics", "admin", "data-streams", "list",
+				"--property", "123",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	if !strings.Contains(errOut, "# Next page: --page-token npt") {
+		t.Fatalf("expected page-token next-page hint, got stderr=%q", errOut)
+	}
+	if strings.Contains(errOut, "--page npt") {
+		t.Fatalf("expected no stale --page hint, got stderr=%q", errOut)
+	}
+}
+
 func TestExecute_AADataStreamsCreate_JSON(t *testing.T) {
 	srv := analyticsAdminStreamsTestServer()
 	defer srv.Close()
@@ -217,6 +242,72 @@ func TestExecute_AADataStreamsCreate_JSON(t *testing.T) {
 	}
 	if parsed.DataStream.WebStreamData.MeasurementId != "G-NEW123" {
 		t.Fatalf("unexpected measurement ID: %q", parsed.DataStream.WebStreamData.MeasurementId)
+	}
+}
+
+func TestExecute_AADataStreamsCreate_Plain(t *testing.T) {
+	srv := analyticsAdminStreamsTestServer()
+	defer srv.Close()
+	setupAnalyticsServices(t, srv)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain", "--account", "a@b.com",
+				"analytics", "admin", "data-streams", "create",
+				"--property", "123",
+				"--type", "WEB_DATA_STREAM",
+				"--display-name", "Healthcare LP",
+				"--web-default-uri", "https://healthcare.itallyllc.com",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	const want = "NAME\tMEASUREMENT_ID\nproperties/123/dataStreams/789\tG-NEW123\n"
+	if out != want {
+		t.Fatalf("plain output mismatch:\nwant %q\ngot  %q", want, out)
+	}
+}
+
+func TestExecute_AADataStreamsCreate_Plain_NonWeb(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.HasSuffix(r.URL.Path, "/dataStreams") && r.Method == http.MethodPost {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"name":        "properties/123/dataStreams/790",
+				"type":        "ANDROID_APP_DATA_STREAM",
+				"displayName": "Android App",
+				"androidAppStreamData": map[string]any{
+					"packageName": "com.example.app",
+				},
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+	setupAnalyticsServices(t, srv)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain", "--account", "a@b.com",
+				"analytics", "admin", "data-streams", "create",
+				"--property", "123",
+				"--type", "ANDROID_APP_DATA_STREAM",
+				"--display-name", "Android App",
+				"--package-name", "com.example.app",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	const want = "NAME\nproperties/123/dataStreams/790\n"
+	if out != want {
+		t.Fatalf("plain output mismatch:\nwant %q\ngot  %q", want, out)
 	}
 }
 
@@ -301,6 +392,30 @@ func TestExecute_AADataStreamsDelete_WithForce_JSON(t *testing.T) {
 	}
 }
 
+func TestExecute_AADataStreamsDelete_WithForce_Plain(t *testing.T) {
+	srv := analyticsAdminStreamsTestServer()
+	defer srv.Close()
+	setupAnalyticsServices(t, srv)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain", "--account", "a@b.com", "--force",
+				"analytics", "admin", "data-streams", "delete",
+				"--property", "123",
+				"456",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	const want = "DELETED\tNAME\ntrue\tproperties/123/dataStreams/456\n"
+	if out != want {
+		t.Fatalf("plain output mismatch:\nwant %q\ngot  %q", want, out)
+	}
+}
+
 func TestExecute_AADataStreamsPatch_UpdateMask(t *testing.T) {
 	var gotUpdateMask string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -346,6 +461,31 @@ func TestExecute_AADataStreamsPatch_UpdateMask(t *testing.T) {
 	}
 }
 
+func TestExecute_AADataStreamsPatch_Plain(t *testing.T) {
+	srv := analyticsAdminStreamsTestServer()
+	defer srv.Close()
+	setupAnalyticsServices(t, srv)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain", "--account", "a@b.com",
+				"analytics", "admin", "data-streams", "patch",
+				"--property", "123",
+				"--display-name", "Updated Name",
+				"456",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	const want = "NAME\nproperties/123/dataStreams/456\n"
+	if out != want {
+		t.Fatalf("plain output mismatch:\nwant %q\ngot  %q", want, out)
+	}
+}
+
 // --- MP Secrets tests ---
 
 func TestExecute_AAMpSecretsList_JSON(t *testing.T) {
@@ -384,6 +524,32 @@ func TestExecute_AAMpSecretsList_JSON(t *testing.T) {
 	}
 }
 
+func TestExecute_AAMpSecretsList_NextPageHintUsesPageToken(t *testing.T) {
+	srv := analyticsAdminStreamsTestServer()
+	defer srv.Close()
+	setupAnalyticsServices(t, srv)
+
+	errOut := captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			if err := Execute([]string{
+				"--account", "a@b.com",
+				"analytics", "admin", "mp-secrets", "list",
+				"--property", "123",
+				"--stream", "456",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	if !strings.Contains(errOut, "# Next page: --page-token npt") {
+		t.Fatalf("expected page-token next-page hint, got stderr=%q", errOut)
+	}
+	if strings.Contains(errOut, "--page npt") {
+		t.Fatalf("expected no stale --page hint, got stderr=%q", errOut)
+	}
+}
+
 func TestExecute_AAMpSecretsCreate_JSON(t *testing.T) {
 	srv := analyticsAdminStreamsTestServer()
 	defer srv.Close()
@@ -417,6 +583,31 @@ func TestExecute_AAMpSecretsCreate_JSON(t *testing.T) {
 	}
 }
 
+func TestExecute_AAMpSecretsCreate_Plain(t *testing.T) {
+	srv := analyticsAdminStreamsTestServer()
+	defer srv.Close()
+	setupAnalyticsServices(t, srv)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain", "--account", "a@b.com",
+				"analytics", "admin", "mp-secrets", "create",
+				"--property", "123",
+				"--stream", "456",
+				"--display-name", "New Secret",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	const want = "NAME\tSECRET_VALUE\nproperties/123/dataStreams/456/measurementProtocolSecrets/999\tsecret_new123\n"
+	if out != want {
+		t.Fatalf("plain output mismatch:\nwant %q\ngot  %q", want, out)
+	}
+}
+
 func TestExecute_AAMpSecretsDelete_WithoutForce(t *testing.T) {
 	srv := analyticsAdminStreamsTestServer()
 	defer srv.Close()
@@ -434,6 +625,31 @@ func TestExecute_AAMpSecretsDelete_WithoutForce(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "without --force") {
 		t.Fatalf("expected 'without --force' in error, got: %v", err)
+	}
+}
+
+func TestExecute_AAMpSecretsDelete_WithForce_Plain(t *testing.T) {
+	srv := analyticsAdminStreamsTestServer()
+	defer srv.Close()
+	setupAnalyticsServices(t, srv)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain", "--account", "a@b.com", "--force",
+				"analytics", "admin", "mp-secrets", "delete",
+				"--property", "123",
+				"--stream", "456",
+				"789",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	const want = "DELETED\tNAME\ntrue\tproperties/123/dataStreams/456/measurementProtocolSecrets/789\n"
+	if out != want {
+		t.Fatalf("plain output mismatch:\nwant %q\ngot  %q", want, out)
 	}
 }
 
@@ -481,5 +697,31 @@ func TestExecute_AAMpSecretsPatch_UpdateMask(t *testing.T) {
 	}
 	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
 		t.Fatalf("json parse: %v\nout=%q", err, out)
+	}
+}
+
+func TestExecute_AAMpSecretsPatch_Plain(t *testing.T) {
+	srv := analyticsAdminStreamsTestServer()
+	defer srv.Close()
+	setupAnalyticsServices(t, srv)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain", "--account", "a@b.com",
+				"analytics", "admin", "mp-secrets", "patch",
+				"--property", "123",
+				"--stream", "456",
+				"--display-name", "Updated Secret",
+				"789",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	const want = "NAME\nproperties/123/dataStreams/456/measurementProtocolSecrets/789\n"
+	if out != want {
+		t.Fatalf("plain output mismatch:\nwant %q\ngot  %q", want, out)
 	}
 }

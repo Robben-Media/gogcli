@@ -18,6 +18,11 @@ func TestExecute_BigqueryDatasets_JSON(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/datasets") && r.Method == http.MethodGet {
+			if got := r.URL.Query().Get("pageToken"); got != "page2" {
+				t.Errorf("pageToken=%q", got)
+				http.Error(w, "unexpected pageToken", http.StatusBadRequest)
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"datasets": []map[string]any{
@@ -50,7 +55,7 @@ func TestExecute_BigqueryDatasets_JSON(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "bigquery", "datasets", "--project", "proj1"}); err != nil {
+			if err := Execute([]string{"--json", "--account", "a@b.com", "bigquery", "datasets", "--project", "proj1", "--page", "page2"}); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
 		})
@@ -86,6 +91,11 @@ func TestExecute_BigqueryTables_JSON(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/tables") && r.Method == http.MethodGet {
+			if got := r.URL.Query().Get("pageToken"); got != "page2" {
+				t.Errorf("pageToken=%q", got)
+				http.Error(w, "unexpected pageToken", http.StatusBadRequest)
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"tables": []map[string]any{
@@ -119,7 +129,7 @@ func TestExecute_BigqueryTables_JSON(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "bigquery", "tables", "--project", "proj1", "--dataset", "my_dataset"}); err != nil {
+			if err := Execute([]string{"--json", "--account", "a@b.com", "bigquery", "tables", "--project", "proj1", "--dataset", "my_dataset", "--page", "page2"}); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
 		})
@@ -144,6 +154,81 @@ func TestExecute_BigqueryTables_JSON(t *testing.T) {
 	}
 	if parsed.Tables[0].Type != "TABLE" {
 		t.Fatalf("unexpected table type: %q", parsed.Tables[0].Type)
+	}
+}
+
+func TestExecute_BigqueryListCommands_FirstPageOmitsPageToken(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		path     string
+		args     []string
+		response map[string]any
+	}{
+		{
+			name: "datasets",
+			path: "/datasets",
+			args: []string{"--json", "--account", "a@b.com", "bigquery", "datasets", "--project", "proj1"},
+			response: map[string]any{
+				"datasets":      []map[string]any{},
+				"nextPageToken": "",
+			},
+		},
+		{
+			name: "tables",
+			path: "/tables",
+			args: []string{"--json", "--account", "a@b.com", "bigquery", "tables", "--project", "proj1", "--dataset", "my_dataset"},
+			response: map[string]any{
+				"tables":        []map[string]any{},
+				"nextPageToken": "",
+			},
+		},
+		{
+			name: "jobs",
+			path: "/jobs",
+			args: []string{"--json", "--account", "a@b.com", "bigquery", "jobs", "--project", "proj1"},
+			response: map[string]any{
+				"jobs":          []map[string]any{},
+				"nextPageToken": "",
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			origNew := newBigqueryService
+			t.Cleanup(func() { newBigqueryService = origNew })
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.Contains(r.URL.Path, tt.path) && r.Method == http.MethodGet {
+					if got := r.URL.Query().Get("pageToken"); got != "" {
+						t.Errorf("pageToken=%q", got)
+						http.Error(w, "unexpected pageToken", http.StatusBadRequest)
+						return
+					}
+					w.Header().Set("Content-Type", "application/json")
+					_ = json.NewEncoder(w).Encode(tt.response)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			defer srv.Close()
+
+			svc, err := bigquery.NewService(context.Background(),
+				option.WithoutAuthentication(),
+				option.WithHTTPClient(srv.Client()),
+				option.WithEndpoint(srv.URL+"/"),
+			)
+			if err != nil {
+				t.Fatalf("NewService: %v", err)
+			}
+			newBigqueryService = func(context.Context, string) (*bigquery.Service, error) { return svc, nil }
+
+			_ = captureStdout(t, func() {
+				_ = captureStderr(t, func() {
+					if err := Execute(tt.args); err != nil {
+						t.Fatalf("Execute: %v", err)
+					}
+				})
+			})
+		})
 	}
 }
 
@@ -249,6 +334,11 @@ func TestExecute_BigqueryJobs_JSON(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/jobs") && r.Method == http.MethodGet {
+			if got := r.URL.Query().Get("pageToken"); got != "page2" {
+				t.Errorf("pageToken=%q", got)
+				http.Error(w, "unexpected pageToken", http.StatusBadRequest)
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"jobs": []map[string]any{
@@ -288,7 +378,7 @@ func TestExecute_BigqueryJobs_JSON(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "bigquery", "jobs", "--project", "proj1"}); err != nil {
+			if err := Execute([]string{"--json", "--account", "a@b.com", "bigquery", "jobs", "--project", "proj1", "--page", "page2"}); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
 		})
