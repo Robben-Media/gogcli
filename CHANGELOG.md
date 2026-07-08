@@ -12,6 +12,7 @@
 
 ### Fixed
 
+- CLI: correct the shared `--out` flag help for download/export commands (sheets, docs, slides, drive, gmail attachments, chat media) to describe the derived default filename instead of an inaccurate "gogcli config dir". (#37)
 - CLI: make `--plain config list` and `--plain policy list` emit stable TSV for scriptable output. (#26)
 - Calendar: fix recurrence rules with BYDAY parameter (e.g., `BYDAY=MO,TU,WE,TH,FR`). (#120)
 - Docs: improve create-with-parent failure errors to include created document ID and target parent when move fails.

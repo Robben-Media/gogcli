@@ -1,6 +1,9 @@
 package cmd
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 type outputPathCmd struct {
 	Output OutputPathFlag `embed:""`
@@ -21,6 +24,25 @@ func TestOutputPathFlag_AcceptsOutputAlias(t *testing.T) {
 	if cmd.Output.Path != "file.txt" {
 		t.Fatalf("expected output path, got %q", cmd.Output.Path)
 	}
+}
+
+func TestOutputPathFlag_HelpDescribesDerivedDefault(t *testing.T) {
+	cmd := &outputPathCmd{}
+	kctx := parseKongContext(t, cmd, nil)
+
+	for _, f := range kctx.Flags() {
+		if f.Name != "out" {
+			continue
+		}
+		if strings.Contains(f.Help, "gogcli config dir") {
+			t.Fatalf("out flag help misleads about a single default dir: %q", f.Help)
+		}
+		if !strings.Contains(strings.ToLower(f.Help), "derived filename") {
+			t.Fatalf("out flag help does not describe the derived default filename: %q", f.Help)
+		}
+		return
+	}
+	t.Fatal("out flag not found on outputPathCmd")
 }
 
 func TestOutputPathFlag_AcceptsOut(t *testing.T) {
