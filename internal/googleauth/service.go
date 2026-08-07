@@ -208,6 +208,7 @@ var serviceInfoByService = map[Service]serviceInfo{
 		scopes: []string{
 			"https://www.googleapis.com/auth/analytics.readonly",
 			"https://www.googleapis.com/auth/analytics.edit",
+			"https://www.googleapis.com/auth/analytics.manage.users",
 		},
 		user: true,
 		apis: []string{"Analytics Data API", "Analytics Admin API"},
@@ -221,9 +222,12 @@ var serviceInfoByService = map[Service]serviceInfo{
 		apis: []string{"Search Console API"},
 	},
 	ServiceTagManager: {
-		scopes: []string{"https://www.googleapis.com/auth/tagmanager.readonly"},
-		user:   true,
-		apis:   []string{"Tag Manager API v2"},
+		scopes: []string{
+			"https://www.googleapis.com/auth/tagmanager.readonly",
+			"https://www.googleapis.com/auth/tagmanager.manage.users",
+		},
+		user: true,
+		apis: []string{"Tag Manager API v2"},
 	},
 	ServiceBusinessProfile: {
 		scopes: []string{"https://www.googleapis.com/auth/business.manage"},
@@ -540,7 +544,10 @@ func scopesForServiceWithOptions(service Service, opts ScopeOptions) ([]string, 
 		return Scopes(service)
 	case ServiceAnalytics:
 		if opts.Readonly {
-			return []string{"https://www.googleapis.com/auth/analytics.readonly"}, nil
+			return []string{
+				"https://www.googleapis.com/auth/analytics.readonly",
+				"https://www.googleapis.com/auth/analytics.manage.users.readonly",
+			}, nil
 		}
 
 		return Scopes(service)
@@ -551,6 +558,10 @@ func scopesForServiceWithOptions(service Service, opts ScopeOptions) ([]string, 
 
 		return Scopes(service)
 	case ServiceTagManager:
+		if opts.Readonly {
+			return []string{"https://www.googleapis.com/auth/tagmanager.readonly"}, nil
+		}
+
 		return Scopes(service)
 	case ServiceBusinessProfile:
 		return Scopes(service)

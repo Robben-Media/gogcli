@@ -15,8 +15,9 @@ import (
 )
 
 var (
-	newAnalyticsDataService  = googleapi.NewAnalyticsData
-	newAnalyticsAdminService = googleapi.NewAnalyticsAdmin
+	newAnalyticsDataService       = googleapi.NewAnalyticsData
+	newAnalyticsAdminService      = googleapi.NewAnalyticsAdmin
+	newAnalyticsAdminAlphaService = googleapi.NewAnalyticsAdminAlpha
 )
 
 type AnalyticsCmd struct {

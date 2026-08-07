@@ -360,7 +360,7 @@ Many resources also accept a full `path` positional arg (e.g. `accounts/123/cont
 | **create** | `gog gtm user-permissions create` | `--account-id` (required); `--email` (required); `--account-access-type` (optional: noAccess, user, admin); `--container-access` (optional repeatable JSON) | JSON object |
 | **delete** | `gog gtm user-permissions delete <path>` | `path` (positional). `--force`. `confirmDestructive()`. | JSON `{"deleted": true}` |
 | **get** | `gog gtm user-permissions get <path>` | `path` (positional) | JSON object |
-| **list** | `gog gtm user-permissions list` | `--account-id` (required); `--max`, `--page` | JSON array, TSV: PERMISSION_ID, EMAIL, ACCOUNT_ACCESS |
+| **list** | `gog gtm user-permissions list` | `--account-id` (required); `--page` | JSON object with userPermissions array + nextPageToken, TSV: PERMISSION_ID, EMAIL, ACCOUNT_ACCESS |
 | **update** | `gog gtm user-permissions update <path>` | `path`; `--account-access-type`, `--container-access` (optional). Uses `flagProvided()`. | JSON object |
 
 **Test requirements:**

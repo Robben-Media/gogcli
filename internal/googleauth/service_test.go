@@ -312,6 +312,47 @@ func TestScopesForServiceWithOptions_ServiceKeep_Readonly(t *testing.T) {
 	}
 }
 
+func TestScopesForServiceWithOptions_TagManagerManageUsers(t *testing.T) {
+	writeScopes, err := scopesForServiceWithOptions(ServiceTagManager, ScopeOptions{})
+	if err != nil {
+		t.Fatalf("write scopes: %v", err)
+	}
+
+	if !containsScope(writeScopes, "https://www.googleapis.com/auth/tagmanager.manage.users") {
+		t.Fatalf("missing tagmanager.manage.users in %v", writeScopes)
+	}
+
+	readonlyScopes, err := scopesForServiceWithOptions(ServiceTagManager, ScopeOptions{Readonly: true})
+	if err != nil {
+		t.Fatalf("readonly scopes: %v", err)
+	}
+
+	if len(readonlyScopes) != 1 || readonlyScopes[0] != "https://www.googleapis.com/auth/tagmanager.readonly" {
+		t.Fatalf("unexpected readonly scopes: %v", readonlyScopes)
+	}
+}
+
+func TestScopesForServiceWithOptions_AnalyticsManageUsers(t *testing.T) {
+	writeScopes, err := scopesForServiceWithOptions(ServiceAnalytics, ScopeOptions{})
+	if err != nil {
+		t.Fatalf("write scopes: %v", err)
+	}
+
+	if !containsScope(writeScopes, "https://www.googleapis.com/auth/analytics.manage.users") {
+		t.Fatalf("missing analytics.manage.users in %v", writeScopes)
+	}
+
+	readonlyScopes, err := scopesForServiceWithOptions(ServiceAnalytics, ScopeOptions{Readonly: true})
+	if err != nil {
+		t.Fatalf("readonly scopes: %v", err)
+	}
+
+	if !containsScope(readonlyScopes, "https://www.googleapis.com/auth/analytics.readonly") ||
+		!containsScope(readonlyScopes, "https://www.googleapis.com/auth/analytics.manage.users.readonly") {
+		t.Fatalf("unexpected readonly scopes: %v", readonlyScopes)
+	}
+}
+
 func TestScopesForManageWithOptions_DriveScopeFile(t *testing.T) {
 	scopes, err := ScopesForManageWithOptions([]Service{ServiceDrive, ServiceDocs}, ScopeOptions{
 		DriveScope: DriveScopeFile,
