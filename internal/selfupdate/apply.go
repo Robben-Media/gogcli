@@ -45,22 +45,62 @@ func Check(ctx context.Context, client *Client, current string) (CheckResult, er
 	cur := NormalizeVersion(current)
 	// strip dirty suffixes from git describe e.g. 0.9.0-52-gae841c6-dirty
 	curBase := strings.Split(cur, "-")[0]
-	update := latest != "" && curBase != latest && curBase != "dev" && cur != ""
-	// also treat equal base as no update when current is pure tag
-	if cur == latest {
-		update = false
-	}
-	// If current is newer-looking dirty describe of same base, still allow if tag differs
-	if curBase == latest {
-		update = false
-	}
+	update := versionLess(curBase, latest)
 	assetName := AssetNameFor(rel.TagName)
 	return CheckResult{
 		Current: current,
 		Latest:  latest,
-		Update:  update && latest != curBase,
+		Update:  update,
 		Asset:   assetName,
 	}, nil
+}
+
+// versionLess reports whether a is strictly older than b (semver-ish X.Y.Z).
+// Non-numeric / empty a is treated as older when b is a normal version.
+func versionLess(a, b string) bool {
+	a = strings.TrimSpace(a)
+	b = strings.TrimSpace(b)
+	if b == "" || a == b {
+		return false
+	}
+	if a == "" || a == "dev" {
+		return true
+	}
+	ap := parseVersionParts(a)
+	bp := parseVersionParts(b)
+	if ap == nil || bp == nil {
+		// Fall back to string inequality only when both parse fail.
+		return a != b && bp != nil
+	}
+	for i := 0; i < 3; i++ {
+		if ap[i] < bp[i] {
+			return true
+		}
+		if ap[i] > bp[i] {
+			return false
+		}
+	}
+	return false
+}
+
+func parseVersionParts(v string) []int {
+	v = strings.Split(v, "-")[0]
+	parts := strings.Split(v, ".")
+	if len(parts) < 1 || len(parts) > 4 {
+		return nil
+	}
+	out := make([]int, 3)
+	for i := 0; i < len(parts) && i < 3; i++ {
+		n := 0
+		for _, ch := range parts[i] {
+			if ch < '0' || ch > '9' {
+				return nil
+			}
+			n = n*10 + int(ch-'0')
+		}
+		out[i] = n
+	}
+	return out
 }
 
 // Apply downloads the latest release binary and replaces DestPath.

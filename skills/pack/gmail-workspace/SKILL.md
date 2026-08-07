@@ -94,6 +94,11 @@ gog --no-input --account jeremy@robbenmedia.com gmail send --to "client@example.
 
 ## Study @learnings/LEARNINGS.md
 
+
+## Command accuracy
+
+Prefer `gog <group> --help` and subcommand `--help` when flags are uncertain; the live binary is the source of truth over any table in this skill.
+
 ## Keeping this skill current
 
 This skill is part of the **gog companion skill pack**. When `gog` reports an update is available, run:

@@ -114,3 +114,18 @@ func TestChecksumLineMatch(t *testing.T) {
 		t.Fatal("unexpected match")
 	}
 }
+
+func TestVersionLess(t *testing.T) {
+	if !versionLess("0.9.0", "0.10.0") {
+		t.Fatal("0.9 < 0.10")
+	}
+	if versionLess("0.10.0", "0.9.0") {
+		t.Fatal("0.10 should not be < 0.9")
+	}
+	if versionLess("1.0.0", "1.0.0") {
+		t.Fatal("equal")
+	}
+	if !versionLess("dev", "1.0.0") {
+		t.Fatal("dev older")
+	}
+}

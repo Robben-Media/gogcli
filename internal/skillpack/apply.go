@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/steipete/gogcli/skills"
 )
@@ -80,41 +79,58 @@ func UpdateInstalled(opts UpdateOptions) ([]ApplyResult, error) {
 			return nil, err
 		}
 		refs := bySkill[name]
-		if len(refs) == 0 {
-			if opts.Install {
-				root := opts.InstallRoot
-				if root == "" {
-					home := opts.Discover.HomeDir
-					if home == "" {
-						home, err = os.UserHomeDir()
-						if err != nil {
-							return nil, err
-						}
+		if opts.Install {
+			root := opts.InstallRoot
+			if root == "" {
+				home := opts.Discover.HomeDir
+				if home == "" {
+					home, err = os.UserHomeDir()
+					if err != nil {
+						return nil, err
 					}
-					root = filepath.Join(home, ".agents", "skills")
 				}
-				dest := filepath.Join(root, name)
+				root = filepath.Join(home, ".agents", "skills")
+			}
+			dest := filepath.Join(root, name)
+			needCanonical := true
+			for _, ref := range refs {
+				if filepath.Clean(ref.RealPath) == filepath.Clean(dest) {
+					needCanonical = false
+					break
+				}
+				// Also treat symlink into dest as present.
+				if real, err := filepath.EvalSymlinks(dest); err == nil && filepath.Clean(real) == filepath.Clean(ref.RealPath) {
+					needCanonical = false
+					break
+				}
+			}
+			if needCanonical {
 				if err := writeSkill(dest, name, managed); err != nil {
 					return results, err
 				}
-				if err := linkIntoOtherRoots(name, dest, opts.Discover); err != nil {
-					return results, err
+				_ = linkIntoOtherRoots(name, dest, opts.Discover) // best-effort; never fail install on symlink
+				destReal := dest
+				if real, err := filepath.EvalSymlinks(dest); err == nil {
+					destReal = filepath.Clean(real)
 				}
-				RecordWrite(&state, filepath.Clean(dest), name, packHash, opts.PackVersion)
+				RecordWrite(&state, destReal, name, packHash, opts.PackVersion)
 				stateDirty = true
 				results = append(results, ApplyResult{
 					Skill:    name,
 					Path:     dest,
-					RealPath: dest,
+					RealPath: destReal,
 					Action:   "installed",
 				})
-			} else {
-				results = append(results, ApplyResult{
-					Skill:  name,
-					Action: "skipped_not_installed",
-					Detail: "run: gog skills install",
-				})
+				// Re-discover is not required; continue to refresh other known refs below.
+				refs = append(refs, InstallRef{Skill: name, Path: dest, RealPath: destReal})
 			}
+		}
+		if len(refs) == 0 {
+			results = append(results, ApplyResult{
+				Skill:  name,
+				Action: "skipped_not_installed",
+				Detail: "run: gog skills install",
+			})
 			continue
 		}
 
@@ -130,6 +146,11 @@ func UpdateInstalled(opts UpdateOptions) ([]ApplyResult, error) {
 			kind := classify(diskHash, packHash, stateHash)
 			switch kind {
 			case StatusCurrent:
+				// Baseline ownership so the next pack change is "outdated", not "dirty".
+				if stateHash == "" {
+					RecordWrite(&state, ref.RealPath, name, packHash, opts.PackVersion)
+					stateDirty = true
+				}
 				results = append(results, ApplyResult{
 					Skill:    name,
 					Path:     ref.Path,
@@ -235,12 +256,8 @@ func linkIntoOtherRoots(skill, primary string, opts DiscoverOptions) error {
 		if err != nil {
 			relLink = primaryReal
 		}
-		if err := os.Symlink(relLink, linkPath); err != nil {
-			// Non-fatal if symlink unsupported; primary install still valid.
-			if !strings.Contains(err.Error(), "not supported") {
-				return fmt.Errorf("symlink %s -> %s: %w", linkPath, relLink, err)
-			}
-		}
+		// Symlinks are best-effort (Windows privilege errors, etc.).
+		_ = os.Symlink(relLink, linkPath)
 	}
 	return nil
 }

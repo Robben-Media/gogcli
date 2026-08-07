@@ -19,7 +19,7 @@ Use `gog drive` for managing Google Drive files, folders, and permissions.
 GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com drive ls --max 20
 
 # List files in a folder
-GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com drive ls --folder FOLDER_ID
+GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com drive ls --parent FOLDER_ID
 
 # Search for files
 GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com drive search "quarterly report"
@@ -28,23 +28,25 @@ GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedi
 GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com drive get FILE_ID
 
 # Upload a file
-GOG_KEYRING_PASSWORD=cli-tools gog --no-input --account jeremy@robbenmedia.com drive upload ./report.pdf --folder FOLDER_ID
+GOG_KEYRING_PASSWORD=cli-tools gog --no-input --account jeremy@robbenmedia.com drive upload ./report.pdf --parent FOLDER_ID
 ```
 
 ## Available Commands
 
 | Command | Description | Key Flags |
 |---------|-------------|-----------|
-| `ls` | List files and folders | `--folder`, `--max`, `--type`, `--page` |
-| `search <query>` | Full-text search | `--max`, `--type` |
+| `ls` | List files and folders | `--parent`, `--max`, `--page` |
+| `search <query>` | Full-text search | `--max` |
 | `get <fileId>` | Get file metadata | |
-| `upload <file>` | Upload a file | `--folder`, `--name` |
-| `download <fileId>` | Download a file | `--output` |
+| `upload <file>` | Upload a file | `--parent`, `--name` |
+| `download <fileId>` | Download a file | `--out` |
 | `mkdir <name>` | Create a folder | `--parent` |
-| `mv <fileId> <folderId>` | Move a file | |
-| `cp <fileId>` | Copy a file | `--name` |
-| `rm <fileId>` | Move to trash | |
-| `share <fileId>` | Manage permissions | `--email`, `--role` |
+| `move <fileId>` | Move a file | `--parent` (required) |
+| `copy <fileId>` | Copy a file | `--name`, `--parent` |
+| `delete <fileId>` / `rm` | Trash or delete | see `gog drive --help` |
+| `permissions` | Manage sharing | see `gog drive permissions --help` |
+
+Prefer `gog drive --help` and subcommand `--help` when unsure — flags drift less often than skill tables.
 
 ## Output Format
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"testing"
 	"time"
 
 	"github.com/steipete/gogcli/internal/config"
@@ -76,8 +77,8 @@ func MaybeNotify(ctx context.Context, client *Client, current string, interval t
 	if os.Getenv("GOG_SKIP_UPDATE_CHECK") == "1" || os.Getenv("GOG_SKIP_UPDATE_CHECK") == "true" {
 		return ""
 	}
-	// Avoid network during `go test`.
-	if os.Getenv("GOG_TEST") == "1" {
+	// Avoid network during `go test` and when callers set GOG_TEST=1.
+	if testing.Testing() || os.Getenv("GOG_TEST") == "1" {
 		return ""
 	}
 	cache, _ := LoadCheckCache()
