@@ -40,9 +40,9 @@ type InstallRef struct {
 
 // DiscoverOptions controls where we look for pack skills.
 type DiscoverOptions struct {
-	HomeDir     string
-	ProjectDir  string
-	HomeRoots   []string
+	HomeDir      string
+	ProjectDir   string
+	HomeRoots    []string
 	ProjectRoots []string
 }
 

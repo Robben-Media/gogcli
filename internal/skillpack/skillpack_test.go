@@ -65,7 +65,7 @@ func TestDirtySkipAndForce(t *testing.T) {
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// Write pack content first via Update with empty state treating as dirty... 
+	// Write pack content first via Update with empty state treating as dirty...
 	// Seed with pack content and record state, then edit.
 	packBytes, err := skills.ReadManagedFile("google-docs", "SKILL.md")
 	if err != nil {

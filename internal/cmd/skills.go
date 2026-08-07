@@ -13,8 +13,8 @@ import (
 
 // SkillsCmd manages the companion skill pack for this CLI.
 type SkillsCmd struct {
-	Status SkillsStatusCmd `cmd:"" help:"Show pack skill install status (pack skills only)"`
-	Update SkillsUpdateCmd `cmd:"" help:"Refresh installed pack skills (skip local edits unless --force)"`
+	Status  SkillsStatusCmd  `cmd:"" help:"Show pack skill install status (pack skills only)"`
+	Update  SkillsUpdateCmd  `cmd:"" help:"Refresh installed pack skills (skip local edits unless --force)"`
 	Install SkillsInstallCmd `cmd:"" help:"Install pack skills into ~/.agents/skills and link other agent roots"`
 }
 

@@ -12,9 +12,9 @@ import (
 
 // State tracks last-written pack hashes so we can detect local edits.
 type State struct {
-	Version int                    `json:"version"`
-	Paths   map[string]PathState   `json:"paths"`
-	Updated time.Time              `json:"updated_at"`
+	Version int                  `json:"version"`
+	Paths   map[string]PathState `json:"paths"`
+	Updated time.Time            `json:"updated_at"`
 }
 
 // PathState is the last install record for one real skill directory.

@@ -18,10 +18,10 @@ import (
 
 // ApplyOptions controls binary replacement.
 type ApplyOptions struct {
-	Client      *Client
-	CurrentVer  string
-	Force       bool // allow replacing dev/dirty builds
-	DestPath    string // default: os.Executable()
+	Client     *Client
+	CurrentVer string
+	Force      bool   // allow replacing dev/dirty builds
+	DestPath   string // default: os.Executable()
 }
 
 // CheckResult is a non-mutating version comparison.
