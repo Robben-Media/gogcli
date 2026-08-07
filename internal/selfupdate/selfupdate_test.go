@@ -85,6 +85,7 @@ func TestCheckAndApply(t *testing.T) {
 	assetName := AssetNameFor("v9.9.9")
 
 	var srv *httptest.Server
+
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/releases/latest"):

@@ -158,7 +158,7 @@ func Apply(ctx context.Context, opts ApplyOptions) (CheckResult, error) {
 	}
 
 	var buf bytes.Buffer
-	if err := client.Download(ctx, asset.BrowserDownloadURL, &buf); err != nil {
+	if err = client.Download(ctx, asset.BrowserDownloadURL, &buf); err != nil {
 		return check, err
 	}
 
@@ -166,7 +166,7 @@ func Apply(ctx context.Context, opts ApplyOptions) (CheckResult, error) {
 
 	if checksums.BrowserDownloadURL != "" {
 		var cbuf bytes.Buffer
-		if err := client.Download(ctx, checksums.BrowserDownloadURL, &cbuf); err != nil {
+		if err = client.Download(ctx, checksums.BrowserDownloadURL, &cbuf); err != nil {
 			return check, fmt.Errorf("download checksums: %w", err)
 		}
 

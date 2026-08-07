@@ -158,7 +158,7 @@ func reexecSkillsPhase(forceSkills bool) error {
 	}
 
 	//nolint:gosec // re-exec of the just-installed gog binary path
-	cmd := exec.Command(exe, args...)
+	cmd := exec.CommandContext(context.Background(), exe, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin

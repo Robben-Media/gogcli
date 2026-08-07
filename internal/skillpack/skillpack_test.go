@@ -80,8 +80,8 @@ func TestDirtySkipAndForce(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), packBytes, 0o644); err != nil {
-		t.Fatal(err)
+	if writeErr := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), packBytes, 0o644); writeErr != nil {
+		t.Fatal(writeErr)
 	}
 
 	res, err := UpdateInstalled(UpdateOptions{
@@ -96,25 +96,25 @@ func TestDirtySkipAndForce(t *testing.T) {
 		t.Fatalf("expected skipped_current, got %s (%+v)", got, res)
 	}
 
-	packHash, err := PackHashFor("google-docs")
-	if err != nil {
-		t.Fatal(err)
+	packHash, hashErr := PackHashFor("google-docs")
+	if hashErr != nil {
+		t.Fatal(hashErr)
 	}
 
-	st, err := LoadState()
-	if err != nil {
-		t.Fatal(err)
+	st, loadErr := LoadState()
+	if loadErr != nil {
+		t.Fatal(loadErr)
 	}
 
 	resolved, _ := filepath.EvalSymlinks(skillDir)
 	RecordWrite(&st, filepath.Clean(resolved), "google-docs", packHash, "test")
 
-	if err := SaveState(st); err != nil {
-		t.Fatal(err)
+	if saveErr := SaveState(st); saveErr != nil {
+		t.Fatal(saveErr)
 	}
 
-	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: google-docs\ndescription: local edit\n---\n# edited\n"), 0o644); err != nil {
-		t.Fatal(err)
+	if writeErr := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: google-docs\ndescription: local edit\n---\n# edited\n"), 0o644); writeErr != nil {
+		t.Fatal(writeErr)
 	}
 
 	res, err = UpdateInstalled(UpdateOptions{
@@ -207,8 +207,8 @@ func TestOutdatedUpdatesWithoutForce(t *testing.T) {
 
 	RecordWrite(&st, realDir, "google-sheets", oldHash, "old")
 
-	if err := SaveState(st); err != nil {
-		t.Fatal(err)
+	if saveErr := SaveState(st); saveErr != nil {
+		t.Fatal(saveErr)
 	}
 
 	res, err := UpdateInstalled(UpdateOptions{

@@ -76,6 +76,7 @@ func UpdateInstalled(opts UpdateOptions) ([]ApplyResult, error) {
 		}
 
 		results = append(results, installResults...)
+
 		if installStateDirty {
 			stateDirty = true
 		}
@@ -90,12 +91,16 @@ func UpdateInstalled(opts UpdateOptions) ([]ApplyResult, error) {
 			continue
 		}
 
-		pathResults, pathStateDirty, err := applyRefs(name, refs, packHash, managed, opts, &state)
+		var pathStateDirty bool
+		var pathResults []ApplyResult
+
+		pathResults, pathStateDirty, err = applyRefs(name, refs, packHash, managed, opts, &state)
 		if err != nil {
 			return results, err
 		}
 
 		results = append(results, pathResults...)
+
 		if pathStateDirty {
 			stateDirty = true
 		}
@@ -112,6 +117,7 @@ func UpdateInstalled(opts UpdateOptions) ([]ApplyResult, error) {
 
 func buildSkillFilter(all, only []string) map[string]struct{} {
 	skillFilter := map[string]struct{}{}
+
 	if len(only) > 0 {
 		for _, s := range only {
 			skillFilter[s] = struct{}{}
@@ -129,6 +135,7 @@ func buildSkillFilter(all, only []string) map[string]struct{} {
 
 func filteredNames(all []string, filter map[string]struct{}) []string {
 	var names []string
+
 	for _, s := range all {
 		if _, ok := filter[s]; ok {
 			names = append(names, s)
@@ -140,6 +147,7 @@ func filteredNames(all []string, filter map[string]struct{}) []string {
 
 func groupInstalls(installs []InstallRef) map[string][]InstallRef {
 	bySkill := map[string][]InstallRef{}
+
 	for _, inst := range installs {
 		bySkill[inst.Skill] = append(bySkill[inst.Skill], inst)
 	}
@@ -291,7 +299,6 @@ func applyRefs(
 }
 
 func writeSkill(destDir, skill string, managed []string) error {
-	//nolint:gosec // skill dirs are user agent skill roots
 	if err := os.MkdirAll(destDir, 0o750); err != nil {
 		return fmt.Errorf("mkdir %s: %w", destDir, err)
 	}
@@ -304,7 +311,6 @@ func writeSkill(destDir, skill string, managed []string) error {
 
 		target := filepath.Join(destDir, rel)
 
-		//nolint:gosec // parent of managed skill file
 		if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
 			return fmt.Errorf("mkdir parent: %w", err)
 		}
@@ -354,9 +360,9 @@ func linkIntoOtherRoots(skill, primary string, opts DiscoverOptions) error {
 			continue
 		}
 
-		if _, err := os.Lstat(linkPath); err == nil {
+		if _, lstatErr := os.Lstat(linkPath); lstatErr == nil {
 			continue
-		} else if !os.IsNotExist(err) {
+		} else if !os.IsNotExist(lstatErr) {
 			// Best-effort: ignore unexpected lstat errors for optional roots.
 			continue
 		}
