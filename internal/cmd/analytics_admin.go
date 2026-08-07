@@ -2,6 +2,7 @@ package cmd
 
 // AnalyticsAdminCmd groups all GA4 Admin API operations.
 type AnalyticsAdminCmd struct {
+	AccessBindings   AAAccessBindingsCmd   `cmd:"" name:"access-bindings" help:"Manage account and property user access"`
 	DataStreams      AADataStreamsCmd      `cmd:"" name:"data-streams" help:"Data stream operations"`
 	MpSecrets        AAMpSecretsCmd        `cmd:"" name:"mp-secrets" help:"Measurement Protocol secret operations"`
 	Accounts         AAAccountsCmd         `cmd:"" name:"accounts" help:"Account operations"`

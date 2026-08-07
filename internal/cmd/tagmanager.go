@@ -16,13 +16,14 @@ import (
 var newTagManagerService = googleapi.NewTagManager
 
 type TagManagerCmd struct {
-	Accounts   TagManagerAccountsCmd   `cmd:"" name:"accounts" group:"Read" help:"List GTM accounts"`
-	Containers TagManagerContainersCmd `cmd:"" name:"containers" group:"Read" help:"List containers in an account"`
-	Tags       TagManagerTagsCmd       `cmd:"" name:"tags" group:"Read" help:"List tags in a workspace"`
-	Tag        TagManagerTagCmd        `cmd:"" name:"tag" group:"Read" help:"Get a single tag by path"`
-	Triggers   TagManagerTriggersCmd   `cmd:"" name:"triggers" group:"Read" help:"List triggers in a workspace"`
-	Variables  TagManagerVariablesCmd  `cmd:"" name:"variables" group:"Read" help:"List variables in a workspace"`
-	Versions   TagManagerVersionsCmd   `cmd:"" name:"versions" group:"Read" help:"List container version headers"`
+	Accounts        TagManagerAccountsCmd        `cmd:"" name:"accounts" group:"Read" help:"List GTM accounts"`
+	Containers      TagManagerContainersCmd      `cmd:"" name:"containers" group:"Read" help:"List containers in an account"`
+	Tags            TagManagerTagsCmd            `cmd:"" name:"tags" group:"Read" help:"List tags in a workspace"`
+	Tag             TagManagerTagCmd             `cmd:"" name:"tag" group:"Read" help:"Get a single tag by path"`
+	Triggers        TagManagerTriggersCmd        `cmd:"" name:"triggers" group:"Read" help:"List triggers in a workspace"`
+	Variables       TagManagerVariablesCmd       `cmd:"" name:"variables" group:"Read" help:"List variables in a workspace"`
+	Versions        TagManagerVersionsCmd        `cmd:"" name:"versions" group:"Read" help:"List container version headers"`
+	UserPermissions TagManagerUserPermissionsCmd `cmd:"" name:"user-permissions" group:"Admin" help:"Manage GTM user permissions"`
 }
 
 func gtmWorkspacePath(accountID, containerID, workspaceID string) string {

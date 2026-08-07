@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	analyticsadminalpha "google.golang.org/api/analyticsadmin/v1alpha"
 	analyticsadmin "google.golang.org/api/analyticsadmin/v1beta"
 	analyticsdata "google.golang.org/api/analyticsdata/v1beta"
 
@@ -15,6 +16,16 @@ func NewAnalyticsData(ctx context.Context, email string) (*analyticsdata.Service
 		return nil, fmt.Errorf("analytics data options: %w", err)
 	} else if svc, err := analyticsdata.NewService(ctx, opts...); err != nil {
 		return nil, fmt.Errorf("create analytics data service: %w", err)
+	} else {
+		return svc, nil
+	}
+}
+
+func NewAnalyticsAdminAlpha(ctx context.Context, email string) (*analyticsadminalpha.Service, error) {
+	if opts, err := optionsForAccount(ctx, googleauth.ServiceAnalytics, email); err != nil {
+		return nil, fmt.Errorf("analytics admin alpha options: %w", err)
+	} else if svc, err := analyticsadminalpha.NewService(ctx, opts...); err != nil {
+		return nil, fmt.Errorf("create analytics admin alpha service: %w", err)
 	} else {
 		return svc, nil
 	}

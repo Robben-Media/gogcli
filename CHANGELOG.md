@@ -5,6 +5,8 @@
 ### Added
 
 - Docs: `gog docs create` now uses Docs API `documents.create`, returns full document metadata (including `revisionId`), and still supports `--parent` via Drive move.
+- Analytics: add account and property user access management with `gog analytics admin access-bindings`.
+- Tag Manager: add account user permission management with `gog gtm user-permissions`.
 - APIs: add Google BigQuery, Analytics (GA4), Search Console, Tag Manager, YouTube Data API v3, and Business Profile command groups.
 - Gmail: add `gog gmail trash` and `gog gmail labels delete`.
 - Sheets: add batch operations (`batch-get`, `batch-update`) and sheet tab management commands.
