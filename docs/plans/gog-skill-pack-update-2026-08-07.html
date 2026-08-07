@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>gog CLI — Skill Pack + Self-Update Plan</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17202a;
+      --muted: #5f6b7a;
+      --line: #d8dee8;
+      --soft: #f5f7fa;
+      --accent: #146c7c;
+      --accent-soft: #e5f4f6;
+      --good: #23633a;
+      --good-soft: #e7f5eb;
+      --warn: #8a5a00;
+      --warn-soft: #fff5d8;
+      --bad: #8f2f2f;
+      --bad-soft: #fde8e8;
+    }
+    body { margin: 0; background: #fff; color: var(--ink); font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { max-width: 960px; margin: 0 auto; padding: 40px 24px 72px; }
+    header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 20px; }
+    h1 { font-size: 30px; line-height: 1.15; margin: 0 0 8px; }
+    h2 { font-size: 20px; margin: 32px 0 12px; }
+    h3 { font-size: 16px; margin: 24px 0 8px; }
+    p, li { color: var(--ink); }
+    .muted { color: var(--muted); }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--muted); font-size: 13px; }
+    .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 600; }
+    .box { background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin: 12px 0; }
+    .good { background: var(--good-soft); border-color: #c5e6cf; }
+    .warn { background: var(--warn-soft); border-color: #f0df9a; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; font-size: 14px; }
+    th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: var(--soft); }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+    pre { background: #0f1720; color: #e8eef5; padding: 14px 16px; border-radius: 10px; overflow-x: auto; }
+    ul { padding-left: 1.25rem; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="pill">Robben Media · gogcli</div>
+    <h1>Skill pack + self-update for gog CLI</h1>
+    <p class="muted">CLI-scoped companion skills update with the binary. Agents get a notice, can run update, skip dirty skills, and report skips to the user.</p>
+    <div class="meta">
+      <span>Date: 2026-08-07</span>
+      <span>Branch: <code>feat/skill-pack-update</code></span>
+      <span>Repo: <code>Robben-Media/gogcli</code></span>
+      <span>Spec for Codex <code>/code-review</code></span>
+    </div>
+  </header>
+
+  <section>
+    <h2>1. Goal</h2>
+    <p>When gog ships a release, machines that already use gog should be able to:</p>
+    <ol>
+      <li>Learn that a newer binary exists (notice on use / explicit check).</li>
+      <li>Upgrade the binary with one command.</li>
+      <li>Refresh <strong>only</strong> the Google/gog companion skills that ship with this CLI — never unrelated agent skills.</li>
+      <li>Find those skills wherever they already live (<code>.agents</code>, <code>.claude</code>, etc.).</li>
+      <li>If a skill was locally edited: <strong>skip</strong> by default (agent-safe); allow force overwrite for intentional human runs; always report skips so an agent can tell the user.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>2. Skill pack (in-repo source of truth)</h2>
+    <p>Canonical pack lives in the gogcli repo (not “whatever is on the machine”):</p>
+    <pre>skills/
+  manifest.json
+  embed.go              # go:embed pack + manifest
+  pack/
+    gmail-personal/SKILL.md
+    gmail-workspace/SKILL.md
+    google-analytics/SKILL.md
+    google-business-profile/SKILL.md
+    google-calendar/SKILL.md
+    google-docs/SKILL.md
+    google-drive/SKILL.md
+    google-search-console/SKILL.md
+    google-sheets/SKILL.md
+    google-tag-manager/SKILL.md</pre>
+
+    <div class="box">
+      <strong>Managed files only:</strong> <code>SKILL.md</code> per skill.<br>
+      <strong>Never managed:</strong> <code>learnings/</code>, local notes, agent memory files under the skill dir.
+    </div>
+
+    <h3>Manifest (names only — no other skills)</h3>
+    <pre>{
+  "name": "gogcli",
+  "skills": [
+    "gmail-personal",
+    "gmail-workspace",
+    "google-analytics",
+    "google-business-profile",
+    "google-calendar",
+    "google-docs",
+    "google-drive",
+    "google-search-console",
+    "google-sheets",
+    "google-tag-manager"
+  ],
+  "managed_files": ["SKILL.md"]
+}</pre>
+  </section>
+
+  <section>
+    <h2>3. Discovery</h2>
+    <p>For each manifest skill name, search known agent skill roots under the user home (and optional project cwd):</p>
+    <ul>
+      <li><code>~/.agents/skills/&lt;name&gt;</code></li>
+      <li><code>~/.claude/skills/&lt;name&gt;</code></li>
+      <li><code>~/.codex/skills/&lt;name&gt;</code></li>
+      <li><code>~/.cursor/skills/&lt;name&gt;</code></li>
+      <li><code>~/.grok/skills/&lt;name&gt;</code></li>
+      <li><code>~/.factory/skills/&lt;name&gt;</code></li>
+      <li><code>~/.config/agents/skills/&lt;name&gt;</code></li>
+      <li>Project: <code>&lt;cwd&gt;/.agents/skills/&lt;name&gt;</code>, <code>&lt;cwd&gt;/.claude/skills/&lt;name&gt;</code> when present</li>
+    </ul>
+    <p>Resolve symlinks to real paths and <strong>dedupe</strong> (Jeremy’s setup: <code>.claude/skills/*</code> → <code>.agents/skills/*</code>). Update the real directory once.</p>
+    <p>If a skill is not installed anywhere: leave it alone (no mass install unless <code>gog skills install</code>).</p>
+  </section>
+
+  <section>
+    <h2>4. Dirty / outdated detection</h2>
+    <p>State file: <code>~/.config/gogcli/skill-pack-state.json</code> records last content hash written per real path.</p>
+    <table>
+      <thead><tr><th>Condition</th><th>Status</th><th>Default action</th></tr></thead>
+      <tbody>
+        <tr><td>No install path</td><td><code>not_installed</code></td><td>Skip (unless install)</td></tr>
+        <tr><td>Disk hash == pack hash</td><td><code>current</code></td><td>No-op</td></tr>
+        <tr><td>Disk hash == last-written hash ≠ pack</td><td><code>outdated</code></td><td>Update</td></tr>
+        <tr><td>Disk hash ≠ pack and ≠ last-written (or no state)</td><td><code>dirty</code></td><td><strong>Skip</strong> unless <code>--force</code></td></tr>
+      </tbody>
+    </table>
+    <div class="box warn">
+      <strong>Agent policy:</strong> never force-overwrite dirty skills. Print skip lines so the agent can tell the user.<br>
+      <strong>Human policy:</strong> pass <code>--force</code> / <code>--force-skills</code> when pack should win.
+    </div>
+  </section>
+
+  <section>
+    <h2>5. CLI surface</h2>
+    <table>
+      <thead><tr><th>Command</th><th>Behavior</th></tr></thead>
+      <tbody>
+        <tr><td><code>gog update</code></td><td>Binary self-update from GitHub Releases + skill refresh (pack-only, skip dirty)</td></tr>
+        <tr><td><code>gog update --skills-only</code></td><td>Skills only</td></tr>
+        <tr><td><code>gog update --binary-only</code></td><td>Binary only</td></tr>
+        <tr><td><code>gog update --force-skills</code></td><td>Overwrite dirty pack skills</td></tr>
+        <tr><td><code>gog update --force-binary</code></td><td>Allow replacing dev/dirty binaries</td></tr>
+        <tr><td><code>gog skills status</code></td><td>List pack skills, install paths, current/outdated/dirty/not_installed</td></tr>
+        <tr><td><code>gog skills update</code></td><td>Refresh installed pack skills (skip dirty)</td></tr>
+        <tr><td><code>gog skills update --overwrite-local</code></td><td>Overwrite dirty (human)</td></tr>
+        <tr><td><code>gog skills install</code></td><td>Ensure pack skills exist under <code>~/.agents/skills</code> (and symlink into other existing agent skill roots if missing)</td></tr>
+        <tr><td><code>gog version</code> / use of any command</td><td>Throttled update check → stderr notice (optional skip via env)</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Agent-parseable notices (stderr)</h3>
+    <pre>gog: update available 0.9.0 → 0.10.0; run: gog update
+gog: skills updated: google-calendar, google-drive
+gog: skills skipped (local edits): gmail-workspace @ /Users/…/.agents/skills/gmail-workspace
+     re-run with: gog skills update --overwrite-local
+gog: skills not installed: google-tag-manager — run: gog skills install</pre>
+  </section>
+
+  <section>
+    <h2>6. Binary self-update</h2>
+    <ul>
+      <li>Source: GitHub Releases for <code>Robben-Media/gogcli</code> (override with <code>GOG_UPDATE_REPO</code>).</li>
+      <li>Use existing GoReleaser asset naming: <code>gogcli_&lt;version&gt;_&lt;os&gt;_&lt;arch&gt;.tar.gz</code> (+ windows zip).</li>
+      <li>Verify against <code>checksums.txt</code> when present.</li>
+      <li>Atomic replace of the running binary path (<code>os.Executable()</code>).</li>
+      <li>Refuse auto-replace for obvious local-dev builds if version is empty/<code>dev</code> unless <code>--force</code>.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>7. Check-on-use (LLM notification)</h2>
+    <ul>
+      <li>At most once per 24h (state: <code>~/.config/gogcli/update-check.json</code>).</li>
+      <li>Non-fatal; network errors silent.</li>
+      <li>Disable: <code>GOG_SKIP_UPDATE_CHECK=1</code> or <code>--no-input</code> paths that must stay quiet can still show check only on successful version compare (prefer always stderr only).</li>
+      <li>Does not auto-upgrade; only prints the notice. Agent/skill text: if notice appears, run <code>gog update</code> then retry.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>8. Implementation layout</h2>
+    <div class="grid">
+      <div class="box">
+        <strong>packages</strong>
+        <ul>
+          <li><code>skills/</code> — embed + pack files</li>
+          <li><code>internal/skillpack/</code> — discover, hash, state, apply</li>
+          <li><code>internal/selfupdate/</code> — GitHub release check + apply</li>
+          <li><code>internal/cmd/update.go</code>, <code>skills.go</code></li>
+        </ul>
+      </div>
+      <div class="box">
+        <strong>docs / release</strong>
+        <ul>
+          <li>CHANGELOG Unreleased</li>
+          <li>RELEASING.md: skills ship in git + binary; no separate skill artifact required (embedded)</li>
+          <li>README install: mention <code>gog update</code> / <code>gog skills install</code></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>9. Phased delivery (this PR)</h2>
+    <ol>
+      <li>Import 10 SKILL.md files into <code>skills/pack/</code> + manifest + embed.</li>
+      <li><code>skillpack</code> library with unit tests (hash, dirty, discover, apply, symlink dedupe).</li>
+      <li><code>gog skills status|update|install</code>.</li>
+      <li><code>selfupdate</code> check + apply (tests with httptest fixtures).</li>
+      <li><code>gog update</code> composing both.</li>
+      <li>Throttled check-on-use wired from root execute path.</li>
+      <li>Focused tests + <code>make test</code> / package tests green.</li>
+      <li>Codex <code>/code-review</code> vs <code>main</code> using this plan as Spec; address blocking findings before merge.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>10. Explicit non-goals</h2>
+    <ul>
+      <li>Do not update Matt Pocock / Vercel / unrelated skills.</li>
+      <li>Do not reimplement skills.sh.</li>
+      <li>Do not overwrite <code>learnings/</code>.</li>
+      <li>Do not push updates to machines (pull-on-use only).</li>
+      <li>Do not publish personal keyring passwords as new secrets (existing skill examples may retain local conventions already on disk).</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>11. Acceptance criteria</h2>
+    <ul>
+      <li><code>gog skills status</code> lists all 10 pack skills and finds existing installs under <code>~/.agents</code> / <code>~/.claude</code>.</li>
+      <li>Editing a managed <code>SKILL.md</code> causes skip without <code>--force</code>; message names path.</li>
+      <li>Clean outdated skill is rewritten; <code>learnings/</code> untouched.</li>
+      <li><code>gog update --skills-only</code> never touches non-pack skill dirs.</li>
+      <li>Binary check returns structured “update available” line without upgrading when not asked.</li>
+      <li>Codex code-review completed against this plan; merge only after review disposition.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>12. Review gate</h2>
+    <div class="box good">
+      Before merge: run a Codex session with the repo’s <code>/code-review</code> skill against fixed point <code>main</code>, Spec = this document.
+      Fix blocking Standards/Spec findings; re-run or note residual nits.
+    </div>
+  </section>
+</main>
+</body>
+</html>
