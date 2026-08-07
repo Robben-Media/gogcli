@@ -17,6 +17,7 @@ import (
 	"github.com/steipete/gogcli/internal/googleauth"
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/secrets"
+	"github.com/steipete/gogcli/internal/selfupdate"
 	"github.com/steipete/gogcli/internal/ui"
 )
 
@@ -68,6 +69,8 @@ type CLI struct {
 	BusinessProfile BusinessProfileCmd    `cmd:"" aliases:"gbp,business" help:"Google Business Profile"`
 	Config          ConfigCmd             `cmd:"" help:"Manage configuration"`
 	Policy          PolicyCmd             `cmd:"" help:"Manage command safety policies"`
+	Update          UpdateCmd             `cmd:"" help:"Update gog binary and companion Google skills"`
+	Skills          SkillsCmd             `cmd:"" help:"Manage companion Google skill pack (pack skills only)"`
 	VersionCmd      VersionCmd            `cmd:"" name:"version" help:"Print version"`
 	Completion      CompletionCmd         `cmd:"" help:"Generate shell completion scripts"`
 	Complete        CompletionInternalCmd `cmd:"" name:"__complete" hidden:"" help:"Internal completion helper"`
@@ -154,6 +157,14 @@ func Execute(args []string) (err error) {
 
 	kctx.BindTo(ctx, (*context.Context)(nil))
 	kctx.Bind(&cli.RootFlags)
+
+	// Throttled non-fatal update notice for humans and agents (stderr only).
+	if notice := selfupdate.MaybeNotify(ctx, &selfupdate.Client{
+		Repo:  strings.TrimSpace(os.Getenv("GOG_UPDATE_REPO")),
+		Token: envOr("GITHUB_TOKEN", envOr("GH_TOKEN", "")),
+	}, version, 0); notice != "" {
+		_, _ = fmt.Fprintln(os.Stderr, notice)
+	}
 
 	err = kctx.Run()
 	if err == nil {

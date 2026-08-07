@@ -51,6 +51,28 @@ Run:
 ./bin/gog --help
 ```
 
+### Updates (binary + companion skills)
+
+This fork can pull newer binaries from GitHub Releases and refresh **only** the Google companion skills that ship with gog (not unrelated agent skills):
+
+```bash
+# Notice on use (stderr) when a newer release exists, or:
+gog update --check
+
+# Upgrade binary + refresh installed pack skills (skips local skill edits)
+gog update
+
+# Skills only
+gog skills status
+gog skills update
+gog skills install                 # ensure pack skills under ~/.agents/skills
+gog skills update --overwrite-local  # human: replace dirty pack skills
+```
+
+Agents: if output says `skills skipped (local edits)`, tell the user — do not force-overwrite unless asked.
+
+Disable background update checks: `GOG_SKIP_UPDATE_CHECK=1`.
+
 Help:
 
 - `gog --help` shows top-level command groups.

@@ -4,6 +4,10 @@
 
 ### Added
 
+- CLI: `gog update` self-updates the binary from GitHub Releases and refreshes the embedded companion Google skill pack (pack skills only).
+- CLI: `gog skills status|update|install` discovers pack skills under agent skill roots (`.agents`, `.claude`, `.codex`, etc.), skips locally edited skills by default, and never touches non-pack skills or `learnings/`.
+- CLI: throttled stderr notice when a newer release is available (`GOG_SKIP_UPDATE_CHECK=1` to disable).
+- Skills: ship 10 companion skills under `skills/pack/` (Gmail personal/workspace, Analytics, Business Profile, Calendar, Docs, Drive, Search Console, Sheets, Tag Manager).
 - Docs: `gog docs create` now uses Docs API `documents.create`, returns full document metadata (including `revisionId`), and still supports `--parent` via Drive move.
 - Analytics: add account and property user access management with `gog analytics admin access-bindings`.
 - Tag Manager: add account user permission management with `gog gtm user-permissions`.

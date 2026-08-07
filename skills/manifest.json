@@ -1,0 +1,16 @@
+{
+  "name": "gogcli",
+  "skills": [
+    "gmail-personal",
+    "gmail-workspace",
+    "google-analytics",
+    "google-business-profile",
+    "google-calendar",
+    "google-docs",
+    "google-drive",
+    "google-search-console",
+    "google-sheets",
+    "google-tag-manager"
+  ],
+  "managed_files": ["SKILL.md"]
+}
