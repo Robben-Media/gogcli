@@ -48,7 +48,7 @@
           <a href="#quickstart">Quickstart</a>
           <a href="#features">Features</a>
           <a href="#examples">Examples</a>
-          <a class="nav__cta" href="https://github.com/steipete/gogcli">GitHub</a>
+          <a class="nav__cta" href="https://github.com/Robben-Media/gogcli">GitHub</a>
         </nav>
       </div>
     </header>
@@ -82,7 +82,7 @@
 
             <div class="hero__actions">
               <a class="btn btn--primary" href="#install">Install</a>
-              <a class="btn btn--ghost" href="https://github.com/steipete/gogcli#quick-start">Readme</a>
+              <a class="btn btn--ghost" href="https://github.com/Robben-Media/gogcli#quick-start">Readme</a>
             </div>
 
             <p class="note">
@@ -102,7 +102,9 @@
               </div>
               <div class="term__body">
                 <pre class="term__pre"><code id="demo">
-$ brew install steipete/tap/gogcli
+$ git clone https://github.com/Robben-Media/gogcli.git
+$ cd gogcli && make build
+$ install -m 755 bin/gog ~/.local/bin/gog
 $ gog auth credentials ~/Downloads/client_secret.json
 $ gog auth add you@gmail.com
 
@@ -136,20 +138,22 @@ $ gog drive ls --query "mimeType='application/pdf'" --max 3
         <div class="wrap section__grid">
           <div>
             <h2>Install</h2>
-            <p class="muted">Homebrew tap, or build from source.</p>
+            <p class="muted">Build and install the independently maintained Robben Media fork.</p>
           </div>
 
           <div class="cols">
             <div class="card block">
-              <h3>Homebrew</h3>
-              <pre class="code"><code>brew install steipete/tap/gogcli</code></pre>
+              <h3>From the Robben Media fork</h3>
+              <pre class="code"><code>git clone https://github.com/Robben-Media/gogcli.git
+cd gogcli
+make build
+install -m 755 bin/gog ~/.local/bin/gog</code></pre>
             </div>
             <div class="card block">
-              <h3>From source</h3>
-              <pre class="code"><code>git clone https://github.com/steipete/gogcli.git
-cd gogcli
-make
-./bin/gog --help</code></pre>
+              <h3>Verify</h3>
+              <pre class="code"><code>gog --version
+gog --help</code></pre>
+              <p class="muted">Upstream Homebrew taps and go-install shortcuts are not supported for this fork.</p>
             </div>
           </div>
         </div>
@@ -264,8 +268,8 @@ gog slides export &lt;presentationId&gt; --format pptx --out ./deck.pptx</code><
           </div>
 
           <div class="footerline">
-            <a class="btn btn--primary" href="https://github.com/steipete/gogcli">Go to GitHub</a>
-            <a class="btn btn--ghost" href="https://github.com/steipete/gogcli/blob/main/CHANGELOG.md">Changelog</a>
+            <a class="btn btn--primary" href="https://github.com/Robben-Media/gogcli">Go to GitHub</a>
+            <a class="btn btn--ghost" href="https://github.com/Robben-Media/gogcli/blob/main/CHANGELOG.md">Changelog</a>
           </div>
         </div>
       </section>
@@ -279,15 +283,15 @@ gog slides export &lt;presentationId&gt; --format pptx --out ./deck.pptx</code><
             <span>gog</span>
           </div>
           <div class="sitefoot__small">
-            <span>Built by <a href="https://steipete.me">Peter Steinberger</a>.</span>
+            <span>Originally created by <a href="https://steipete.me">Peter Steinberger</a>; independently maintained by Robben Media.</span>
             <span class="sep" aria-hidden="true">·</span>
-            <a href="https://github.com/steipete/gogcli/blob/main/LICENSE">MIT</a>
+            <a href="https://github.com/Robben-Media/gogcli/blob/main/LICENSE">MIT</a>
           </div>
         </div>
         <div class="sitefoot__right">
-          <a href="https://github.com/steipete/gogcli">Source</a>
-          <a href="https://github.com/steipete/gogcli#installation">Install</a>
-          <a href="https://github.com/steipete/gogcli#commands">Commands</a>
+          <a href="https://github.com/Robben-Media/gogcli">Source</a>
+          <a href="https://github.com/Robben-Media/gogcli#installation">Install</a>
+          <a href="https://github.com/Robben-Media/gogcli#commands">Commands</a>
         </div>
       </div>
 

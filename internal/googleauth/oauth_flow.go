@@ -62,7 +62,8 @@ var (
 
 func Authorize(ctx context.Context, opts AuthorizeOptions) (string, error) {
 	if opts.Timeout <= 0 {
-		opts.Timeout = 2 * time.Minute
+		// Browser consent (especially Workspace multi-scope) often exceeds 2m.
+		opts.Timeout = 10 * time.Minute
 	}
 
 	if len(opts.Scopes) == 0 {

@@ -31,25 +31,23 @@ Fast, script-friendly CLI for Gmail, Calendar, Chat, Classroom, Drive, Docs, Sli
 
 ## Installation
 
-### Homebrew
+Robben Media maintains this fork independently. Build and install it from the Robben Media repository:
 
 ```bash
-brew install steipete/tap/gogcli
-```
-
-### Build from Source
-
-```bash
-git clone https://github.com/steipete/gogcli.git
+git clone https://github.com/Robben-Media/gogcli.git
 cd gogcli
-make
+make build
+install -m 755 bin/gog ~/.local/bin/gog
 ```
 
-Run:
+Verify the installed binary:
 
 ```bash
-./bin/gog --help
+gog --version
+gog --help
 ```
+
+Upstream Homebrew taps and `go install ...@main` are not supported installation methods for this fork. The retained Go module namespace is an implementation compatibility detail, not an install target.
 
 ### Updates (binary + companion skills)
 
@@ -340,6 +338,12 @@ Service scope matrix (auto-generated; run `go run scripts/gen-auth-services-md.g
 | people | yes | People API | `profile` | OIDC profile scope |
 | groups | no | Cloud Identity API | `https://www.googleapis.com/auth/cloud-identity.groups.readonly` | Workspace only |
 | keep | no | Keep API | `https://www.googleapis.com/auth/keep.readonly` | Workspace only; service account (domain-wide delegation) |
+| youtube | yes | YouTube Data API v3 | `https://www.googleapis.com/auth/youtube.readonly` |  |
+| bigquery | yes | BigQuery API | `https://www.googleapis.com/auth/bigquery`<br>`https://www.googleapis.com/auth/bigquery.readonly` |  |
+| analytics | yes | Analytics Data API, Analytics Admin API | `https://www.googleapis.com/auth/analytics.readonly`<br>`https://www.googleapis.com/auth/analytics.edit`<br>`https://www.googleapis.com/auth/analytics.manage.users.readonly`<br>`https://www.googleapis.com/auth/analytics.manage.users` | Includes manage.users for accessBindings / invite users |
+| searchconsole | yes | Search Console API | `https://www.googleapis.com/auth/webmasters.readonly`<br>`https://www.googleapis.com/auth/webmasters` | Full webmasters scope covers site user permission APIs |
+| tagmanager | yes | Tag Manager API v2 | `https://www.googleapis.com/auth/tagmanager.readonly`<br>`https://www.googleapis.com/auth/tagmanager.edit.containers`<br>`https://www.googleapis.com/auth/tagmanager.edit.containerversions`<br>`https://www.googleapis.com/auth/tagmanager.manage.accounts`<br>`https://www.googleapis.com/auth/tagmanager.manage.users`<br>`https://www.googleapis.com/auth/tagmanager.publish` | Includes manage.users + edit/publish (not delete.containers) |
+| businessprofile | yes | Business Information API, Business Account Management API | `https://www.googleapis.com/auth/business.manage` |  |
 <!-- auth-services:end -->
 
 ### Service Accounts (Workspace only)
@@ -1381,7 +1385,7 @@ Optional env:
 - `GOG_LIVE_SKIP=groups,keep`
 - `GOG_LIVE_AUTH=all,groups`
 - `GOG_LIVE_ALLOW_NONTEST=1`
-- `GOG_LIVE_EMAIL_TEST=steipete+gogtest@gmail.com`
+- `GOG_LIVE_EMAIL_TEST=test-account@example.com` (required for tests that send email)
 - `GOG_LIVE_GROUP_EMAIL=group@domain`
 - `GOG_LIVE_CLASSROOM_COURSE=<courseId>`
 - `GOG_LIVE_CLASSROOM_CREATE=1`
@@ -1413,7 +1417,8 @@ MIT
 
 ## Links
 
-- [GitHub Repository](https://github.com/steipete/gogcli)
+- [Robben Media fork](https://github.com/Robben-Media/gogcli)
+- [Original project by Peter Steinberger](https://github.com/steipete/gogcli)
 - [Gmail API Documentation](https://developers.google.com/gmail/api)
 - [Google Calendar API Documentation](https://developers.google.com/calendar)
 - [Google Drive API Documentation](https://developers.google.com/drive)
@@ -1424,7 +1429,9 @@ MIT
 
 ## Credits
 
-This project is inspired by Mario Zechner's original CLIs:
+This Robben Media fork is based on Peter Steinberger's original [`gogcli`](https://github.com/steipete/gogcli). We are grateful for the foundation he created and retain attribution under the MIT license while maintaining this fork independently going forward.
+
+The original project was inspired by Mario Zechner's CLIs:
 
 - [gmcli](https://github.com/badlogic/gmcli)
 - [gccli](https://github.com/badlogic/gccli)
