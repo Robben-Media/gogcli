@@ -151,26 +151,25 @@ func TestDirtySkipAndForce(t *testing.T) {
 		t.Fatalf("skill not restored to pack content")
 	}
 
-	if err := os.MkdirAll(filepath.Join(skillDir, "learnings"), 0o755); err != nil {
-		t.Fatal(err)
+	if mkdirErr := os.MkdirAll(filepath.Join(skillDir, "learnings"), 0o755); mkdirErr != nil {
+		t.Fatal(mkdirErr)
 	}
 
-	if err := os.WriteFile(filepath.Join(skillDir, "learnings", "LEARNINGS.md"), []byte("keep me"), 0o644); err != nil {
-		t.Fatal(err)
+	if writeErr := os.WriteFile(filepath.Join(skillDir, "learnings", "LEARNINGS.md"), []byte("keep me"), 0o644); writeErr != nil {
+		t.Fatal(writeErr)
 	}
 
-	_, err = UpdateInstalled(UpdateOptions{
+	if _, updateErr := UpdateInstalled(UpdateOptions{
 		Discover:    DiscoverOptions{HomeDir: home},
 		Force:       true,
 		PackVersion: "test",
-	})
-	if err != nil {
-		t.Fatal(err)
+	}); updateErr != nil {
+		t.Fatal(updateErr)
 	}
 
-	b, err := os.ReadFile(filepath.Join(skillDir, "learnings", "LEARNINGS.md"))
-	if err != nil || string(b) != "keep me" {
-		t.Fatalf("learnings clobbered: %v %q", err, b)
+	b, readErr := os.ReadFile(filepath.Join(skillDir, "learnings", "LEARNINGS.md"))
+	if readErr != nil || string(b) != "keep me" {
+		t.Fatalf("learnings clobbered: %v %q", readErr, b)
 	}
 }
 

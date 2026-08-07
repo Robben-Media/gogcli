@@ -81,7 +81,7 @@ func (c *UpdateCmd) Run(ctx context.Context) error {
 
 	// After replacing the binary, re-exec so skills come from the new embed FS.
 	if binaryUpdated {
-		return reexecSkillsPhase(c.ForceSkills)
+		return reexecSkillsPhase(ctx, c.ForceSkills)
 	}
 
 	return c.updateSkills(ctx)
@@ -134,7 +134,7 @@ func (c *UpdateCmd) updateSkills(ctx context.Context) error {
 	return printSkillResults(ctx, results)
 }
 
-func reexecSkillsPhase(forceSkills bool) error {
+func reexecSkillsPhase(ctx context.Context, forceSkills bool) error {
 	exe, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("resolve executable for skills re-exec: %w", err)
@@ -158,7 +158,7 @@ func reexecSkillsPhase(forceSkills bool) error {
 	}
 
 	//nolint:gosec // re-exec of the just-installed gog binary path
-	cmd := exec.CommandContext(context.Background(), exe, args...)
+	cmd := exec.CommandContext(ctx, exe, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
