@@ -16,19 +16,26 @@ import (
 func HashManagedFiles(root string, managedFiles []string) (string, error) {
 	files := normalizeManaged(managedFiles)
 	h := sha256.New()
+
 	for _, rel := range files {
 		fmt.Fprintf(h, "%s\n", rel)
+
+		//nolint:gosec // managed skill path under discovered skill root
 		b, err := os.ReadFile(filepath.Join(root, rel))
 		if err != nil {
 			if os.IsNotExist(err) {
 				h.Write([]byte{0})
+
 				continue
 			}
+
 			return "", fmt.Errorf("read %s: %w", rel, err)
 		}
+
 		h.Write(b)
 		h.Write([]byte{0})
 	}
+
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
@@ -36,20 +43,27 @@ func HashManagedFiles(root string, managedFiles []string) (string, error) {
 func HashManagedFromFS(fsys fs.FS, baseDir string, managedFiles []string) (string, error) {
 	files := normalizeManaged(managedFiles)
 	h := sha256.New()
+
 	for _, rel := range files {
 		fmt.Fprintf(h, "%s\n", rel)
+
 		path := pathJoin(baseDir, rel)
+
 		b, err := fs.ReadFile(fsys, path)
 		if err != nil {
 			if os.IsNotExist(err) || errorsIsNotExist(err) {
 				h.Write([]byte{0})
+
 				continue
 			}
+
 			return "", fmt.Errorf("read pack %s: %w", path, err)
 		}
+
 		h.Write(b)
 		h.Write([]byte{0})
 	}
+
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
@@ -57,8 +71,10 @@ func normalizeManaged(managedFiles []string) []string {
 	if len(managedFiles) == 0 {
 		return []string{"SKILL.md"}
 	}
+
 	out := append([]string(nil), managedFiles...)
 	sort.Strings(out)
+
 	return out
 }
 
@@ -67,6 +83,7 @@ func pathJoin(base, rel string) string {
 	if base == "" || base == "." {
 		return rel
 	}
+
 	return base + "/" + rel
 }
 

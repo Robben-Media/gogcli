@@ -1,6 +1,7 @@
 package skillpack
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -53,14 +54,17 @@ func Discover(skillNames []string, opts DiscoverOptions) ([]InstallRef, error) {
 	if home == "" {
 		h, err := os.UserHomeDir()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("resolve home dir: %w", err)
 		}
+
 		home = h
 	}
+
 	homeRoots := opts.HomeRoots
 	if len(homeRoots) == 0 {
 		homeRoots = DefaultHomeSkillRoots
 	}
+
 	projectRoots := opts.ProjectRoots
 	if len(projectRoots) == 0 {
 		projectRoots = DefaultProjectSkillRoots
@@ -70,24 +74,26 @@ func Discover(skillNames []string, opts DiscoverOptions) ([]InstallRef, error) {
 	var out []InstallRef
 
 	add := func(skill, path, root, kind string) {
-		real, err := filepath.EvalSymlinks(path)
+		resolved, err := filepath.EvalSymlinks(path)
 		if err != nil {
-			real = path
+			resolved = path
 		}
-		real = filepath.Clean(real)
-		if _, ok := seen[real]; ok {
+
+		resolved = filepath.Clean(resolved)
+		if _, ok := seen[resolved]; ok {
 			return
 		}
-		// Must look like a skill dir (directory exists).
+
 		st, err := os.Stat(path)
 		if err != nil || !st.IsDir() {
 			return
 		}
-		seen[real] = struct{}{}
+
+		seen[resolved] = struct{}{}
 		out = append(out, InstallRef{
 			Skill:    skill,
 			Path:     path,
-			RealPath: real,
+			RealPath: resolved,
 			RootKind: kind,
 			Root:     root,
 		})
@@ -98,6 +104,7 @@ func Discover(skillNames []string, opts DiscoverOptions) ([]InstallRef, error) {
 			root := filepath.Join(home, rel)
 			add(skill, filepath.Join(root, skill), root, "home")
 		}
+
 		if opts.ProjectDir != "" {
 			for _, rel := range projectRoots {
 				root := filepath.Join(opts.ProjectDir, rel)
@@ -110,7 +117,9 @@ func Discover(skillNames []string, opts DiscoverOptions) ([]InstallRef, error) {
 		if out[i].Skill != out[j].Skill {
 			return out[i].Skill < out[j].Skill
 		}
+
 		return out[i].RealPath < out[j].RealPath
 	})
+
 	return out, nil
 }

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -40,14 +41,17 @@ func (c *UpdateCmd) Run(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+
 		if outfmt.IsJSON(ctx) {
 			return outfmt.WriteJSON(os.Stdout, res)
 		}
+
 		if res.Update {
 			fmt.Fprintf(os.Stdout, "gog: update available %s → %s; run: gog update\n", splitVersionBase(res.Current), res.Latest)
 		} else {
 			fmt.Fprintf(os.Stdout, "gog: up to date (%s)\n", res.Latest)
 		}
+
 		return nil
 	}
 
@@ -57,12 +61,14 @@ func (c *UpdateCmd) Run(ctx context.Context) error {
 	}
 
 	binaryUpdated := false
+
 	if !c.SkillsOnly {
 		updated, err := c.updateBinary(ctx, client)
 		if err != nil {
 			if c.BinaryOnly {
 				return err
 			}
+
 			fmt.Fprintf(os.Stderr, "gog: binary update skipped: %v\n", err)
 		} else {
 			binaryUpdated = updated
@@ -77,6 +83,7 @@ func (c *UpdateCmd) Run(ctx context.Context) error {
 	if binaryUpdated {
 		return reexecSkillsPhase(c.ForceSkills)
 	}
+
 	return c.updateSkills(ctx)
 }
 
@@ -85,10 +92,13 @@ func (c *UpdateCmd) updateBinary(ctx context.Context, client *selfupdate.Client)
 	if err != nil {
 		return false, err
 	}
+
 	if !res.Update && !c.ForceBinary {
 		fmt.Fprintf(os.Stderr, "gog: binary up to date (%s)\n", res.Latest)
+
 		return false, nil
 	}
+
 	applied, err := selfupdate.Apply(ctx, selfupdate.ApplyOptions{
 		Client:     client,
 		CurrentVer: version,
@@ -97,13 +107,16 @@ func (c *UpdateCmd) updateBinary(ctx context.Context, client *selfupdate.Client)
 	if err != nil {
 		return false, err
 	}
+
 	fmt.Fprintf(os.Stderr, "gog: binary updated %s → %s\n", splitVersionBase(applied.Current), applied.Latest)
+
 	return true, nil
 }
 
 func (c *UpdateCmd) updateSkills(ctx context.Context) error {
 	cwd, _ := os.Getwd()
 	home, _ := os.UserHomeDir()
+
 	results, err := skillpack.UpdateInstalled(skillpack.UpdateOptions{
 		Discover: skillpack.DiscoverOptions{
 			HomeDir:    home,
@@ -117,6 +130,7 @@ func (c *UpdateCmd) updateSkills(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 	return printSkillResults(ctx, results)
 }
 
@@ -125,13 +139,16 @@ func reexecSkillsPhase(forceSkills bool) error {
 	if err != nil {
 		return fmt.Errorf("resolve executable for skills re-exec: %w", err)
 	}
-	if real, err := filepath.EvalSymlinks(exe); err == nil {
-		exe = real
+
+	if resolved, linkErr := filepath.EvalSymlinks(exe); linkErr == nil {
+		exe = resolved
 	}
+
 	args := []string{"update", "--skills-after-binary"}
 	if forceSkills {
 		args = append(args, "--force-skills")
 	}
+
 	// Preserve output mode flags if present in original argv (best-effort).
 	for _, a := range os.Args[1:] {
 		switch a {
@@ -139,19 +156,25 @@ func reexecSkillsPhase(forceSkills bool) error {
 			args = append(args, a)
 		}
 	}
+
+	//nolint:gosec // re-exec of the just-installed gog binary path
 	cmd := exec.Command(exe, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	cmd.Env = os.Environ()
+
 	if err := cmd.Run(); err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
 			if status, ok := ee.Sys().(syscall.WaitStatus); ok {
 				return &ExitError{Code: status.ExitStatus(), Err: err}
 			}
 		}
+
 		return err
 	}
+
 	return nil
 }
 
@@ -161,6 +184,7 @@ func firstNonEmpty(vals ...string) string {
 			return strings.TrimSpace(v)
 		}
 	}
+
 	return ""
 }
 
@@ -169,5 +193,6 @@ func splitVersionBase(v string) string {
 	if i := strings.IndexByte(v, '-'); i >= 0 {
 		return v[:i]
 	}
+
 	return v
 }

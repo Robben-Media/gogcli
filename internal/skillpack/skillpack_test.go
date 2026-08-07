@@ -12,18 +12,22 @@ func TestPackManifestAndEmbed(t *testing.T) {
 	if err := VerifyPackPresent(); err != nil {
 		t.Fatal(err)
 	}
+
 	m, err := skills.LoadManifest()
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(m.Skills) != 10 {
 		t.Fatalf("expected 10 skills, got %d", len(m.Skills))
 	}
+
 	for _, name := range m.Skills {
-		b, err := skills.ReadManagedFile(name, "SKILL.md")
-		if err != nil {
-			t.Fatalf("%s: %v", name, err)
+		b, readErr := skills.ReadManagedFile(name, "SKILL.md")
+		if readErr != nil {
+			t.Fatalf("%s: %v", name, readErr)
 		}
+
 		if len(b) < 20 {
 			t.Fatalf("%s: SKILL.md too short", name)
 		}
@@ -34,15 +38,19 @@ func TestDiscoverDedupeSymlink(t *testing.T) {
 	home := t.TempDir()
 	agents := filepath.Join(home, ".agents", "skills", "google-calendar")
 	claudeRoot := filepath.Join(home, ".claude", "skills")
+
 	if err := os.MkdirAll(agents, 0o755); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := os.WriteFile(filepath.Join(agents, "SKILL.md"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := os.MkdirAll(claudeRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
+
 	// relative symlink like real machine
 	if err := os.Symlink(filepath.Join("..", "..", ".agents", "skills", "google-calendar"), filepath.Join(claudeRoot, "google-calendar")); err != nil {
 		t.Fatal(err)
@@ -52,6 +60,7 @@ func TestDiscoverDedupeSymlink(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(refs) != 1 {
 		t.Fatalf("expected 1 deduped ref, got %d: %+v", len(refs), refs)
 	}
@@ -60,22 +69,21 @@ func TestDiscoverDedupeSymlink(t *testing.T) {
 func TestDirtySkipAndForce(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
-	// HOME for InstallRoot paths unused; we use Discover HomeDir
+
 	skillDir := filepath.Join(home, ".agents", "skills", "google-docs")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// Write pack content first via Update with empty state treating as dirty...
-	// Seed with pack content and record state, then edit.
+
 	packBytes, err := skills.ReadManagedFile("google-docs", "SKILL.md")
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), packBytes, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// First update should see current or dirty without state:
-	// no state + disk==pack => current
+
 	res, err := UpdateInstalled(UpdateOptions{
 		Discover:    DiscoverOptions{HomeDir: home},
 		PackVersion: "test",
@@ -83,25 +91,28 @@ func TestDirtySkipAndForce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if got := actionFor(res, "google-docs"); got != "skipped_current" {
 		t.Fatalf("expected skipped_current, got %s (%+v)", got, res)
 	}
 
-	// Force install path to record state by writing via update outdated:
-	// Manually record state as pack hash then change disk to dirty.
 	packHash, err := PackHashFor("google-docs")
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	st, err := LoadState()
 	if err != nil {
 		t.Fatal(err)
 	}
-	real, _ := filepath.EvalSymlinks(skillDir)
-	RecordWrite(&st, filepath.Clean(real), "google-docs", packHash, "test")
+
+	resolved, _ := filepath.EvalSymlinks(skillDir)
+	RecordWrite(&st, filepath.Clean(resolved), "google-docs", packHash, "test")
+
 	if err := SaveState(st); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: google-docs\ndescription: local edit\n---\n# edited\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -113,6 +124,7 @@ func TestDirtySkipAndForce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if got := actionFor(res, "google-docs"); got != "skipped_dirty" {
 		t.Fatalf("expected skipped_dirty, got %s", got)
 	}
@@ -125,24 +137,29 @@ func TestDirtySkipAndForce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if got := actionFor(res, "google-docs"); got != "updated" {
 		t.Fatalf("expected updated, got %s", got)
 	}
+
 	got, err := os.ReadFile(filepath.Join(skillDir, "SKILL.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if string(got) != string(packBytes) {
 		t.Fatalf("skill not restored to pack content")
 	}
-	// learnings must not be required / not deleted
+
 	if err := os.MkdirAll(filepath.Join(skillDir, "learnings"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := os.WriteFile(filepath.Join(skillDir, "learnings", "LEARNINGS.md"), []byte("keep me"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	res, err = UpdateInstalled(UpdateOptions{
+
+	_, err = UpdateInstalled(UpdateOptions{
 		Discover:    DiscoverOptions{HomeDir: home},
 		Force:       true,
 		PackVersion: "test",
@@ -150,7 +167,7 @@ func TestDirtySkipAndForce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = res
+
 	b, err := os.ReadFile(filepath.Join(skillDir, "learnings", "LEARNINGS.md"))
 	if err != nil || string(b) != "keep me" {
 		t.Fatalf("learnings clobbered: %v %q", err, b)
@@ -160,29 +177,36 @@ func TestDirtySkipAndForce(t *testing.T) {
 func TestOutdatedUpdatesWithoutForce(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
+
 	skillDir := filepath.Join(home, ".agents", "skills", "google-sheets")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+
 	old := []byte("---\nname: google-sheets\ndescription: old\n---\n# old\n")
 	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), old, 0o644); err != nil {
 		t.Fatal(err)
 	}
+
 	realDir, err := filepath.EvalSymlinks(skillDir)
 	if err != nil {
 		realDir = skillDir
 	}
+
 	realDir = filepath.Clean(realDir)
-	// Record state as matching old content (simulates previous pack install).
+
 	oldHash, err := HashManagedFiles(realDir, []string{"SKILL.md"})
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	st, err := LoadState()
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	RecordWrite(&st, realDir, "google-sheets", oldHash, "old")
+
 	if err := SaveState(st); err != nil {
 		t.Fatal(err)
 	}
@@ -194,6 +218,7 @@ func TestOutdatedUpdatesWithoutForce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if got := actionFor(res, "google-sheets"); got != "updated" {
 		t.Fatalf("expected updated for outdated, got %s (%+v)", got, res)
 	}
@@ -202,10 +227,11 @@ func TestOutdatedUpdatesWithoutForce(t *testing.T) {
 func TestInstallMissing(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
-	// create another agent root so symlink is attempted
+
 	if err := os.MkdirAll(filepath.Join(home, ".claude", "skills"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+
 	res, err := UpdateInstalled(UpdateOptions{
 		Discover:    DiscoverOptions{HomeDir: home},
 		Install:     true,
@@ -216,9 +242,11 @@ func TestInstallMissing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if got := actionFor(res, "google-calendar"); got != "installed" {
 		t.Fatalf("expected installed, got %s", got)
 	}
+
 	if _, err := os.Stat(filepath.Join(home, ".agents", "skills", "google-calendar", "SKILL.md")); err != nil {
 		t.Fatal(err)
 	}
@@ -230,5 +258,6 @@ func actionFor(results []ApplyResult, skill string) string {
 			return r.Action
 		}
 	}
+
 	return ""
 }

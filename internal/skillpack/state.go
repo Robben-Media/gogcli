@@ -28,8 +28,9 @@ type PathState struct {
 func statePath() (string, error) {
 	dir, err := config.Dir()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("resolve config dir: %w", err)
 	}
+
 	return filepath.Join(dir, "skill-pack-state.json"), nil
 }
 
@@ -39,49 +40,63 @@ func LoadState() (State, error) {
 	if err != nil {
 		return State{}, err
 	}
+
+	//nolint:gosec // path is under user config dir
 	b, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return State{Version: 1, Paths: map[string]PathState{}}, nil
 		}
+
 		return State{}, fmt.Errorf("read skill pack state: %w", err)
 	}
+
 	var s State
 	if err := json.Unmarshal(b, &s); err != nil {
 		return State{}, fmt.Errorf("parse skill pack state: %w", err)
 	}
+
 	if s.Paths == nil {
 		s.Paths = map[string]PathState{}
 	}
+
 	if s.Version == 0 {
 		s.Version = 1
 	}
+
 	return s, nil
 }
 
 // SaveState writes skill pack state atomically.
 func SaveState(s State) error {
 	if _, err := config.EnsureDir(); err != nil {
-		return err
+		return fmt.Errorf("ensure config dir: %w", err)
 	}
+
 	path, err := statePath()
 	if err != nil {
 		return err
 	}
+
 	s.Version = 1
 	s.Updated = time.Now().UTC()
+
 	b, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode skill pack state: %w", err)
 	}
+
 	b = append(b, '\n')
 	tmp := path + ".tmp"
+
 	if err := os.WriteFile(tmp, b, 0o600); err != nil {
 		return fmt.Errorf("write skill pack state: %w", err)
 	}
+
 	if err := os.Rename(tmp, path); err != nil {
 		return fmt.Errorf("commit skill pack state: %w", err)
 	}
+
 	return nil
 }
 
@@ -90,6 +105,7 @@ func RecordWrite(s *State, realPath, skillName, contentHash, packVersion string)
 	if s.Paths == nil {
 		s.Paths = map[string]PathState{}
 	}
+
 	s.Paths[realPath] = PathState{
 		Skill:       skillName,
 		ContentHash: contentHash,
