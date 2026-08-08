@@ -148,10 +148,12 @@ func printSkillResults(ctx context.Context, results []skillpack.ApplyResult) err
 	}
 	if len(dirty) > 0 {
 		fmt.Fprintf(os.Stdout, "skipped (local edits): %s\n", strings.Join(unique(dirty), ", "))
-		fmt.Fprintf(os.Stdout, "Tell the user which skills were skipped and their paths; do not force-overwrite unless they ask.\n")
+		fmt.Fprintln(os.Stderr, "Tell the user which skills were skipped and their paths; do not force-overwrite unless they ask.")
 	}
 	if len(missing) > 0 {
-		fmt.Fprintf(os.Stdout, "not installed: %s — run: gog skills install\n", strings.Join(unique(missing), ", "))
+		missingList := strings.Join(unique(missing), ", ")
+		fmt.Fprintf(os.Stdout, "not installed: %s\n", missingList)
+		fmt.Fprintf(os.Stderr, "gog: skills not installed: %s — run: gog skills install\n", missingList)
 	}
 	if len(updated) == 0 && len(installed) == 0 && len(dirty) == 0 && len(missing) == 0 {
 		fmt.Fprintln(os.Stdout, "all installed pack skills are current")

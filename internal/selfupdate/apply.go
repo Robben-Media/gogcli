@@ -22,6 +22,7 @@ var (
 	errAlreadyLatest    = errors.New("already on latest version")
 	errChecksumMismatch = errors.New("checksum mismatch")
 	errArchiveNoBinary  = errors.New("archive missing gog binary")
+	renameFile          = os.Rename
 )
 
 // ApplyOptions controls binary replacement.
@@ -331,13 +332,13 @@ func replaceExecutable(dest string, data []byte) error {
 	backup := dest + ".bak"
 	_ = os.Remove(backup)
 
-	if runtime.GOOS == "windows" {
-		if err := os.Rename(dest, backup); err != nil && !os.IsNotExist(err) {
+	if runtime.GOOS == goosWindows {
+		if err := renameFile(dest, backup); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("backup current binary: %w", err)
 		}
 
-		if err := os.Rename(tmpName, dest); err != nil {
-			_ = os.Rename(backup, dest)
+		if err := renameFile(tmpName, dest); err != nil {
+			_ = renameFile(backup, dest)
 
 			return fmt.Errorf("replace binary: %w", err)
 		}
@@ -347,13 +348,7 @@ func replaceExecutable(dest string, data []byte) error {
 		return nil
 	}
 
-	if err := os.Rename(tmpName, dest); err != nil {
-		if err2 := os.Remove(dest); err2 == nil {
-			if err3 := os.Rename(tmpName, dest); err3 == nil {
-				return nil
-			}
-		}
-
+	if err := renameFile(tmpName, dest); err != nil {
 		return fmt.Errorf("replace binary: %w", err)
 	}
 
