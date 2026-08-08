@@ -219,14 +219,12 @@ var serviceInfoByService = map[Service]serviceInfo{
 		note: "Includes manage.users for accessBindings / invite users",
 	},
 	ServiceSearchConsole: {
-		// webmasters (full) already covers Search Console user/permission APIs.
 		scopes: []string{
 			"https://www.googleapis.com/auth/webmasters.readonly",
 			"https://www.googleapis.com/auth/webmasters",
 		},
 		user: true,
 		apis: []string{"Search Console API"},
-		note: "Full webmasters scope covers site user permission APIs",
 	},
 	ServiceTagManager: {
 		// readonly alone cannot manage users. manage.users is required for

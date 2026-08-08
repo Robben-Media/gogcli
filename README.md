@@ -341,7 +341,7 @@ Service scope matrix (auto-generated; run `go run scripts/gen-auth-services-md.g
 | youtube | yes | YouTube Data API v3 | `https://www.googleapis.com/auth/youtube.readonly` |  |
 | bigquery | yes | BigQuery API | `https://www.googleapis.com/auth/bigquery`<br>`https://www.googleapis.com/auth/bigquery.readonly` |  |
 | analytics | yes | Analytics Data API, Analytics Admin API | `https://www.googleapis.com/auth/analytics.readonly`<br>`https://www.googleapis.com/auth/analytics.edit`<br>`https://www.googleapis.com/auth/analytics.manage.users.readonly`<br>`https://www.googleapis.com/auth/analytics.manage.users` | Includes manage.users for accessBindings / invite users |
-| searchconsole | yes | Search Console API | `https://www.googleapis.com/auth/webmasters.readonly`<br>`https://www.googleapis.com/auth/webmasters` | Full webmasters scope covers site user permission APIs |
+| searchconsole | yes | Search Console API | `https://www.googleapis.com/auth/webmasters.readonly`<br>`https://www.googleapis.com/auth/webmasters` |  |
 | tagmanager | yes | Tag Manager API v2 | `https://www.googleapis.com/auth/tagmanager.readonly`<br>`https://www.googleapis.com/auth/tagmanager.edit.containers`<br>`https://www.googleapis.com/auth/tagmanager.edit.containerversions`<br>`https://www.googleapis.com/auth/tagmanager.manage.accounts`<br>`https://www.googleapis.com/auth/tagmanager.manage.users`<br>`https://www.googleapis.com/auth/tagmanager.publish` | Includes manage.users + edit/publish (not delete.containers) |
 | businessprofile | yes | Business Information API, Business Account Management API | `https://www.googleapis.com/auth/business.manage` |  |
 <!-- auth-services:end -->

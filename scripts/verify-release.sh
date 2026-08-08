@@ -12,7 +12,9 @@ cd "$root"
 
 expected_origin="https://github.com/Robben-Media/gogcli"
 origin="$(git remote get-url origin)"
-if [[ "$origin" != "$expected_origin" && "$origin" != "git@github.com:Robben-Media/gogcli.git" ]]; then
+origin="${origin%/}"
+origin="${origin%.git}"
+if [[ "$origin" != "$expected_origin" && "$origin" != "git@github.com:Robben-Media/gogcli" ]]; then
   echo "unexpected origin: $origin" >&2
   echo "expected the Robben Media fork: $expected_origin" >&2
   exit 2

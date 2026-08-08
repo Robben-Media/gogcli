@@ -154,6 +154,17 @@ func TestServicesInfo_Metadata(t *testing.T) {
 	}
 }
 
+func TestServicesInfo_SearchConsoleDoesNotClaimUserManagement(t *testing.T) {
+	info, found := findServiceInfo(ServicesInfo(), ServiceSearchConsole)
+	if !found {
+		t.Fatal("missing searchconsole info")
+	}
+
+	if info.Note != "" {
+		t.Fatalf("searchconsole note = %q, want no unsupported user-management claim", info.Note)
+	}
+}
+
 func findServiceInfo(infos []ServiceInfo, svc Service) (ServiceInfo, bool) {
 	for _, info := range infos {
 		if info.Service == svc {
