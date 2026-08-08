@@ -12,12 +12,14 @@ import (
 	"github.com/steipete/gogcli/internal/config"
 )
 
-// CheckCache stores last successful remote version check.
+// CheckCache stores the last remote version check attempt and any successful result.
 type CheckCache struct {
 	CheckedAt time.Time `json:"checked_at"`
 	Latest    string    `json:"latest"`
 	Current   string    `json:"current"`
 }
+
+var isTestProcess = testing.Testing
 
 func checkCachePath() (string, error) {
 	dir, err := config.Dir()
@@ -95,7 +97,7 @@ func MaybeNotify(ctx context.Context, client *Client, current string, interval t
 	}
 
 	// Avoid network during `go test` and when callers set GOG_TEST=1.
-	if testing.Testing() || os.Getenv("GOG_TEST") == "1" {
+	if isTestProcess() || os.Getenv("GOG_TEST") == "1" {
 		return ""
 	}
 
@@ -111,13 +113,20 @@ func MaybeNotify(ctx context.Context, client *Client, current string, interval t
 		return ""
 	}
 
+	checkedAt := time.Now().UTC()
+
 	res, err := Check(ctx, client, current)
 	if err != nil {
+		_ = SaveCheckCache(CheckCache{
+			CheckedAt: checkedAt,
+			Current:   current,
+		})
+
 		return ""
 	}
 
 	_ = SaveCheckCache(CheckCache{
-		CheckedAt: time.Now().UTC(),
+		CheckedAt: checkedAt,
 		Latest:    res.Latest,
 		Current:   current,
 	})

@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -16,7 +17,10 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
+
+var errTestRename = errors.New("rename failed")
 
 func TestNormalizeAndAssetName(t *testing.T) {
 	t.Parallel()
@@ -30,7 +34,7 @@ func TestNormalizeAndAssetName(t *testing.T) {
 		t.Fatalf("asset name: %s", name)
 	}
 
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		if !strings.HasSuffix(name, ".zip") {
 			t.Fatalf("windows asset should be zip: %s", name)
 		}
@@ -151,5 +155,109 @@ func TestChecksumLineMatch(t *testing.T) {
 
 	if checksumLineMatch("abc  other\n", "file.tar.gz", "abc") {
 		t.Fatal("unexpected match")
+	}
+}
+
+func TestMaybeNotifyThrottlesFailedChecks(t *testing.T) {
+	originalTesting := isTestProcess
+	isTestProcess = func() bool { return false }
+
+	t.Cleanup(func() { isTestProcess = originalTesting })
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("GOG_TEST", "")
+	t.Setenv("GOG_SKIP_UPDATE_CHECK", "")
+
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(server.Close)
+
+	client := &Client{BaseURL: server.URL, HTTP: server.Client()}
+
+	if notice := MaybeNotify(context.Background(), client, "1.2.3", time.Hour); notice != "" {
+		t.Fatalf("first notice = %q, want silent failure", notice)
+	}
+
+	if notice := MaybeNotify(context.Background(), client, "1.2.3", time.Hour); notice != "" {
+		t.Fatalf("second notice = %q, want cached silent failure", notice)
+	}
+
+	if requests != 1 {
+		t.Fatalf("release checks = %d, want 1 within throttle interval", requests)
+	}
+}
+
+func TestApplyPreservesExecutableWhenAtomicReplaceFails(t *testing.T) {
+	if runtime.GOOS == goosWindows {
+		t.Skip("Unix atomic replacement behavior")
+	}
+
+	originalRename := renameFile
+	renameFile = func(_, _ string) error { return errTestRename }
+
+	t.Cleanup(func() { renameFile = originalRename })
+
+	binaryPayload := []byte("#!/bin/sh\necho replacement\n")
+	var archive bytes.Buffer
+	gz := gzip.NewWriter(&archive)
+
+	tw := tar.NewWriter(gz)
+	if err := tw.WriteHeader(&tar.Header{Name: "gog", Mode: 0o755, Size: int64(len(binaryPayload))}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := tw.Write(binaryPayload); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	assetName := AssetNameFor("v9.9.9")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/Robben-Media/gogcli/releases/latest":
+			_ = json.NewEncoder(w).Encode(Release{
+				TagName: "v9.9.9",
+				Assets:  []Asset{{Name: assetName, BrowserDownloadURL: "http://" + r.Host + "/asset"}},
+			})
+		case "/asset":
+			_, _ = w.Write(archive.Bytes())
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	dest := filepath.Join(t.TempDir(), "gog")
+	if err := os.WriteFile(dest, []byte("original"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Apply(context.Background(), ApplyOptions{
+		Client:     &Client{BaseURL: server.URL, HTTP: server.Client()},
+		CurrentVer: "1.2.3",
+		DestPath:   dest,
+	})
+	if err == nil {
+		t.Fatal("Apply succeeded despite rename failure")
+	}
+
+	got, readErr := os.ReadFile(dest)
+	if readErr != nil {
+		t.Fatalf("read original executable: %v", readErr)
+	}
+
+	if string(got) != "original" {
+		t.Fatalf("original executable = %q, want preserved content", got)
 	}
 }

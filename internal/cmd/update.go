@@ -26,15 +26,19 @@ type UpdateCmd struct {
 	SkillsAfterBinary bool `name:"skills-after-binary" hidden:"" help:"Internal: run skills refresh after binary update"`
 }
 
+var newSelfUpdateClient = func() *selfupdate.Client {
+	return &selfupdate.Client{
+		Repo:  strings.TrimSpace(os.Getenv("GOG_UPDATE_REPO")),
+		Token: firstNonEmpty(os.Getenv("GITHUB_TOKEN"), os.Getenv("GH_TOKEN")),
+	}
+}
+
 func (c *UpdateCmd) Run(ctx context.Context) error {
 	if c.SkillsOnly && c.BinaryOnly {
 		return fmt.Errorf("use only one of --skills-only or --binary-only")
 	}
 
-	client := &selfupdate.Client{
-		Repo:  strings.TrimSpace(os.Getenv("GOG_UPDATE_REPO")),
-		Token: firstNonEmpty(os.Getenv("GITHUB_TOKEN"), os.Getenv("GH_TOKEN")),
-	}
+	client := newSelfUpdateClient()
 
 	if c.Check {
 		res, err := selfupdate.Check(ctx, client, version)
@@ -44,6 +48,12 @@ func (c *UpdateCmd) Run(ctx context.Context) error {
 
 		if outfmt.IsJSON(ctx) {
 			return outfmt.WriteJSON(os.Stdout, res)
+		}
+		if outfmt.IsPlain(ctx) {
+			fmt.Fprintln(os.Stdout, "CURRENT\tLATEST\tUPDATE\tASSET")
+			fmt.Fprintf(os.Stdout, "%s\t%s\t%t\t%s\n", res.Current, res.Latest, res.Update, res.Asset)
+
+			return nil
 		}
 
 		if res.Update {

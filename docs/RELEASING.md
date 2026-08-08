@@ -63,6 +63,13 @@ gh release view vX.Y.Z
 
 Ensure GitHub release notes are not empty (mirror the changelog section).
 
+The companion skill pack ships in two forms from the same source under `skills/pack/`:
+
+- the `SKILL.md` files are present in the tagged Git tree;
+- the same files are embedded in the `gog` binary with `go:embed`.
+
+No separate skill-pack release artifact is required.
+
 If the workflow needs a rerun:
 ```sh
 gh workflow run release.yml -f tag=vX.Y.Z
