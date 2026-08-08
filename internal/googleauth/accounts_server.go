@@ -256,7 +256,7 @@ func (ms *ManageServer) handleAuthStart(w http.ResponseWriter, r *http.Request) 
 		Scopes:       scopes,
 	}
 
-	authURL := cfg.AuthCodeURL(state, authURLParams(ms.opts.ForceConsent, true)...)
+	authURL := cfg.AuthCodeURL(state, authURLParams(ms.opts.ForceConsent, !ms.opts.ForceConsent)...)
 	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
@@ -304,7 +304,7 @@ func (ms *ManageServer) handleAuthUpgrade(w http.ResponseWriter, r *http.Request
 	// Always force consent for upgrades to ensure user sees all scopes
 	// Add login_hint to pre-select the account
 	authURL := cfg.AuthCodeURL(state,
-		append(authURLParams(true, true),
+		append(authURLParams(true, false),
 			oauth2.SetAuthURLParam("login_hint", email))...)
 
 	http.Redirect(w, r, authURL, http.StatusFound)

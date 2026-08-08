@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Changed
+
+- Distribution: use `Robben-Media/gogcli` as the sole install and release source; remove upstream Homebrew/tap assumptions.
+- Auth: request the full Analytics and Tag Manager administration scopes, make `--force-consent` request the exact selected scopes, and allow up to 10 minutes for browser consent.
+
 ## 0.10.0 - 2026-08-07
 
 ### Highlights

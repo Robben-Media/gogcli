@@ -426,7 +426,10 @@ func TestManageServer_HandleAuthStart(t *testing.T) {
 
 	t.Cleanup(func() { _ = ln.Close() })
 
-	ms := &ManageServer{listener: ln}
+	ms := &ManageServer{
+		listener: ln,
+		opts:     ManageServerOptions{ForceConsent: true},
+	}
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/auth/start", nil)
 	ms.handleAuthStart(rr, req)
@@ -455,6 +458,14 @@ func TestManageServer_HandleAuthStart(t *testing.T) {
 
 	if redirectURI := parsed.Query().Get("redirect_uri"); !strings.Contains(redirectURI, "127.0.0.1:") {
 		t.Fatalf("expected redirect uri, got %q", redirectURI)
+	}
+
+	if prompt := parsed.Query().Get("prompt"); prompt != "consent" {
+		t.Fatalf("expected prompt=consent, got %q", prompt)
+	}
+
+	if includeScopes := parsed.Query().Get("include_granted_scopes"); includeScopes != "" {
+		t.Fatalf("expected exact scopes with force consent, got include_granted_scopes=%q", includeScopes)
 	}
 
 	scope := parsed.Query().Get("scope")
@@ -950,6 +961,10 @@ func TestManageServer_HandleAuthUpgrade(t *testing.T) {
 	// Check for prompt=consent (forces consent screen)
 	if prompt := parsed.Query().Get("prompt"); prompt != "consent" {
 		t.Fatalf("expected prompt=consent, got %q", prompt)
+	}
+
+	if includeScopes := parsed.Query().Get("include_granted_scopes"); includeScopes != "" {
+		t.Fatalf("expected exact scopes for upgrade, got include_granted_scopes=%q", includeScopes)
 	}
 }
 

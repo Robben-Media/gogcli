@@ -205,13 +205,18 @@ var serviceInfoByService = map[Service]serviceInfo{
 		apis: []string{"BigQuery API"},
 	},
 	ServiceAnalytics: {
+		// manage.users* is required for accessBindings / adding users with roles.
+		// edit alone is not enough for user permission APIs; LLMs can call Admin API
+		// with the same refresh token when these scopes are on the grant.
 		scopes: []string{
 			"https://www.googleapis.com/auth/analytics.readonly",
 			"https://www.googleapis.com/auth/analytics.edit",
+			"https://www.googleapis.com/auth/analytics.manage.users.readonly",
 			"https://www.googleapis.com/auth/analytics.manage.users",
 		},
 		user: true,
 		apis: []string{"Analytics Data API", "Analytics Admin API"},
+		note: "Includes manage.users for accessBindings / invite users",
 	},
 	ServiceSearchConsole: {
 		scopes: []string{
@@ -222,12 +227,19 @@ var serviceInfoByService = map[Service]serviceInfo{
 		apis: []string{"Search Console API"},
 	},
 	ServiceTagManager: {
+		// readonly alone cannot manage users. manage.users is required for
+		// account/container user permissions; edit/publish for full GTM ops.
 		scopes: []string{
 			"https://www.googleapis.com/auth/tagmanager.readonly",
+			"https://www.googleapis.com/auth/tagmanager.edit.containers",
+			"https://www.googleapis.com/auth/tagmanager.edit.containerversions",
+			"https://www.googleapis.com/auth/tagmanager.manage.accounts",
 			"https://www.googleapis.com/auth/tagmanager.manage.users",
+			"https://www.googleapis.com/auth/tagmanager.publish",
 		},
 		user: true,
 		apis: []string{"Tag Manager API v2"},
+		note: "Includes manage.users + edit/publish (not delete.containers)",
 	},
 	ServiceBusinessProfile: {
 		scopes: []string{"https://www.googleapis.com/auth/business.manage"},

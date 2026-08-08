@@ -121,7 +121,7 @@ func (c *AAAccessBindingsListCmd) Run(ctx context.Context, flags *RootFlags) err
 
 type AAAccessBindingsCreateCmd struct {
 	Parent string `arg:"" name:"parent" help:"Parent resource (accounts/123 or properties/456)"`
-	Email  string `name:"email" required:"" help:"User email address"`
+	Email  string `name:"email" required:"" help:"Google account email (Workspace aliases/groups are not supported by the API)"`
 	Roles  string `name:"roles" required:"" help:"Comma-separated roles: viewer, analyst, editor, admin, no-cost-data, no-revenue-data"`
 }
 

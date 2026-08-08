@@ -1,67 +1,69 @@
 ---
-summary: "Release checklist for gogcli (GitHub release + Homebrew tap)"
+summary: "Release checklist for the Robben Media gogcli fork"
 ---
 
 # Releasing `gogcli`
 
-This playbook mirrors the Homebrew + GitHub flow used in `../camsnap`.
+Robben Media maintains this fork independently from the original project. Releases come only from `Robben-Media/gogcli`; upstream repositories, taps, and install methods are not part of this process.
 
-Always do **all** steps below (CI + changelog + tag + GitHub release artifacts + tap update + Homebrew sanity install). No partial releases.
+Shortcut scripts:
 
-Shortcut scripts (preferred, keep notes non-empty):
 ```sh
 scripts/release.sh X.Y.Z
 scripts/verify-release.sh X.Y.Z
 ```
 
-Assumptions:
-- Repo: `steipete/gogcli`
-- Tap repo: `../homebrew-tap` (tap: `steipete/tap`)
-- Homebrew formula name: `gogcli` (installs the `gog` binary)
+## 0) Prerequisites
 
-## 0) Prereqs
-- Clean working tree on `main`.
-- Go toolchain installed (Go version comes from `go.mod`).
-- `make` works locally.
-- Access to the tap repo (e.g. `steipete/homebrew-tap`).
+- Repo: `Robben-Media/gogcli`
+- Clean working tree on `main`
+- Go toolchain from `go.mod`
+- GitHub CLI authenticated for the Robben Media repository
+- `make ci` succeeds locally
 
-## 1) Verify build is green
+## 1) Verify the build
+
 ```sh
 make ci
+make build
+./bin/gog --version
 ```
 
-Confirm GitHub Actions `ci` is green for the commit you’re tagging:
+Confirm GitHub Actions `ci` is green for the commit being tagged:
+
 ```sh
-gh run list -L 5 --branch main
+gh run list -L 5 --repo Robben-Media/gogcli --branch main
 ```
 
-## 2) Update changelog
-- Update `CHANGELOG.md` for the version you’re releasing.
+## 2) Update the changelog
 
-Example heading:
-- `## 0.1.0 - 2025-12-12`
+Update `CHANGELOG.md` with a dated section for the release.
 
-## 3) Commit, tag & push
+Example:
+
+```text
+## 0.10.0 - 2026-08-04
+```
+
+## 3) Commit, tag, and push
+
 ```sh
-git checkout main
-git pull
+git switch main
+git pull --ff-only origin main
 
-# commit changelog + any release tweaks
 git commit -am "release: vX.Y.Z"
-
 git tag -a vX.Y.Z -m "Release X.Y.Z"
 git push origin main --tags
 ```
 
-## 4) Verify GitHub release artifacts
-The tag push triggers `.github/workflows/release.yml` (GoReleaser). Ensure it completes successfully and the release has assets.
+## 4) Verify the Robben Media GitHub release
+
+The tag triggers `.github/workflows/release.yml`. Confirm the workflow succeeds, release notes are non-empty, and the expected assets and checksums are present:
 
 ```sh
-gh run list -L 5 --workflow release.yml
-gh release view vX.Y.Z
+gh run list -L 5 --repo Robben-Media/gogcli --workflow release.yml
+gh release view vX.Y.Z --repo Robben-Media/gogcli
 ```
-
-Ensure GitHub release notes are not empty (mirror the changelog section).
 
 The companion skill pack ships in two forms from the same source under `skills/pack/`:
 
@@ -72,46 +74,25 @@ No separate skill-pack release artifact is required.
 
 If the workflow needs a rerun:
 ```sh
-gh workflow run release.yml -f tag=vX.Y.Z
+gh workflow run release.yml --repo Robben-Media/gogcli -f tag=vX.Y.Z
 ```
 
-## 5) Update (or add) the Homebrew formula
-In the tap repo (assumed sibling at `../homebrew-tap`), create/update `Formula/gogcli.rb`.
+## 5) Verify from Robben source
 
-Recommended formula shape (build-from-source, no binary assets needed):
-- `version "X.Y.Z"`
-- `url "https://github.com/steipete/gogcli/archive/refs/tags/vX.Y.Z.tar.gz"`
-- `sha256 "<sha256>"`
-- `depends_on "go" => :build`
-- Build:
-  - `system "go", "build", *std_go_args(ldflags: "-s -w"), "./cmd/gog"`
+Before further commits land on `main`, run the repository verification script from the clean checkout whose `HEAD` is tagged `vX.Y.Z`:
 
-Compute the SHA256 for the tag tarball:
 ```sh
-curl -L -o /tmp/gogcli.tar.gz https://github.com/steipete/gogcli/archive/refs/tags/vX.Y.Z.tar.gz
-shasum -a 256 /tmp/gogcli.tar.gz
+scripts/verify-release.sh X.Y.Z
 ```
 
-Commit + push in the tap repo:
+The script validates the changelog, CI, GitHub release, local test suite, and a fresh local build from the Robben Media checkout.
+
+For an operator installation, build from the verified Robben checkout and install the resulting binary:
+
 ```sh
-cd ../homebrew-tap
-git add Formula/gogcli.rb
-git commit -m "gogcli vX.Y.Z"
-git push origin main
+make build
+install -m 755 bin/gog ~/.local/bin/gog
+gog --version
 ```
 
-## 6) Sanity-check install from tap
-```sh
-brew update
-brew uninstall gogcli || true
-brew untap steipete/tap || true
-brew tap steipete/tap
-brew install steipete/tap/gogcli
-brew test steipete/tap/gogcli
-
-gog --help
-```
-
-## Notes
-- `gog` currently does not print a version string; use tags + changelog as the source of truth.
-- If you later add `gog version`, update this doc to validate `gog version` post-install.
+Do not use an upstream Homebrew tap or `go install ...@main`. The retained Go module namespace is an internal compatibility detail, not an installation source.

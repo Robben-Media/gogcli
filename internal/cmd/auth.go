@@ -510,7 +510,11 @@ func (c *AuthAddCmd) Run(ctx context.Context) error {
 	}
 	driveScope := strings.ToLower(strings.TrimSpace(c.DriveScope))
 	gmailScope := strings.ToLower(strings.TrimSpace(c.GmailScope))
-	disableIncludeGrantedScopes := c.Readonly ||
+	// --force-consent means "grant exactly these scopes". Keeping
+	// include_granted_scopes=true merges historical grants (e.g. old YouTube +
+	// drive.file) and Google can 400 with "scopes that cannot be requested together".
+	disableIncludeGrantedScopes := c.ForceConsent ||
+		c.Readonly ||
 		driveScope == "readonly" ||
 		driveScope == strFile ||
 		gmailScope == "readonly"
