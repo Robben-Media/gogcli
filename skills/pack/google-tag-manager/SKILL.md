@@ -30,6 +30,8 @@ GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedi
 GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com tag-manager tags --account-id 12345 --container-id 67890
 GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com gtm workspaces create-version accounts/12345/containers/67890/workspaces/7 --name "Release"
 GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com gtm versions publish accounts/12345/containers/67890/versions/42
+GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com gtm triggers create --account-id 12345 --container-id 67890 --workspace-id 7 --name "Checkout" --type customEvent --custom-event-filter '{"type":"equals","parameter":[{"type":"template","key":"arg0","value":"{{Event}}"},{"type":"template","key":"arg1","value":"checkout"}]}'
+GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com gtm built-in-variables create --account-id 12345 --container-id 67890 --workspace-id 7 --type pageUrl --type clickId
 ```
 
 ## Available Commands
@@ -40,8 +42,13 @@ GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedi
 | `containers` | List containers in an account | `--account-id` |
 | `tags` | List tags in a container | `--account-id`, `--container-id`, `--workspace-id` |
 | `tag` | Get a single tag by path | `<tagPath>` (positional) |
-| `triggers` | List triggers in a container | `--account-id`, `--container-id`, `--workspace-id` |
-| `variables` | List variables in a container | `--account-id`, `--container-id`, `--workspace-id` |
+| `triggers` | List triggers in a workspace | `--account-id`, `--container-id`, `--workspace-id` |
+| `triggers create` | Create a trigger | workspace flags, `--name`, `--type`; repeatable Condition JSON flags |
+| `triggers delete/get/revert/update` | Mutate a trigger by full path | `<path>`; update field flags; delete uses `--force` |
+| `variables` | List variables in a workspace | `--account-id`, `--container-id`, `--workspace-id` |
+| `variables create` | Create a custom variable | workspace flags, `--name`, `--type`, repeatable `--parameter` JSON |
+| `variables delete/get/revert/update` | Mutate a custom variable by full path | `<path>`; update field flags; delete uses `--force` |
+| `built-in-variables create/delete/list/revert` | Manage workspace built-in variables | workspace flags, repeatable `--type`; delete uses `--force` |
 | `versions` | List container versions | `--account-id`, `--container-id` |
 | `versions publish` | Publish a container version | `<path>`, `--fingerprint` |
 | `workspaces create-version` | Create a container version from a workspace | `<path>`, `--name`, `--notes` |

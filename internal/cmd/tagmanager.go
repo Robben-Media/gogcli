@@ -16,15 +16,16 @@ import (
 var newTagManagerService = googleapi.NewTagManager
 
 type TagManagerCmd struct {
-	Accounts        TagManagerAccountsCmd        `cmd:"" name:"accounts" group:"Read" help:"List GTM accounts"`
-	Containers      TagManagerContainersCmd      `cmd:"" name:"containers" group:"Read" help:"List containers in an account"`
-	Tags            TagManagerTagsCmd            `cmd:"" name:"tags" group:"Read" help:"List tags in a workspace"`
-	Tag             TagManagerTagCmd             `cmd:"" name:"tag" group:"Read" help:"Get a single tag by path"`
-	Triggers        TagManagerTriggersCmd        `cmd:"" name:"triggers" group:"Read" help:"List triggers in a workspace"`
-	Variables       TagManagerVariablesCmd       `cmd:"" name:"variables" group:"Read" help:"List variables in a workspace"`
-	Versions        TagManagerVersionsCmd        `cmd:"" name:"versions" group:"Read" help:"List container version headers"`
-	Workspaces      TagManagerWorkspacesCmd      `cmd:"" name:"workspaces" group:"Write" help:"Manage GTM workspaces"`
-	UserPermissions TagManagerUserPermissionsCmd `cmd:"" name:"user-permissions" group:"Admin" help:"Manage GTM user permissions"`
+	Accounts         TagManagerAccountsCmd         `cmd:"" name:"accounts" group:"Read" help:"List GTM accounts"`
+	BuiltInVariables TagManagerBuiltInVariablesCmd `cmd:"" name:"built-in-variables" group:"Write" help:"Manage built-in variables in a workspace"`
+	Containers       TagManagerContainersCmd       `cmd:"" name:"containers" group:"Read" help:"List containers in an account"`
+	Tags             TagManagerTagsCmd             `cmd:"" name:"tags" group:"Read" help:"List tags in a workspace"`
+	Tag              TagManagerTagCmd              `cmd:"" name:"tag" group:"Read" help:"Get a single tag by path"`
+	Triggers         TagManagerTriggersCmd         `cmd:"" name:"triggers" group:"Write" help:"Manage triggers in a workspace"`
+	Variables        TagManagerVariablesCmd        `cmd:"" name:"variables" group:"Write" help:"Manage variables in a workspace"`
+	Versions         TagManagerVersionsCmd         `cmd:"" name:"versions" group:"Read" help:"List container version headers"`
+	Workspaces       TagManagerWorkspacesCmd       `cmd:"" name:"workspaces" group:"Write" help:"Manage GTM workspaces"`
+	UserPermissions  TagManagerUserPermissionsCmd  `cmd:"" name:"user-permissions" group:"Admin" help:"Manage GTM user permissions"`
 }
 
 func gtmWorkspacePath(accountID, containerID, workspaceID string) string {
@@ -223,12 +224,21 @@ func (c *TagManagerTagCmd) Run(ctx context.Context, flags *RootFlags) error {
 // --- triggers ---
 
 type TagManagerTriggersCmd struct {
+	List   TagManagerTriggersListCmd   `cmd:"" default:"withargs" help:"List triggers in a workspace"`
+	Create TagManagerTriggersCreateCmd `cmd:"" name:"create" help:"Create a trigger"`
+	Delete TagManagerTriggersDeleteCmd `cmd:"" name:"delete" help:"Delete a trigger"`
+	Get    TagManagerTriggersGetCmd    `cmd:"" name:"get" help:"Get a trigger"`
+	Revert TagManagerTriggersRevertCmd `cmd:"" name:"revert" help:"Revert a trigger"`
+	Update TagManagerTriggersUpdateCmd `cmd:"" name:"update" help:"Update a trigger"`
+}
+
+type TagManagerTriggersListCmd struct {
 	AccountID   string `name:"account-id" required:"" help:"GTM account ID"`
 	ContainerID string `name:"container-id" required:"" help:"GTM container ID"`
 	WorkspaceID string `name:"workspace-id" help:"GTM workspace ID (default: 0)" default:"0"`
 }
 
-func (c *TagManagerTriggersCmd) Run(ctx context.Context, flags *RootFlags) error {
+func (c *TagManagerTriggersListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u := ui.FromContext(ctx)
 	account, err := requireAccount(flags)
 	if err != nil {
@@ -275,12 +285,21 @@ func (c *TagManagerTriggersCmd) Run(ctx context.Context, flags *RootFlags) error
 // --- variables ---
 
 type TagManagerVariablesCmd struct {
+	List   TagManagerVariablesListCmd   `cmd:"" default:"withargs" help:"List variables in a workspace"`
+	Create TagManagerVariablesCreateCmd `cmd:"" name:"create" help:"Create a variable"`
+	Delete TagManagerVariablesDeleteCmd `cmd:"" name:"delete" help:"Delete a variable"`
+	Get    TagManagerVariablesGetCmd    `cmd:"" name:"get" help:"Get a variable"`
+	Revert TagManagerVariablesRevertCmd `cmd:"" name:"revert" help:"Revert a variable"`
+	Update TagManagerVariablesUpdateCmd `cmd:"" name:"update" help:"Update a variable"`
+}
+
+type TagManagerVariablesListCmd struct {
 	AccountID   string `name:"account-id" required:"" help:"GTM account ID"`
 	ContainerID string `name:"container-id" required:"" help:"GTM container ID"`
 	WorkspaceID string `name:"workspace-id" help:"GTM workspace ID (default: 0)" default:"0"`
 }
 
-func (c *TagManagerVariablesCmd) Run(ctx context.Context, flags *RootFlags) error {
+func (c *TagManagerVariablesListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u := ui.FromContext(ctx)
 	account, err := requireAccount(flags)
 	if err != nil {

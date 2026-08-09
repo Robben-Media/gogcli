@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Tag Manager v2 API has 99 missing methods. Currently implemented: `accounts.list`, `containers.list`, `versionHeaders.list`, `workspaces.tags.get`, `workspaces.tags.list`, `workspaces.triggers.list`, `workspaces.variables.list`.
+This document tracks the remaining Tag Manager v2 surface and the CLI conventions used as methods are added. Implemented workspace surfaces include trigger and custom-variable list/create/delete/get/revert/update, built-in-variable create/delete/list/revert, version creation/publishing, and account user-permission management.
 
 All Tag Manager resources use a deeply nested path-based hierarchy:
 ```
@@ -203,11 +203,11 @@ Many resources also accept a full `path` positional arg (e.g. `accounts/123/cont
 
 | Method | CLI Command | Args/Flags | Output |
 |--------|-------------|------------|--------|
-| **create** | `gog gtm triggers create` | workspace flags; `--name` (required); `--type` (required, e.g. pageview, click, formSubmit, customEvent, etc.); `--filter` (repeatable); `--custom-event-filter` (repeatable) | JSON object |
+| **create** | `gog gtm triggers create` | workspace flags; `--name` and `--type` (required); repeatable Condition JSON via `--filter`, `--auto-event-filter`, and `--custom-event-filter`; timer Parameter JSON via `--event-name`, `--interval`, and `--limit` | JSON object |
 | **delete** | `gog gtm triggers delete <path>` | `path` (positional). `--force`. `confirmDestructive()`. | JSON `{"deleted": true}` |
 | **get** | `gog gtm triggers get <path>` | `path` (positional) | JSON object, TSV: TRIGGER_ID, NAME, TYPE |
 | **revert** | `gog gtm triggers revert <path>` | `path` (positional) | JSON object |
-| **update** | `gog gtm triggers update <path>` | `path` (positional); `--name`, `--type`, `--filter` (optional). Uses `flagProvided()`. | JSON object |
+| **update** | `gog gtm triggers update <path>` | `path` (positional); any create field flag. Uses `flagProvided()` and rejects empty updates. | JSON object |
 
 **Test requirements:**
 - Full CRUD + revert cycle; verify trigger type enum values
@@ -218,11 +218,11 @@ Many resources also accept a full `path` positional arg (e.g. `accounts/123/cont
 
 | Method | CLI Command | Args/Flags | Output |
 |--------|-------------|------------|--------|
-| **create** | `gog gtm variables create` | workspace flags; `--name` (required); `--type` (required); `--parameter` (repeatable key=value) | JSON object |
+| **create** | `gog gtm variables create` | workspace flags; `--name` and `--type` (required); `--parameter` accepts repeatable GTM Parameter JSON objects, including nested map/list values | JSON object |
 | **delete** | `gog gtm variables delete <path>` | `path` (positional). `--force`. `confirmDestructive()`. | JSON `{"deleted": true}` |
 | **get** | `gog gtm variables get <path>` | `path` (positional) | JSON object, TSV: VARIABLE_ID, NAME, TYPE |
 | **revert** | `gog gtm variables revert <path>` | `path` (positional) | JSON object |
-| **update** | `gog gtm variables update <path>` | `path` (positional); `--name`, `--type`, `--parameter` (optional). Uses `flagProvided()`. | JSON object |
+| **update** | `gog gtm variables update <path>` | `path` (positional); `--name`, `--type`, `--parameter` (optional). Uses `flagProvided()` and rejects empty updates. | JSON object |
 
 **Test requirements:**
 - Full CRUD + revert cycle; verify parameter key=value parsing
@@ -236,7 +236,7 @@ Many resources also accept a full `path` positional arg (e.g. `accounts/123/cont
 | **create** | `gog gtm built-in-variables create` | workspace flags; `--type` (required, repeatable: e.g. pageUrl, pageHostname, pagePath, referrer, event, etc.) | JSON object with list of created built-in variables |
 | **delete** | `gog gtm built-in-variables delete` | workspace flags; `--type` (required, repeatable). `--force`. `confirmDestructive()`. | JSON `{"deleted": true}` |
 | **list** | `gog gtm built-in-variables list` | workspace flags | JSON array, TSV: TYPE, NAME |
-| **revert** | `gog gtm built-in-variables revert` | workspace flags; `--type` (required) | JSON object |
+| **revert** | `gog gtm built-in-variables revert` | workspace flags; exactly one `--type` (required) | JSON object with type and resulting enabled state |
 
 **Notes:** Built-in variables use `type` enum instead of individual IDs. Create/delete take arrays of types.
 
