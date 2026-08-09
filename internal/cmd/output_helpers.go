@@ -2,12 +2,21 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/ui"
+)
+
+var plainFieldReplacer = strings.NewReplacer(
+	"\t", " ",
+	"\r\n", " ",
+	"\r", " ",
+	"\n", " ",
 )
 
 func tableWriter(ctx context.Context) (io.Writer, func()) {
@@ -16,6 +25,20 @@ func tableWriter(ctx context.Context) (io.Writer, func()) {
 	}
 	tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 	return tw, func() { _ = tw.Flush() }
+}
+
+func writeTableRow(ctx context.Context, w io.Writer, fields []string) {
+	if outfmt.IsPlain(ctx) {
+		fields = append([]string(nil), fields...)
+		for i := range fields {
+			fields[i] = sanitizePlainField(fields[i])
+		}
+	}
+	fmt.Fprintln(w, strings.Join(fields, "\t"))
+}
+
+func sanitizePlainField(s string) string {
+	return plainFieldReplacer.Replace(s)
 }
 
 func printNextPageHint(u *ui.UI, nextPageToken string) {

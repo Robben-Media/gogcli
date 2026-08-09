@@ -139,7 +139,7 @@ func (c *AnalyticsReportCmd) Run(ctx context.Context, flags *RootFlags) error {
 	for _, mh := range resp.MetricHeaders {
 		headers = append(headers, mh.Name)
 	}
-	fmt.Fprintln(w, strings.Join(headers, "\t"))
+	writeTableRow(ctx, w, headers)
 
 	// Build data rows
 	for _, row := range resp.Rows {
@@ -150,7 +150,7 @@ func (c *AnalyticsReportCmd) Run(ctx context.Context, flags *RootFlags) error {
 		for _, mv := range row.MetricValues {
 			vals = append(vals, mv.Value)
 		}
-		fmt.Fprintln(w, strings.Join(vals, "\t"))
+		writeTableRow(ctx, w, vals)
 	}
 
 	return nil
@@ -235,7 +235,7 @@ func (c *AnalyticsRealtimeCmd) Run(ctx context.Context, flags *RootFlags) error 
 	for _, mh := range resp.MetricHeaders {
 		headers = append(headers, mh.Name)
 	}
-	fmt.Fprintln(w, strings.Join(headers, "\t"))
+	writeTableRow(ctx, w, headers)
 
 	for _, row := range resp.Rows {
 		var vals []string
@@ -245,7 +245,7 @@ func (c *AnalyticsRealtimeCmd) Run(ctx context.Context, flags *RootFlags) error 
 		for _, mv := range row.MetricValues {
 			vals = append(vals, mv.Value)
 		}
-		fmt.Fprintln(w, strings.Join(vals, "\t"))
+		writeTableRow(ctx, w, vals)
 	}
 
 	return nil
