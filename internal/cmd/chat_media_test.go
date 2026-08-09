@@ -220,6 +220,60 @@ func TestExecute_ChatMediaDownload(t *testing.T) {
 	if result["path"] != outputPath {
 		t.Fatalf("expected path %s, got %v", outputPath, result["path"])
 	}
+	if result["size"] != float64(len(testContent)) {
+		t.Fatalf("expected size %d, got %v", len(testContent), result["size"])
+	}
+}
+
+func TestExecute_ChatMediaDownload_InterruptedPreservesDestinationWithoutReceipt(t *testing.T) {
+	origNew := newChatService
+	t.Cleanup(func() { newChatService = origNew })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "100")
+		_, _ = io.WriteString(w, "partial")
+	}))
+	defer srv.Close()
+
+	svc, err := chat.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newChatService = func(context.Context, string) (*chat.Service, error) { return svc, nil }
+
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "downloaded.txt")
+	if writeErr := os.WriteFile(dest, []byte("original"), 0o600); writeErr != nil {
+		t.Fatalf("WriteFile: %v", writeErr)
+	}
+
+	out := captureStdout(t, func() {
+		err = Execute([]string{"--json", "--account", "a@b.com", "chat", "media", "download", "media/abc123", "--output", dest})
+	})
+	if err == nil {
+		t.Fatal("expected interrupted download error")
+	}
+	if out != "" {
+		t.Fatalf("unexpected success receipt: %q", out)
+	}
+	data, readErr := os.ReadFile(dest)
+	if readErr != nil {
+		t.Fatalf("ReadFile: %v", readErr)
+	}
+	if string(data) != "original" {
+		t.Fatalf("destination changed: %q", data)
+	}
+	entries, readDirErr := os.ReadDir(dir)
+	if readDirErr != nil {
+		t.Fatalf("ReadDir: %v", readDirErr)
+	}
+	if len(entries) != 1 || entries[0].Name() != "downloaded.txt" {
+		t.Fatalf("temporary artifact left behind: %#v", entries)
+	}
 }
 
 func TestExecute_ChatMedia_ConsumerBlocked(t *testing.T) {

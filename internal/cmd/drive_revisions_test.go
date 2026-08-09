@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -152,6 +154,97 @@ func TestDriveRevisionsGetCmd_JSON(t *testing.T) {
 	})
 	if !strings.Contains(jsonOut, "rev1") || !strings.Contains(jsonOut, "keepForever") {
 		t.Fatalf("unexpected JSON output: %q", jsonOut)
+	}
+}
+
+func TestDownloadRevision_InterruptedDownloadPreservesDestination(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("alt") != "media" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Length", "100")
+		_, _ = io.WriteString(w, "partial")
+	}))
+	defer srv.Close()
+
+	svc, err := drive.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "revision.bin")
+	if writeErr := os.WriteFile(dest, []byte("original"), 0o600); writeErr != nil {
+		t.Fatalf("WriteFile: %v", writeErr)
+	}
+	if downloadErr := downloadRevision(context.Background(), svc, "file1", "rev1", &drive.Revision{}, dest); downloadErr == nil {
+		t.Fatal("expected interrupted download error")
+	}
+	data, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(data) != "original" {
+		t.Fatalf("destination changed: %q", data)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "revision.bin" {
+		t.Fatalf("temporary artifact left behind: %#v", entries)
+	}
+}
+
+func TestDownloadRevision_ReceiptReportsCommittedPathAndSize(t *testing.T) {
+	const body = "revision content"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, body)
+	}))
+	defer srv.Close()
+
+	svc, err := drive.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	dest := filepath.Join(t.TempDir(), "revision.bin")
+	ctx := outfmt.WithMode(context.Background(), outfmt.Mode{JSON: true})
+	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
+	if err != nil {
+		t.Fatalf("ui.New: %v", err)
+	}
+	ctx = ui.WithUI(ctx, u)
+
+	out := captureStdout(t, func() {
+		if downloadErr := downloadRevision(ctx, svc, "file1", "rev1", &drive.Revision{MimeType: "text/plain"}, dest); downloadErr != nil {
+			t.Fatalf("downloadRevision: %v", downloadErr)
+		}
+	})
+	var receipt struct {
+		Path string `json:"path"`
+		Size int64  `json:"size"`
+	}
+	if unmarshalErr := json.Unmarshal([]byte(out), &receipt); unmarshalErr != nil {
+		t.Fatalf("Unmarshal: %v", unmarshalErr)
+	}
+	if receipt.Path != dest || receipt.Size != int64(len(body)) {
+		t.Fatalf("unexpected receipt: %#v", receipt)
+	}
+	data, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(data) != body {
+		t.Fatalf("unexpected file: %q", data)
 	}
 }
 

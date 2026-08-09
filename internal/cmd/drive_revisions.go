@@ -170,16 +170,9 @@ func downloadRevision(ctx context.Context, svc *drive.Service, fileID, revisionI
 		outputPath = fmt.Sprintf("%s-revision-%s", fileID, revisionID)
 	}
 
-	// Create output file
-	// #nosec G304 -- User-provided output path for downloaded revision
-	f, err := os.Create(outputPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	// Copy content
-	size, err := io.Copy(f, resp.Body)
+	size, err := writeDownloadFile(outputPath, func(w io.Writer) (int64, error) {
+		return io.Copy(w, resp.Body)
+	})
 	if err != nil {
 		return err
 	}

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -149,6 +150,190 @@ func TestDownloadDriveFile_HTTPError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "download failed") || !strings.Contains(err.Error(), "nope") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestDownloadDriveFile_InterruptedDownloadPreservesDestination(t *testing.T) {
+	orig := driveDownload
+	t.Cleanup(func() { driveDownload = orig })
+	driveDownload = func(context.Context, *drive.Service, string) (*http.Response, error) {
+		return &http.Response{
+			Status:     "200 OK",
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(io.MultiReader(strings.NewReader("partial"), errorReader{err: errors.New("connection lost")})),
+		}, nil
+	}
+
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "file.bin")
+	if err := os.WriteFile(dest, []byte("original"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	_, _, err := downloadDriveFile(context.Background(), &drive.Service{}, &drive.File{Id: "id1", MimeType: "application/pdf"}, dest, "")
+	if err == nil {
+		t.Fatal("expected interrupted download error")
+	}
+	data, readErr := os.ReadFile(dest)
+	if readErr != nil {
+		t.Fatalf("ReadFile: %v", readErr)
+	}
+	if string(data) != "original" {
+		t.Fatalf("destination changed: %q", data)
+	}
+	entries, readDirErr := os.ReadDir(dir)
+	if readDirErr != nil {
+		t.Fatalf("ReadDir: %v", readDirErr)
+	}
+	if len(entries) != 1 || entries[0].Name() != "file.bin" {
+		t.Fatalf("temporary artifact left behind: %#v", entries)
+	}
+}
+
+func TestDownloadDriveFile_InterruptedNewDownloadLeavesNoArtifacts(t *testing.T) {
+	orig := driveDownload
+	t.Cleanup(func() { driveDownload = orig })
+	driveDownload = func(context.Context, *drive.Service, string) (*http.Response, error) {
+		return &http.Response{
+			Status:     "200 OK",
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(io.MultiReader(strings.NewReader("partial"), errorReader{err: errors.New("connection lost")})),
+		}, nil
+	}
+
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "file.bin")
+	if _, _, err := downloadDriveFile(context.Background(), &drive.Service{}, &drive.File{Id: "id1", MimeType: "application/pdf"}, dest, ""); err == nil {
+		t.Fatal("expected interrupted download error")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("failed new download left artifacts: %#v", entries)
+	}
+}
+
+type errorReader struct {
+	err error
+}
+
+func (r errorReader) Read([]byte) (int, error) {
+	return 0, r.err
+}
+
+type writeErrorTempFile struct {
+	file *os.File
+}
+
+func (f *writeErrorTempFile) Write(p []byte) (int, error) {
+	if len(p) > 0 {
+		_, _ = f.file.Write(p[:1])
+	}
+	return 0, errors.New("disk full")
+}
+
+func (f *writeErrorTempFile) Close() error { return f.file.Close() }
+func (f *writeErrorTempFile) Name() string { return f.file.Name() }
+
+type closeErrorTempFile struct {
+	file *os.File
+}
+
+func (f *closeErrorTempFile) Write(p []byte) (int, error) { return f.file.Write(p) }
+func (f *closeErrorTempFile) Name() string                { return f.file.Name() }
+func (f *closeErrorTempFile) Close() error {
+	_ = f.file.Close()
+	return errors.New("close failed")
+}
+
+func TestDownloadDriveFile_CommitFailuresPreserveDestination(t *testing.T) {
+	origDownload := driveDownload
+	origCreate := createDownloadTempFile
+	origReplace := replaceDownloadFile
+	t.Cleanup(func() {
+		driveDownload = origDownload
+		createDownloadTempFile = origCreate
+		replaceDownloadFile = origReplace
+	})
+
+	driveDownload = func(context.Context, *drive.Service, string) (*http.Response, error) {
+		return &http.Response{
+			Status:     "200 OK",
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader("replacement")),
+		}, nil
+	}
+
+	tests := []struct {
+		name   string
+		inject func()
+	}{
+		{
+			name: "write",
+			inject: func() {
+				createDownloadTempFile = func(dir, pattern string) (downloadTempFile, error) {
+					f, err := os.CreateTemp(dir, pattern)
+					if err != nil {
+						return nil, err
+					}
+					return &writeErrorTempFile{file: f}, nil
+				}
+			},
+		},
+		{
+			name: "close",
+			inject: func() {
+				createDownloadTempFile = func(dir, pattern string) (downloadTempFile, error) {
+					f, err := os.CreateTemp(dir, pattern)
+					if err != nil {
+						return nil, err
+					}
+					return &closeErrorTempFile{file: f}, nil
+				}
+			},
+		},
+		{
+			name: "replace",
+			inject: func() {
+				replaceDownloadFile = func(string, string) error {
+					return errors.New("replace failed")
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			createDownloadTempFile = origCreate
+			replaceDownloadFile = origReplace
+			tt.inject()
+
+			dir := t.TempDir()
+			dest := filepath.Join(dir, "file.bin")
+			if err := os.WriteFile(dest, []byte("original"), 0o600); err != nil {
+				t.Fatalf("WriteFile: %v", err)
+			}
+
+			if _, _, err := downloadDriveFile(context.Background(), &drive.Service{}, &drive.File{Id: "id1", MimeType: "application/pdf"}, dest, ""); err == nil {
+				t.Fatal("expected download failure")
+			}
+			data, err := os.ReadFile(dest)
+			if err != nil {
+				t.Fatalf("ReadFile: %v", err)
+			}
+			if string(data) != "original" {
+				t.Fatalf("destination changed: %q", data)
+			}
+			entries, err := os.ReadDir(dir)
+			if err != nil {
+				t.Fatalf("ReadDir: %v", err)
+			}
+			if len(entries) != 1 || entries[0].Name() != "file.bin" {
+				t.Fatalf("temporary artifact left behind: %#v", entries)
+			}
+		})
 	}
 }
 

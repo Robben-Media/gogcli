@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	stdbytes "bytes"
 	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -104,10 +106,6 @@ func downloadAttachmentToPath(
 		if st, err := os.Stat(outPath); err == nil && st.Size() == expectedSize {
 			return outPath, true, st.Size(), nil
 		}
-	} else if expectedSize == -1 {
-		if st, err := os.Stat(outPath); err == nil && st.Size() > 0 {
-			return outPath, true, st.Size(), nil
-		}
 	}
 
 	body, err := svc.Users.Messages.Attachments.Get("me", messageID, attachmentID).Context(ctx).Do()
@@ -126,11 +124,14 @@ func downloadAttachmentToPath(
 		}
 	}
 
-	if err := os.MkdirAll(filepath.Dir(outPath), 0o700); err != nil {
+	if mkdirErr := os.MkdirAll(filepath.Dir(outPath), 0o700); mkdirErr != nil {
+		return "", false, 0, mkdirErr
+	}
+	written, err := writeDownloadFile(outPath, func(w io.Writer) (int64, error) {
+		return io.Copy(w, stdbytes.NewReader(data))
+	})
+	if err != nil {
 		return "", false, 0, err
 	}
-	if err := os.WriteFile(outPath, data, 0o600); err != nil {
-		return "", false, 0, err
-	}
-	return outPath, false, int64(len(data)), nil
+	return outPath, false, written, nil
 }

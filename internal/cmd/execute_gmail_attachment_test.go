@@ -97,10 +97,10 @@ func TestExecute_GmailAttachment_OutPath_JSON(t *testing.T) {
 	}
 
 	parsed2 := run()
-	if atomic.LoadInt32(&attachmentCalls) != 1 {
+	if atomic.LoadInt32(&attachmentCalls) != 2 {
 		t.Fatalf("attachmentCalls=%d", attachmentCalls)
 	}
-	if parsed2["cached"] != true {
+	if parsed2["cached"] != false {
 		t.Fatalf("cached=%v", parsed2["cached"])
 	}
 }
