@@ -460,6 +460,16 @@ func (c *SheetsValuesBatchGetByFilterCmd) Run(ctx context.Context, flags *RootFl
 		u.Err().Println("No data found")
 		return nil
 	}
+	if outfmt.IsPlain(ctx) {
+		valueRanges := make([]*sheets.ValueRange, 0, len(resp.ValueRanges))
+		for _, matchedValueRange := range resp.ValueRanges {
+			if matchedValueRange != nil && matchedValueRange.ValueRange != nil {
+				valueRanges = append(valueRanges, matchedValueRange.ValueRange)
+			}
+		}
+		writeSheetsValueRangesPlain(ctx, valueRanges)
+		return nil
+	}
 
 	for i, mvr := range resp.ValueRanges {
 		u.Out().Printf("Range %d:", i+1)

@@ -12,10 +12,40 @@ import (
 	"google.golang.org/api/sheets/v4"
 )
 
-const sheetsSafeTSV = "tab value\tline feed\tcarriage return\tcrlf value\n"
+const (
+	sheetsSafeTSV      = "tab value\tline feed\tcarriage return\tcrlf value\n"
+	sheetsBatchSafeTSV = "range\trow\tcolumn\tvalue\n" +
+		"Sheet1!A1:D1\t1\t1\ttab value\n" +
+		"Sheet1!A1:D1\t1\t2\tline feed\n" +
+		"Sheet1!A1:D1\t1\t3\tcarriage return\n" +
+		"Sheet1!A1:D1\t1\t4\tcrlf value\n" +
+		"Sheet2!B2:D4\t1\t1\tsecond\n" +
+		"Sheet2!B2:D4\t1\t2\t\n" +
+		"Sheet2!B2:D4\t1\t3\tthird\n" +
+		"Sheet2!B2:D4\t3\t1\tlast\n"
+	sheetsColumnMajorSafeTSV = "range\trow\tcolumn\tvalue\n" +
+		"Sheet3!A1:B2\t1\t1\ta\n" +
+		"Sheet3!A1:B2\t2\t1\tb\n" +
+		"Sheet3!A1:B2\t1\t2\tc\n" +
+		"Sheet3!A1:B2\t2\t2\td\n"
+)
 
 func TestSheetsValueReads_PlainTSVPreservesRows(t *testing.T) {
 	values := [][]any{{"tab\tvalue", "line\nfeed", "carriage\rreturn", "crlf\r\nvalue"}}
+	valueRanges := []map[string]any{
+		{
+			"range":  "Sheet1!A1:D1",
+			"values": values,
+		},
+		{
+			"range": "Sheet2!B2:D4",
+			"values": [][]any{
+				{"second", nil, "third"},
+				{},
+				{"last"},
+			},
+		},
+	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
@@ -24,20 +54,31 @@ func TestSheetsValueReads_PlainTSVPreservesRows(t *testing.T) {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/values:batchGet"):
 			response = map[string]any{
 				"spreadsheetId": "s1",
-				"valueRanges": []map[string]any{{
-					"range":  "Sheet1!A1:D1",
-					"values": values,
-				}},
+				"valueRanges":   valueRanges,
 			}
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/values:batchGetByDataFilter"):
-			response = map[string]any{
-				"valueRanges": []map[string]any{{
-					"valueRange": map[string]any{
-						"range":  "Sheet1!A1:D1",
-						"values": values,
-					},
-				}},
+			var request struct {
+				MajorDimension string `json:"majorDimension"`
 			}
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Errorf("decode request: %v", err)
+				return
+			}
+			if request.MajorDimension == "COLUMNS" {
+				response = map[string]any{"valueRanges": []map[string]any{{
+					"valueRange": map[string]any{
+						"range":          "Sheet3!A1:B2",
+						"majorDimension": "COLUMNS",
+						"values":         [][]any{{"a", "b"}, {"c", "d"}},
+					},
+				}}}
+				break
+			}
+			matchedValueRanges := make([]map[string]any, len(valueRanges))
+			for i, valueRange := range valueRanges {
+				matchedValueRanges[i] = map[string]any{"valueRange": valueRange}
+			}
+			response = map[string]any{"valueRanges": matchedValueRanges}
 		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/values/"):
 			response = map[string]any{
 				"range":  "Sheet1!A1:D1",
@@ -71,18 +112,27 @@ func TestSheetsValueReads_PlainTSVPreservesRows(t *testing.T) {
 	tests := []struct {
 		name    string
 		command []string
+		want    string
 	}{
 		{
 			name:    "single range",
 			command: []string{"sheets", "get", "s1", "Sheet1!A1:D1"},
+			want:    sheetsSafeTSV,
 		},
 		{
 			name:    "batch ranges",
-			command: []string{"sheets", "batch-get", "s1", "Sheet1!A1:D1"},
+			command: []string{"sheets", "batch-get", "s1", "Sheet1!A1:D1", "Sheet2!B2:D4"},
+			want:    sheetsBatchSafeTSV,
 		},
 		{
 			name:    "filter ranges",
-			command: []string{"sheets", "batch-get-by-filter", "s1", "--filters-json", `[{"a1Range":"Sheet1!A1:D1"}]`},
+			command: []string{"sheets", "batch-get-by-filter", "s1", "--filters-json", `[{"a1Range":"Sheet1!A1:D1"},{"a1Range":"Sheet2!B2:D4"}]`},
+			want:    sheetsBatchSafeTSV,
+		},
+		{
+			name:    "column-major filter range",
+			command: []string{"sheets", "batch-get-by-filter", "s1", "--filters-json", `[{"a1Range":"Sheet3!A1:B2"}]`, "--major-dimension", "COLUMNS"},
+			want:    sheetsColumnMajorSafeTSV,
 		},
 	}
 
@@ -96,8 +146,8 @@ func TestSheetsValueReads_PlainTSVPreservesRows(t *testing.T) {
 					}
 				})
 			})
-			if !strings.HasSuffix(out, sheetsSafeTSV) {
-				t.Fatalf("plain output = %q, want sanitized row suffix %q", out, sheetsSafeTSV)
+			if out != tt.want {
+				t.Fatalf("plain output = %q, want %q", out, tt.want)
 			}
 		})
 	}
