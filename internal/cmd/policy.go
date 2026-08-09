@@ -54,6 +54,14 @@ func (c *PolicyCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 			"policy":  saved,
 		})
 	}
+	if outfmt.IsPlain(ctx) {
+		fmt.Fprintln(os.Stdout, "ACTION\tNAME\tACCOUNT\tCLIENT\tALLOW\tDENY\tREASON")
+		writeTableRow(ctx, os.Stdout, []string{
+			"create", saved.Name, saved.Account, saved.Client,
+			joinCSV(saved.Allow), joinCSV(saved.Deny), saved.Reason,
+		})
+		return nil
+	}
 	fmt.Fprintf(os.Stdout, "Saved policy %s\n", saved.Name)
 	return nil
 }
@@ -131,6 +139,7 @@ func (c *PolicyDeleteCmd) Run(ctx context.Context) error {
 		return err
 	}
 
+	deleted, _ := config.GetPolicy(cfg, c.Name)
 	if err := config.DeletePolicy(&cfg, c.Name); err != nil {
 		return usage(err.Error())
 	}
@@ -143,6 +152,11 @@ func (c *PolicyDeleteCmd) Run(ctx context.Context) error {
 			"deleted": true,
 			"name":    c.Name,
 		})
+	}
+	if outfmt.IsPlain(ctx) {
+		fmt.Fprintln(os.Stdout, "ACTION\tNAME\tACCOUNT\tCLIENT\tALLOW\tDENY\tREASON")
+		writeTableRow(ctx, os.Stdout, []string{"delete", deleted.Name, "", "", "", "", ""})
+		return nil
 	}
 	fmt.Fprintf(os.Stdout, "Deleted policy %s\n", c.Name)
 	return nil
