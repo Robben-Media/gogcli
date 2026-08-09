@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -47,7 +49,20 @@ func gmailWatchStatePath(account string) (string, error) {
 }
 
 func sanitizeAccountForPath(account string) string {
-	clean := strings.TrimSpace(strings.ToLower(account))
+	clean := normalizeWatchAccount(account)
+	if clean == "" {
+		return "unknown"
+	}
+	digest := sha256.Sum256([]byte(clean))
+	return hex.EncodeToString(digest[:])
+}
+
+func normalizeWatchAccount(account string) string {
+	return strings.TrimSpace(strings.ToLower(account))
+}
+
+func legacySanitizeAccountForPath(account string) string {
+	clean := normalizeWatchAccount(account)
 	if clean == "" {
 		return "unknown"
 	}
@@ -84,16 +99,50 @@ func loadGmailWatchStore(account string) (*gmailWatchStore, error) {
 		return nil, err
 	}
 	data, err := os.ReadFile(store.path)
-	if err != nil {
+	if errors.Is(err, os.ErrNotExist) {
+		legacyPath := filepath.Join(filepath.Dir(store.path), legacySanitizeAccountForPath(account)+".json")
+		data, err = os.ReadFile(legacyPath)
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, errors.New("watch state not found; run gmail watch start")
 		}
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(data, &store.state); err != nil {
+			return nil, err
+		}
+		if normalizeWatchAccount(store.state.Account) != normalizeWatchAccount(account) {
+			return nil, errors.New("watch state not found; run gmail watch start")
+		}
+		if err := migrateGmailWatchState(legacyPath, store.path, data); err != nil {
+			return nil, err
+		}
+		return store, nil
+	}
+	if err != nil {
 		return nil, err
 	}
 	if err := json.Unmarshal(data, &store.state); err != nil {
 		return nil, err
 	}
 	return store, nil
+}
+
+func migrateGmailWatchState(oldPath, newPath string, data []byte) error {
+	file, err := os.OpenFile(newPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		_ = os.Remove(newPath)
+		return err
+	}
+	if err := file.Close(); err != nil {
+		_ = os.Remove(newPath)
+		return err
+	}
+	return os.Remove(oldPath)
 }
 
 func (s *gmailWatchStore) Get() gmailWatchState {

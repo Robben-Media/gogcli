@@ -217,9 +217,6 @@ func TestGmailWatchStore_StateHelpers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("store: %v", err)
 	}
-	if !strings.Contains(store.path, "user_x_example_com.json") {
-		t.Fatalf("unexpected path: %s", store.path)
-	}
 	id, startErr := store.StartHistoryID("101")
 	if startErr != nil {
 		t.Fatalf("start history: %v", startErr)
