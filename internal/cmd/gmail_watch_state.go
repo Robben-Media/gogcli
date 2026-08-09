@@ -17,6 +17,8 @@ import (
 	"github.com/steipete/gogcli/internal/config"
 )
 
+const unknownWatchAccount = "unknown"
+
 type gmailWatchStore struct {
 	path  string
 	mu    sync.Mutex
@@ -51,7 +53,7 @@ func gmailWatchStatePath(account string) (string, error) {
 func sanitizeAccountForPath(account string) string {
 	clean := normalizeWatchAccount(account)
 	if clean == "" {
-		return "unknown"
+		return unknownWatchAccount
 	}
 	digest := sha256.Sum256([]byte(clean))
 	return hex.EncodeToString(digest[:])
@@ -64,7 +66,7 @@ func normalizeWatchAccount(account string) string {
 func legacySanitizeAccountForPath(account string) string {
 	clean := normalizeWatchAccount(account)
 	if clean == "" {
-		return "unknown"
+		return unknownWatchAccount
 	}
 	var b strings.Builder
 	b.Grow(len(clean))
@@ -98,29 +100,29 @@ func loadGmailWatchStore(account string) (*gmailWatchStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := os.ReadFile(store.path)
-	if errors.Is(err, os.ErrNotExist) {
+	data, readErr := os.ReadFile(store.path)
+	if errors.Is(readErr, os.ErrNotExist) {
 		legacyPath := filepath.Join(filepath.Dir(store.path), legacySanitizeAccountForPath(account)+".json")
-		data, err = os.ReadFile(legacyPath)
-		if errors.Is(err, os.ErrNotExist) {
+		data, readErr = os.ReadFile(legacyPath) //nolint:gosec // derived from the configured watch directory and sanitized account
+		if errors.Is(readErr, os.ErrNotExist) {
 			return nil, errors.New("watch state not found; run gmail watch start")
 		}
-		if err != nil {
-			return nil, err
+		if readErr != nil {
+			return nil, readErr
 		}
-		if err := json.Unmarshal(data, &store.state); err != nil {
-			return nil, err
+		if unmarshalErr := json.Unmarshal(data, &store.state); unmarshalErr != nil {
+			return nil, unmarshalErr
 		}
 		if normalizeWatchAccount(store.state.Account) != normalizeWatchAccount(account) {
 			return nil, errors.New("watch state not found; run gmail watch start")
 		}
-		if err := migrateGmailWatchState(legacyPath, store.path, data); err != nil {
-			return nil, err
+		if migrateErr := migrateGmailWatchState(legacyPath, store.path, data); migrateErr != nil {
+			return nil, migrateErr
 		}
 		return store, nil
 	}
-	if err != nil {
-		return nil, err
+	if readErr != nil {
+		return nil, readErr
 	}
 	if err := json.Unmarshal(data, &store.state); err != nil {
 		return nil, err
@@ -129,7 +131,7 @@ func loadGmailWatchStore(account string) (*gmailWatchStore, error) {
 }
 
 func migrateGmailWatchState(oldPath, newPath string, data []byte) error {
-	file, err := os.OpenFile(newPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	file, err := os.OpenFile(newPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) //nolint:gosec // derived from the configured watch directory and account hash
 	if err != nil {
 		return err
 	}

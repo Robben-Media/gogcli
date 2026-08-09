@@ -37,9 +37,9 @@ func TestGmailWatchStatePath_CollisionFreeForNormalizedAccounts(t *testing.T) {
 func TestLoadGmailWatchStore_MigratesMatchingLegacyState(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
-	newPath, err := gmailWatchStatePath("user+sales@example.com")
-	if err != nil {
-		t.Fatalf("new state path: %v", err)
+	newPath, pathErr := gmailWatchStatePath("user+sales@example.com")
+	if pathErr != nil {
+		t.Fatalf("new state path: %v", pathErr)
 	}
 	legacyPath := filepath.Join(filepath.Dir(newPath), "user_sales_example_com.json")
 	payload := []byte("{\"account\":\" User+Sales@Example.COM \",\"topic\":\"projects/p/topics/t\",\"historyId\":\"123\"}\n")
@@ -72,9 +72,9 @@ func TestLoadGmailWatchStore_MigratesMatchingLegacyState(t *testing.T) {
 func TestLoadGmailWatchStore_RejectsCollidingLegacyStateForAnotherAccount(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
-	requestedPath, err := gmailWatchStatePath("user+sales@example.com")
-	if err != nil {
-		t.Fatalf("requested state path: %v", err)
+	requestedPath, pathErr := gmailWatchStatePath("user+sales@example.com")
+	if pathErr != nil {
+		t.Fatalf("requested state path: %v", pathErr)
 	}
 	legacyPath := filepath.Join(filepath.Dir(requestedPath), "user_sales_example_com.json")
 	payload := []byte("{\"account\":\"user_sales@example.com\",\"historyId\":\"456\"}\n")
