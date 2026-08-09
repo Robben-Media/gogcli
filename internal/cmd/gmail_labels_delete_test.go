@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"google.golang.org/api/gmail/v1"
@@ -51,7 +52,7 @@ func TestExecute_GmailLabelsDelete_JSON(t *testing.T) {
 	// Test delete by name (should resolve to ID)
 	_ = captureStderr(t, func() {
 		out := captureStdout(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "gmail", "labels", "delete", "MyLabel"}); err != nil {
+			if err := Execute([]string{"--json", "--force", "--account", "a@b.com", "gmail", "labels", "delete", "MyLabel"}); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
 		})
@@ -101,7 +102,7 @@ func TestExecute_GmailLabelsDelete_ByID_JSON(t *testing.T) {
 	// Test delete by ID directly
 	_ = captureStderr(t, func() {
 		out := captureStdout(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "gmail", "labels", "delete", "Label_1"}); err != nil {
+			if err := Execute([]string{"--json", "--force", "--account", "a@b.com", "gmail", "labels", "delete", "Label_1"}); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
 		})
@@ -109,6 +110,54 @@ func TestExecute_GmailLabelsDelete_ByID_JSON(t *testing.T) {
 			t.Fatalf("expected Label_1 in out=%q", out)
 		}
 	})
+}
+
+func TestExecute_GmailLabelsDelete_NoInputRefusesBeforeDelete(t *testing.T) {
+	origNew := newGmailService
+	t.Cleanup(func() { newGmailService = origNew })
+
+	var listRequests atomic.Int32
+	var deleteRequests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/gmail/v1/users/me/labels" && r.Method == http.MethodGet:
+			listRequests.Add(1)
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"labels": []map[string]any{{"id": "Label_1", "name": "MyLabel", "type": "user"}},
+			})
+		case r.URL.Path == "/gmail/v1/users/me/labels/Label_1" && r.Method == http.MethodDelete:
+			deleteRequests.Add(1)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	svc, err := gmail.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
+
+	err = Execute([]string{"--json", "--no-input", "--account", "a@b.com", "gmail", "labels", "delete", "MyLabel"})
+	if err == nil {
+		t.Fatal("expected non-interactive deletion to require --force")
+	}
+	if !strings.Contains(err.Error(), "without --force") {
+		t.Fatalf("expected --force guidance, got %v", err)
+	}
+	if got := listRequests.Load(); got != 1 {
+		t.Fatalf("expected one read-only label resolution request, got %d", got)
+	}
+	if got := deleteRequests.Load(); got != 0 {
+		t.Fatalf("expected no delete request after refusal, got %d", got)
+	}
 }
 
 func TestExecute_GmailLabelsDelete_EmptyLabel(t *testing.T) {
