@@ -12,6 +12,10 @@
 - Distribution: use `Robben-Media/gogcli` as the sole install and release source; remove upstream Homebrew/tap assumptions.
 - Auth: request the full Analytics and Tag Manager administration scopes, preserve existing scopes during service-specific reauthorization, add explicit `--replace-scopes`, and allow up to 10 minutes for browser consent. (#13)
 
+### Fixed
+
+- Policy: enforce normalized service policies for canonical hyphenated Business Profile, Search Console, and Tag Manager commands. (#50, #100)
+
 ## 0.10.0 - 2026-08-07
 
 ### Highlights
