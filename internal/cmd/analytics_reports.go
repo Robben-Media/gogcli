@@ -135,7 +135,7 @@ func (c *AnalyticsPivotReportCmd) Run(ctx context.Context, flags *RootFlags) err
 			}
 		}
 	}
-	fmt.Fprintln(w, strings.Join(headers, "\t"))
+	writeTableRow(ctx, w, headers)
 
 	// Build data rows
 	for _, row := range resp.Rows {
@@ -146,7 +146,7 @@ func (c *AnalyticsPivotReportCmd) Run(ctx context.Context, flags *RootFlags) err
 		for _, mv := range row.MetricValues {
 			vals = append(vals, mv.Value)
 		}
-		fmt.Fprintln(w, strings.Join(vals, "\t"))
+		writeTableRow(ctx, w, vals)
 	}
 
 	return nil
@@ -228,7 +228,7 @@ func (c *AnalyticsBatchReportsCmd) Run(ctx context.Context, flags *RootFlags) er
 			for _, mh := range report.MetricHeaders {
 				headers = append(headers, mh.Name)
 			}
-			fmt.Fprintln(w, strings.Join(headers, "\t"))
+			writeTableRow(ctx, w, headers)
 			for _, row := range report.Rows {
 				var vals []string
 				for _, dv := range row.DimensionValues {
@@ -237,7 +237,7 @@ func (c *AnalyticsBatchReportsCmd) Run(ctx context.Context, flags *RootFlags) er
 				for _, mv := range row.MetricValues {
 					vals = append(vals, mv.Value)
 				}
-				fmt.Fprintln(w, strings.Join(vals, "\t"))
+				writeTableRow(ctx, w, vals)
 			}
 		}
 	}
@@ -318,7 +318,7 @@ func (c *AnalyticsBatchPivotReportsCmd) Run(ctx context.Context, flags *RootFlag
 			for _, dh := range report.DimensionHeaders {
 				headers = append(headers, dh.Name)
 			}
-			fmt.Fprintln(w, strings.Join(headers, "\t"))
+			writeTableRow(ctx, w, headers)
 			for _, row := range report.Rows {
 				var vals []string
 				for _, dv := range row.DimensionValues {
@@ -327,7 +327,7 @@ func (c *AnalyticsBatchPivotReportsCmd) Run(ctx context.Context, flags *RootFlag
 				for _, mv := range row.MetricValues {
 					vals = append(vals, mv.Value)
 				}
-				fmt.Fprintln(w, strings.Join(vals, "\t"))
+				writeTableRow(ctx, w, vals)
 			}
 		}
 	}

@@ -277,7 +277,7 @@ func (c *AnalyticsAudienceExportsQueryCmd) Run(ctx context.Context, flags *RootF
 
 	// Print header row
 	if len(dimensionNames) > 0 {
-		fmt.Fprintln(w, strings.Join(dimensionNames, "\t"))
+		writeTableRow(ctx, w, dimensionNames)
 	} else {
 		fmt.Fprintln(w, "DIMENSION_VALUES")
 	}
@@ -289,7 +289,7 @@ func (c *AnalyticsAudienceExportsQueryCmd) Run(ctx context.Context, flags *RootF
 			vals = append(vals, dv.Value)
 		}
 		if len(vals) > 0 {
-			fmt.Fprintln(w, strings.Join(vals, "\t"))
+			writeTableRow(ctx, w, vals)
 		}
 	}
 
