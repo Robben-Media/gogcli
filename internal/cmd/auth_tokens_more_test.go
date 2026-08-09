@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/99designs/keyring"
+
 	"github.com/steipete/gogcli/internal/config"
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/secrets"
@@ -178,7 +180,7 @@ func (m *memStore) GetToken(client string, email string) (secrets.Token, error) 
 	}
 	tok, ok := m.tokens[client+":"+email]
 	if !ok {
-		return secrets.Token{}, errors.New("not found")
+		return secrets.Token{}, keyring.ErrKeyNotFound
 	}
 	return tok, nil
 }

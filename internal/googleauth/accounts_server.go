@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/99designs/keyring"
 	"golang.org/x/oauth2"
 
 	"github.com/steipete/gogcli/internal/config"
@@ -281,12 +282,9 @@ func (ms *ManageServer) handleAuthUpgrade(w http.ResponseWriter, r *http.Request
 	}
 	ms.oauthState = state
 
-	// Use requested manage services (exclude Keep)
-	services := manageServices(ms.opts.Services)
-
-	scopes, err := ScopesForManage(services)
+	_, scopes, err := ms.authGrant(email)
 	if err != nil {
-		http.Error(w, "Failed to get scopes", http.StatusInternalServerError)
+		http.Error(w, "Failed to read existing authorization", http.StatusInternalServerError)
 		return
 	}
 
@@ -398,6 +396,14 @@ func (ms *ManageServer) handleOAuthCallback(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	services, scopes, err = ms.authGrant(email)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		renderErrorPage(w, "Failed to read existing authorization: "+err.Error())
+
+		return
+	}
+
 	// Pre-flight: ensure keychain is accessible before storing token
 	needKeychain, err := shouldEnsureKeychainAccess()
 	if err != nil {
@@ -437,6 +443,28 @@ func (ms *ManageServer) handleOAuthCallback(w http.ResponseWriter, r *http.Reque
 	// Render success page with the new template
 	w.WriteHeader(http.StatusOK)
 	renderSuccessPageWithDetails(w, email, serviceNames)
+}
+
+func (ms *ManageServer) authGrant(email string) ([]Service, []string, error) {
+	services := manageServices(ms.opts.Services)
+
+	scopes, err := ScopesForManage(services)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	existing, err := ms.store.GetToken(ms.client, email)
+	if errors.Is(err, keyring.ErrKeyNotFound) {
+		return services, scopes, nil
+	}
+
+	if err != nil {
+		return nil, nil, fmt.Errorf("read existing token: %w", err)
+	}
+
+	services, scopes = MergeAuthGrant(services, scopes, existing.Services, existing.Scopes)
+
+	return services, scopes, nil
 }
 
 func (ms *ManageServer) handleSetDefault(w http.ResponseWriter, r *http.Request) {

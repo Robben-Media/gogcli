@@ -69,7 +69,7 @@ func TestFormat_GoogleAPIError(t *testing.T) {
 	}
 	got := Format(err)
 
-	if !containsAll(got, "403", "insufficientPermissions", "nope") {
+	if !containsAll(got, "403", "insufficientPermissions", "nope", "--services user --force-consent") {
 		t.Fatalf("unexpected: %q", got)
 	}
 }
