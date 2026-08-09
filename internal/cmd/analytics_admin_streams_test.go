@@ -343,6 +343,77 @@ func TestExecute_AADataStreamsGet_JSON(t *testing.T) {
 	}
 }
 
+func TestExecute_AADataStreamsGet_PlainStableSchema(t *testing.T) {
+	tests := []struct {
+		name          string
+		streamType    string
+		streamData    map[string]any
+		measurementID string
+	}{
+		{
+			name:       "web stream",
+			streamType: "WEB_DATA_STREAM",
+			streamData: map[string]any{
+				"webStreamData": map[string]any{
+					"defaultUri":    "https://healthcare.itallyllc.com",
+					"measurementId": "G-ABC123",
+				},
+			},
+			measurementID: "G-ABC123",
+		},
+		{
+			name:       "non-web stream",
+			streamType: "ANDROID_APP_DATA_STREAM",
+			streamData: map[string]any{
+				"androidAppStreamData": map[string]any{
+					"packageName": "com.example.app",
+				},
+			},
+			measurementID: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				response := map[string]any{
+					"name":        "properties/123/dataStreams/456",
+					"type":        tt.streamType,
+					"displayName": "Healthcare LP",
+					"createTime":  "2026-01-01T00:00:00Z",
+					"updateTime":  "2026-01-02T00:00:00Z",
+				}
+				for key, value := range tt.streamData {
+					response[key] = value
+				}
+				_ = json.NewEncoder(w).Encode(response)
+			}))
+			defer srv.Close()
+			setupAnalyticsServices(t, srv)
+
+			out := captureStdout(t, func() {
+				_ = captureStderr(t, func() {
+					if err := Execute([]string{
+						"--plain", "--account", "a@b.com",
+						"analytics", "admin", "data-streams", "get",
+						"--property", "123",
+						"456",
+					}); err != nil {
+						t.Fatalf("Execute: %v", err)
+					}
+				})
+			})
+
+			want := "NAME\tTYPE\tDISPLAY_NAME\tCREATED\tUPDATED\tMEASUREMENT_ID\n" +
+				"properties/123/dataStreams/456\t" + tt.streamType + "\tHealthcare LP\t2026-01-01T00:00:00Z\t2026-01-02T00:00:00Z\t" + tt.measurementID + "\n"
+			if out != want {
+				t.Fatalf("plain output mismatch:\nwant %q\ngot  %q", want, out)
+			}
+		})
+	}
+}
+
 func TestExecute_AADataStreamsDelete_WithoutForce(t *testing.T) {
 	srv := analyticsAdminStreamsTestServer()
 	defer srv.Close()
