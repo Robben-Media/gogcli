@@ -16,7 +16,7 @@ import (
 
 var errUnexpectedChatServiceCall = errors.New("unexpected chat service call")
 
-func TestExecute_ChatSpacesList_Text(t *testing.T) {
+func TestExecute_ChatSpacesList_PlainKeepsOneRowPerSpace(t *testing.T) {
 	origNew := newChatService
 	t.Cleanup(func() { newChatService = origNew })
 
@@ -28,7 +28,7 @@ func TestExecute_ChatSpacesList_Text(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"spaces": []map[string]any{
-				{"name": "spaces/aaa", "displayName": "Engineering", "spaceType": "SPACE"},
+				{"name": "spaces/aaa", "displayName": "Engineering\tNorth\nFloor\rOld\r\nWing", "spaceType": "SPACE"},
 				{"name": "spaces/bbb", "displayName": "", "spaceType": "DIRECT_MESSAGE"},
 			},
 			"nextPageToken": "npt",
@@ -48,7 +48,7 @@ func TestExecute_ChatSpacesList_Text(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		errOut := captureStderr(t, func() {
-			if err := Execute([]string{"--account", "a@b.com", "chat", "spaces", "list", "--max", "2"}); err != nil {
+			if err := Execute([]string{"--plain", "--account", "a@b.com", "chat", "spaces", "list", "--max", "2"}); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
 		})
@@ -56,8 +56,21 @@ func TestExecute_ChatSpacesList_Text(t *testing.T) {
 			t.Fatalf("unexpected stderr=%q", errOut)
 		}
 	})
-	if !strings.Contains(out, "RESOURCE") || !strings.Contains(out, "spaces/aaa") || !strings.Contains(out, "Engineering") {
-		t.Fatalf("unexpected out=%q", out)
+
+	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+	if got, want := len(lines), 3; got != want {
+		t.Fatalf("physical rows = %d, want %d; output=%q", got, want, out)
+	}
+	for i, line := range lines {
+		if got, want := len(strings.Split(line, "\t")), 3; got != want {
+			t.Fatalf("row %d columns = %d, want %d; row=%q", i, got, want, line)
+		}
+		if strings.ContainsRune(line, '\r') {
+			t.Fatalf("row %d contains carriage return: %q", i, line)
+		}
+	}
+	if !strings.Contains(out, "Engineering North Floor Old Wing") {
+		t.Fatalf("sanitized display name missing from output: %q", out)
 	}
 }
 

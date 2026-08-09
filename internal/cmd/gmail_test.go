@@ -55,8 +55,8 @@ func TestBestUnsubscribeLink(t *testing.T) {
 }
 
 func TestSanitizeTab(t *testing.T) {
-	if got := sanitizeTab("a\tb"); got != "a b" {
-		t.Fatalf("unexpected: %q", got)
+	if got, want := sanitizeTab("tab\tline\ncarriage\rwindows\r\nend"), "tab line carriage windows end"; got != want {
+		t.Fatalf("sanitizeTab() = %q, want %q", got, want)
 	}
 }
 

@@ -170,5 +170,5 @@ func formatPartialDate(d *people.Date) string {
 }
 
 func sanitizeTab(s string) string {
-	return strings.ReplaceAll(s, "\t", " ")
+	return sanitizePlainField(s)
 }
