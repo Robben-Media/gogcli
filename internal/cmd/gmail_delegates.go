@@ -144,15 +144,19 @@ func (c *GmailDelegatesRemoveCmd) Run(ctx context.Context, flags *RootFlags) err
 		return err
 	}
 
+	delegateEmail := strings.TrimSpace(c.DelegateEmail)
+	if delegateEmail == "" {
+		return usage("empty delegateEmail")
+	}
+	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("remove gmail delegate %s", delegateEmail)); confirmErr != nil {
+		return confirmErr
+	}
+
 	svc, err := newGmailService(ctx, account)
 	if err != nil {
 		return err
 	}
 
-	delegateEmail := strings.TrimSpace(c.DelegateEmail)
-	if delegateEmail == "" {
-		return usage("empty delegateEmail")
-	}
 	err = svc.Users.Settings.Delegates.Delete("me", delegateEmail).Do()
 	if err != nil {
 		return err
