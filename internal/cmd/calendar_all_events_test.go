@@ -89,12 +89,17 @@ func TestListAllCalendarsEvents_JSON(t *testing.T) {
 	})
 
 	var parsed struct {
-		Events []map[string]any `json:"events"`
+		Events   []map[string]any `json:"events"`
+		Errors   []map[string]any `json:"errors"`
+		Complete bool             `json:"complete"`
 	}
 	if err := json.Unmarshal([]byte(jsonOut), &parsed); err != nil {
 		t.Fatalf("json parse: %v", err)
 	}
 	if len(parsed.Events) != 2 {
 		t.Fatalf("unexpected events: %#v", parsed.Events)
+	}
+	if !parsed.Complete || len(parsed.Errors) != 0 {
+		t.Fatalf("unexpected completeness metadata: complete=%v errors=%#v", parsed.Complete, parsed.Errors)
 	}
 }

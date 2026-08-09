@@ -83,6 +83,11 @@ type eventWithCalendar struct {
 	EndLocal       string `json:"endLocal,omitempty"`
 }
 
+type calendarEventError struct {
+	CalendarID string `json:"calendarId"`
+	Error      string `json:"error"`
+}
+
 func listAllCalendarsEvents(ctx context.Context, svc *calendar.Service, from, to string, maxResults int64, page, query, privatePropFilter, sharedPropFilter, fields string, showWeekday bool) error {
 	u := ui.FromContext(ctx)
 
@@ -118,6 +123,7 @@ func listCalendarIDsEvents(ctx context.Context, svc *calendar.Service, calendarI
 	u := ui.FromContext(ctx)
 
 	all := []*eventWithCalendar{}
+	failures := []calendarEventError{}
 	for _, calID := range calendarIDs {
 		calID = strings.TrimSpace(calID)
 		if calID == "" {
@@ -144,7 +150,9 @@ func listCalendarIDsEvents(ctx context.Context, svc *calendar.Service, calendarI
 		}
 		events, err := call.Context(ctx).Do()
 		if err != nil {
-			u.Err().Printf("calendar %s: %v", calID, err)
+			failure := calendarEventError{CalendarID: calID, Error: err.Error()}
+			failures = append(failures, failure)
+			u.Err().Printf("calendar %s: %s", failure.CalendarID, failure.Error)
 			continue
 		}
 		for _, e := range events.Items {
@@ -164,10 +172,22 @@ func listCalendarIDsEvents(ctx context.Context, svc *calendar.Service, calendarI
 		}
 	}
 
-	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"events": all})
+	var resultErr error
+	if len(failures) > 0 {
+		resultErr = fmt.Errorf("failed to fetch events from %d calendar(s)", len(failures))
 	}
-	if len(all) == 0 {
+
+	if outfmt.IsJSON(ctx) {
+		if err := outfmt.WriteJSON(os.Stdout, map[string]any{
+			"events":   all,
+			"errors":   failures,
+			"complete": len(failures) == 0,
+		}); err != nil {
+			return err
+		}
+		return resultErr
+	}
+	if len(all) == 0 && len(failures) == 0 {
 		u.Err().Println("No events")
 		return nil
 	}
@@ -175,18 +195,24 @@ func listCalendarIDsEvents(ctx context.Context, svc *calendar.Service, calendarI
 	w, flush := tableWriter(ctx)
 	defer flush()
 	if showWeekday {
-		fmt.Fprintln(w, "CALENDAR\tID\tSTART\tSTART_DOW\tEND\tEND_DOW\tSUMMARY")
+		fmt.Fprintln(w, "TYPE\tCALENDAR\tID\tSTART\tSTART_DOW\tEND\tEND_DOW\tSUMMARY\tERROR")
 		for _, e := range all {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", e.CalendarID, e.Id, eventStart(e.Event), e.StartDayOfWeek, eventEnd(e.Event), e.EndDayOfWeek, e.Summary)
+			fmt.Fprintf(w, "event\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n", e.CalendarID, e.Id, eventStart(e.Event), e.StartDayOfWeek, eventEnd(e.Event), e.EndDayOfWeek, e.Summary)
 		}
-		return nil
+		for _, failure := range failures {
+			fmt.Fprintf(w, "calendar_error\t%s\t\t\t\t\t\t\t%s\n", failure.CalendarID, sanitizeTab(strings.NewReplacer("\r", " ", "\n", " ").Replace(failure.Error)))
+		}
+		return resultErr
 	}
 
-	fmt.Fprintln(w, "CALENDAR\tID\tSTART\tEND\tSUMMARY")
+	fmt.Fprintln(w, "TYPE\tCALENDAR\tID\tSTART\tEND\tSUMMARY\tERROR")
 	for _, e := range all {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", e.CalendarID, e.Id, eventStart(e.Event), eventEnd(e.Event), e.Summary)
+		fmt.Fprintf(w, "event\t%s\t%s\t%s\t%s\t%s\t\n", e.CalendarID, e.Id, eventStart(e.Event), eventEnd(e.Event), e.Summary)
 	}
-	return nil
+	for _, failure := range failures {
+		fmt.Fprintf(w, "calendar_error\t%s\t\t\t\t\t%s\n", failure.CalendarID, sanitizeTab(strings.NewReplacer("\r", " ", "\n", " ").Replace(failure.Error)))
+	}
+	return resultErr
 }
 
 func resolveCalendarIDs(ctx context.Context, svc *calendar.Service, inputs []string) ([]string, error) {
