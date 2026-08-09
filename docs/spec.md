@@ -103,12 +103,14 @@ Implementation: `internal/secrets/store.go`.
   - requests `access_type=offline`
   - supports `--force-consent` to force the consent prompt when Google doesn't return a refresh token
   - uses `include_granted_scopes=true` to support incremental auth re-runs
+  - preserves scopes recorded for an existing account when adding services
+  - supports `--replace-scopes` for an explicit exact-scope replacement (implies `--force-consent`)
 
 Scope selection note:
 
 - The consent screen shows the scopes the CLI requested.
 - Users cannot selectively un-check individual requested scopes in the consent screen; they either approve all requested scopes or cancel.
-- To request fewer scopes, choose fewer services via `gog auth add --services ...` or use `gog auth add --readonly` where applicable.
+- For a new account, request fewer scopes with `gog auth add --services ...` or `gog auth add --readonly`. Reauthorization is additive; use `--replace-scopes` to intentionally downgrade an existing grant.
 
 ## Config layout
 
@@ -148,7 +150,7 @@ Flag aliases:
 - `gog auth credentials <credentials.json|->`
 - `gog auth credentials list`
 - `gog --client <name> auth credentials <credentials.json|->`
-- `gog auth add <email> [--services user|all|gmail,calendar,classroom,drive,docs,contacts,tasks,sheets,people,groups] [--readonly] [--drive-scope full|readonly|file] [--manual] [--force-consent]`
+- `gog auth add <email> [--services user|all|gmail,calendar,classroom,drive,docs,contacts,tasks,sheets,people,groups] [--readonly] [--drive-scope full|readonly|file] [--manual] [--force-consent] [--replace-scopes]`
 - `gog auth services [--markdown]`
 - `gog auth keep <email> --key <service-account.json>` (Google Keep; Workspace only)
 - `gog auth list`
@@ -344,7 +346,9 @@ We store a single refresh token per Google account email.
 
 - `gog auth add` requests a union of scopes based on `--services`.
 - Each API client refreshes an access token for the subset of scopes needed for that service.
-- If you later want additional services, re-run `gog auth add <email> --services ...` (may require `--force-consent` to mint a new refresh token).
+- If you later want additional services, re-run `gog auth add <email> --services ...`; stored scopes are retained (and Google may require `--force-consent` to mint a new refresh token).
+- Use `--replace-scopes` only to intentionally replace an existing grant with exactly the selected services.
+- To recover after an accidental replacement, re-run `gog auth add <email> --services user --force-consent` (or list every service the account should retain).
 
 - Gmail: `https://mail.google.com/` (or narrower scopes if we decide later)
 - Calendar: `https://www.googleapis.com/auth/calendar`

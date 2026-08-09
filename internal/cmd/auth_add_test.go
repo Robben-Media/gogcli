@@ -597,9 +597,173 @@ func TestAuthAddCmd_SheetsDriveScopeFile(t *testing.T) {
 	}
 }
 
+func TestAuthAddCmd_PreservesExistingGrant(t *testing.T) {
+	origAuth := authorizeGoogle
+	origOpen := openSecretsStore
+	origKeychain := ensureKeychainAccess
+	origFetch := fetchAuthorizedEmail
+	t.Cleanup(func() {
+		authorizeGoogle = origAuth
+		openSecretsStore = origOpen
+		ensureKeychainAccess = origKeychain
+		fetchAuthorizedEmail = origFetch
+	})
+
+	ensureKeychainAccess = func() error { return nil }
+	store := newMemSecretsStore()
+	existingServices := []googleauth.Service{googleauth.ServiceGmail, googleauth.ServiceDrive}
+	existingScopes, scopeErr := googleauth.ScopesForManage(existingServices)
+	if scopeErr != nil {
+		t.Fatalf("ScopesForManage: %v", scopeErr)
+	}
+	if err := store.SetToken(config.DefaultClientName, "user@example.com", secrets.Token{
+		Email:        "user@example.com",
+		Services:     []string{"gmail", "drive"},
+		Scopes:       existingScopes,
+		RefreshToken: "old-rt",
+	}); err != nil {
+		t.Fatalf("SetToken: %v", err)
+	}
+	openSecretsStore = func() (secrets.Store, error) { return store, nil }
+
+	var gotOpts googleauth.AuthorizeOptions
+	authorizeGoogle = func(_ context.Context, opts googleauth.AuthorizeOptions) (string, error) {
+		gotOpts = opts
+		gotOpts.Services = append([]googleauth.Service(nil), opts.Services...)
+		gotOpts.Scopes = append([]string(nil), opts.Scopes...)
+		return "new-rt", nil
+	}
+	fetchAuthorizedEmail = func(context.Context, string, string, []string, time.Duration) (string, error) {
+		return "user@example.com", nil
+	}
+
+	_ = captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--json", "auth", "add", "user@example.com",
+				"--services", "sheets", "--force-consent",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	for _, service := range []googleauth.Service{googleauth.ServiceGmail, googleauth.ServiceDrive, googleauth.ServiceSheets} {
+		if !containsServiceInSlice(gotOpts.Services, service) {
+			t.Fatalf("missing %s from authorization services: %v", service, gotOpts.Services)
+		}
+	}
+	if !containsStringInSlice(gotOpts.Scopes, "https://www.googleapis.com/auth/gmail.modify") {
+		t.Fatalf("existing Gmail scope was not retained: %v", gotOpts.Scopes)
+	}
+	if !containsStringInSlice(gotOpts.Scopes, "https://www.googleapis.com/auth/spreadsheets") {
+		t.Fatalf("new Sheets scope was not requested: %v", gotOpts.Scopes)
+	}
+	if !gotOpts.ForceConsent || !gotOpts.DisableIncludeGrantedScopes {
+		t.Fatalf("unexpected force-consent options: %+v", gotOpts)
+	}
+
+	stored, err := store.GetToken(config.DefaultClientName, "user@example.com")
+	if err != nil {
+		t.Fatalf("GetToken: %v", err)
+	}
+	if strings.Join(stored.Services, ",") != "drive,gmail,sheets" {
+		t.Fatalf("unexpected stored services: %v", stored.Services)
+	}
+	if !containsStringInSlice(stored.Scopes, "https://www.googleapis.com/auth/gmail.modify") ||
+		!containsStringInSlice(stored.Scopes, "https://www.googleapis.com/auth/spreadsheets") {
+		t.Fatalf("unexpected stored scopes: %v", stored.Scopes)
+	}
+}
+
+func TestAuthAddCmd_ReplaceScopesIsExplicit(t *testing.T) {
+	origAuth := authorizeGoogle
+	origOpen := openSecretsStore
+	origKeychain := ensureKeychainAccess
+	origFetch := fetchAuthorizedEmail
+	t.Cleanup(func() {
+		authorizeGoogle = origAuth
+		openSecretsStore = origOpen
+		ensureKeychainAccess = origKeychain
+		fetchAuthorizedEmail = origFetch
+	})
+
+	ensureKeychainAccess = func() error { return nil }
+	store := newMemSecretsStore()
+	existingScopes, scopeErr := googleauth.ScopesForManage([]googleauth.Service{googleauth.ServiceGmail})
+	if scopeErr != nil {
+		t.Fatalf("ScopesForManage: %v", scopeErr)
+	}
+	if err := store.SetToken(config.DefaultClientName, "user@example.com", secrets.Token{
+		Email:        "user@example.com",
+		Services:     []string{"gmail"},
+		Scopes:       existingScopes,
+		RefreshToken: "old-rt",
+	}); err != nil {
+		t.Fatalf("SetToken: %v", err)
+	}
+	openSecretsStore = func() (secrets.Store, error) { return store, nil }
+
+	var gotOpts googleauth.AuthorizeOptions
+	authorizeGoogle = func(_ context.Context, opts googleauth.AuthorizeOptions) (string, error) {
+		gotOpts = opts
+		gotOpts.Services = append([]googleauth.Service(nil), opts.Services...)
+		gotOpts.Scopes = append([]string(nil), opts.Scopes...)
+		return "new-rt", nil
+	}
+	fetchAuthorizedEmail = func(context.Context, string, string, []string, time.Duration) (string, error) {
+		return "user@example.com", nil
+	}
+
+	var stderr string
+	_ = captureStdout(t, func() {
+		stderr = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--json", "auth", "add", "user@example.com",
+				"--services", "sheets", "--replace-scopes",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	if !gotOpts.ForceConsent || !gotOpts.DisableIncludeGrantedScopes {
+		t.Fatalf("--replace-scopes must force an exact consent request: %+v", gotOpts)
+	}
+	if len(gotOpts.Services) != 1 || gotOpts.Services[0] != googleauth.ServiceSheets {
+		t.Fatalf("unexpected replacement services: %v", gotOpts.Services)
+	}
+	if containsStringInSlice(gotOpts.Scopes, "https://www.googleapis.com/auth/gmail.modify") {
+		t.Fatalf("replacement unexpectedly retained Gmail scope: %v", gotOpts.Scopes)
+	}
+	if !strings.Contains(stderr, "Replacing the existing OAuth grant") {
+		t.Fatalf("missing replacement warning: %q", stderr)
+	}
+
+	stored, err := store.GetToken(config.DefaultClientName, "user@example.com")
+	if err != nil {
+		t.Fatalf("GetToken: %v", err)
+	}
+	if strings.Join(stored.Services, ",") != "sheets" {
+		t.Fatalf("unexpected stored replacement services: %v", stored.Services)
+	}
+	if containsStringInSlice(stored.Scopes, "https://www.googleapis.com/auth/gmail.modify") {
+		t.Fatalf("stored replacement unexpectedly retained Gmail scope: %v", stored.Scopes)
+	}
+}
+
 func containsStringInSlice(items []string, want string) bool {
 	for _, it := range items {
 		if it == want {
+			return true
+		}
+	}
+	return false
+}
+
+func containsServiceInSlice(items []googleauth.Service, want googleauth.Service) bool {
+	for _, item := range items {
+		if item == want {
 			return true
 		}
 	}

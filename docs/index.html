@@ -202,9 +202,17 @@ gog gmail search 'newer_than:7d' --max 10 --json | jq</code></pre>
               <h3>Re-auth a service (e.g. Sheets)</h3>
               <p>
                 If you add scopes later and Google doesn’t return a refresh token, re-run with
-                <code>--force-consent</code>.
+                <code>--force-consent</code>. Existing stored scopes are retained.
               </p>
               <pre class="code"><code>gog auth add you@gmail.com --services sheets --force-consent</code></pre>
+              <p>
+                To intentionally replace the existing grant with exactly the selected services, use
+                <code>--replace-scopes</code>.
+              </p>
+              <p>
+                To recover after an accidental replacement, reauthorize every service the account should retain;
+                for the default set, run <code>gog auth add you@gmail.com --services user --force-consent</code>.
+              </p>
             </div>
           </div>
         </div>

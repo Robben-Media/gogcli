@@ -65,14 +65,26 @@ func Format(err error) string {
 			reason = gerr.Errors[0].Reason
 		}
 
+		message := fmt.Sprintf("Google API error (%d): %s", gerr.Code, gerr.Message)
 		if reason != "" {
-			return fmt.Sprintf("Google API error (%d %s): %s", gerr.Code, reason, gerr.Message)
+			message = fmt.Sprintf("Google API error (%d %s): %s", gerr.Code, reason, gerr.Message)
 		}
 
-		return fmt.Sprintf("Google API error (%d): %s", gerr.Code, gerr.Message)
+		if gerr.Code == 403 && isInsufficientScopeReason(reason, gerr.Message) {
+			message += "\n\nRe-authorize the account with all required services; for example:\n  gog auth add <email> --services user --force-consent"
+		}
+
+		return message
 	}
 
 	return err.Error()
+}
+
+func isInsufficientScopeReason(reason, message string) bool {
+	combined := strings.ToLower(reason + " " + message)
+
+	return strings.Contains(combined, "insufficientpermissions") ||
+		strings.Contains(combined, "insufficient authentication scope")
 }
 
 // UserFacingError forces a specific message, while preserving the underlying cause.

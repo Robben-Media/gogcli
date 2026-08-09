@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/99designs/keyring"
 
 	"github.com/steipete/gogcli/internal/authclient"
 	"github.com/steipete/gogcli/internal/config"
@@ -479,13 +482,14 @@ func (c *AuthTokensImportCmd) Run(ctx context.Context) error {
 }
 
 type AuthAddCmd struct {
-	Email        string `arg:"" name:"email" help:"Email"`
-	Manual       bool   `name:"manual" help:"Browserless auth flow (paste redirect URL)"`
-	ForceConsent bool   `name:"force-consent" help:"Force consent screen to obtain a refresh token"`
-	ServicesCSV  string `name:"services" help:"Services to authorize: user|all or comma-separated ${auth_services} (Keep uses service account: gog auth service-account set)" default:"user"`
-	Readonly     bool   `name:"readonly" help:"Use read-only scopes where available (still includes OIDC identity scopes)"`
-	DriveScope   string `name:"drive-scope" help:"Drive scope mode: full|readonly|file" enum:"full,readonly,file" default:"full"`
-	GmailScope   string `name:"gmail-scope" help:"Gmail scope mode: full|readonly" enum:"full,readonly" default:"full"`
+	Email         string `arg:"" name:"email" help:"Email"`
+	Manual        bool   `name:"manual" help:"Browserless auth flow (paste redirect URL)"`
+	ForceConsent  bool   `name:"force-consent" help:"Force consent screen to obtain a refresh token"`
+	ReplaceScopes bool   `name:"replace-scopes" help:"Replace an existing grant with exactly --services scopes (implies --force-consent)"`
+	ServicesCSV   string `name:"services" help:"Services to authorize: user|all or comma-separated ${auth_services} (Keep uses service account: gog auth service-account set)" default:"user"`
+	Readonly      bool   `name:"readonly" help:"Use read-only scopes where available (still includes OIDC identity scopes)"`
+	DriveScope    string `name:"drive-scope" help:"Drive scope mode: full|readonly|file" enum:"full,readonly,file" default:"full"`
+	GmailScope    string `name:"gmail-scope" help:"Gmail scope mode: full|readonly" enum:"full,readonly" default:"full"`
 }
 
 func (c *AuthAddCmd) Run(ctx context.Context) error {
@@ -510,14 +514,6 @@ func (c *AuthAddCmd) Run(ctx context.Context) error {
 	}
 	driveScope := strings.ToLower(strings.TrimSpace(c.DriveScope))
 	gmailScope := strings.ToLower(strings.TrimSpace(c.GmailScope))
-	// --force-consent means "grant exactly these scopes". Keeping
-	// include_granted_scopes=true merges historical grants (e.g. old YouTube +
-	// drive.file) and Google can 400 with "scopes that cannot be requested together".
-	disableIncludeGrantedScopes := c.ForceConsent ||
-		c.Readonly ||
-		driveScope == "readonly" ||
-		driveScope == strFile ||
-		gmailScope == "readonly"
 	scopes, err := googleauth.ScopesForManageWithOptions(services, googleauth.ScopeOptions{
 		Readonly:   c.Readonly,
 		DriveScope: googleauth.DriveScopeMode(c.DriveScope),
@@ -531,12 +527,41 @@ func (c *AuthAddCmd) Run(ctx context.Context) error {
 	if keychainErr := ensureKeychainAccessIfNeeded(); keychainErr != nil {
 		return fmt.Errorf("keychain access: %w", keychainErr)
 	}
+	store, err := openSecretsStore()
+	if err != nil {
+		return err
+	}
+
+	existing, existingErr := store.GetToken(client, c.Email)
+	hasExisting := existingErr == nil
+	if existingErr != nil && !errors.Is(existingErr, keyring.ErrKeyNotFound) {
+		return fmt.Errorf("read existing token: %w", existingErr)
+	}
+
+	if hasExisting && !c.ReplaceScopes {
+		services, scopes = googleauth.MergeAuthGrant(services, scopes, existing.Services, existing.Scopes)
+	}
+
+	serviceNames := authServiceNames(services)
+	forceConsent := c.ForceConsent || c.ReplaceScopes
+	// Scope variants must be requested exactly because Google can reject a
+	// historical grant containing incompatible variants (for example old
+	// YouTube scopes plus drive.file). Existing scopes are still explicitly
+	// included above unless the user chose --replace-scopes.
+	disableIncludeGrantedScopes := forceConsent ||
+		c.Readonly ||
+		driveScope == "readonly" ||
+		driveScope == strFile ||
+		gmailScope == "readonly"
+	if c.ReplaceScopes {
+		u.Err().Println("Replacing the existing OAuth grant with exactly the selected services and scopes.")
+	}
 
 	refreshToken, err := authorizeGoogle(ctx, googleauth.AuthorizeOptions{
 		Services:                    services,
 		Scopes:                      scopes,
 		Manual:                      c.Manual,
-		ForceConsent:                c.ForceConsent,
+		ForceConsent:                forceConsent,
 		DisableIncludeGrantedScopes: disableIncludeGrantedScopes,
 		Client:                      client,
 	})
@@ -551,16 +576,6 @@ func (c *AuthAddCmd) Run(ctx context.Context) error {
 	if normalizeEmail(authorizedEmail) != normalizeEmail(c.Email) {
 		return fmt.Errorf("authorized as %s, expected %s", authorizedEmail, c.Email)
 	}
-
-	store, err := openSecretsStore()
-	if err != nil {
-		return err
-	}
-	serviceNames := make([]string, 0, len(services))
-	for _, svc := range services {
-		serviceNames = append(serviceNames, string(svc))
-	}
-	sort.Strings(serviceNames)
 
 	if err := store.SetToken(client, authorizedEmail, secrets.Token{
 		Client:       client,
@@ -595,6 +610,15 @@ func (c *AuthAddCmd) Run(ctx context.Context) error {
 	u.Out().Printf("services\t%s", strings.Join(serviceNames, ","))
 	u.Out().Printf("client\t%s", client)
 	return nil
+}
+
+func authServiceNames(services []googleauth.Service) []string {
+	names := make([]string, 0, len(services))
+	for _, service := range services {
+		names = append(names, string(service))
+	}
+	sort.Strings(names)
+	return names
 }
 
 type AuthListCmd struct {

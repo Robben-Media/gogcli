@@ -12,11 +12,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/99designs/keyring"
 	"golang.org/x/oauth2"
 
 	"github.com/steipete/gogcli/internal/config"
@@ -57,7 +59,17 @@ func (s *fakeStore) SetToken(client string, email string, tok secrets.Token) err
 
 	return nil
 }
-func (s *fakeStore) GetToken(string, string) (secrets.Token, error) { return secrets.Token{}, nil }
+
+func (s *fakeStore) GetToken(client string, email string) (secrets.Token, error) {
+	for _, token := range s.tokens {
+		if token.Client == client && token.Email == email {
+			return token, nil
+		}
+	}
+
+	return secrets.Token{}, keyring.ErrKeyNotFound
+}
+
 func (s *fakeStore) DeleteToken(client string, email string) error {
 	s.deleteClient = client
 	s.deleteCalled = email
@@ -573,7 +585,15 @@ func TestManageServer_HandleOAuthCallback_Success(t *testing.T) {
 
 	t.Cleanup(func() { _ = ln.Close() })
 
-	store := &fakeStore{}
+	existingScopes, err := ScopesForManage([]Service{ServiceDrive})
+	if err != nil {
+		t.Fatalf("ScopesForManage: %v", err)
+	}
+	store := &fakeStore{tokens: []secrets.Token{{
+		Email:    "me@example.com",
+		Services: []string{"drive"},
+		Scopes:   existingScopes,
+	}}}
 	ms := &ManageServer{
 		oauthState: "state1",
 		listener:   ln,
@@ -598,6 +618,16 @@ func TestManageServer_HandleOAuthCallback_Success(t *testing.T) {
 
 	if store.setTokenValue.RefreshToken != "refresh" {
 		t.Fatalf("expected refresh token stored")
+	}
+
+	if !slices.Contains(store.setTokenValue.Services, "drive") ||
+		!slices.Contains(store.setTokenValue.Services, "gmail") {
+		t.Fatalf("expected existing and requested services, got %v", store.setTokenValue.Services)
+	}
+
+	if !slices.Contains(store.setTokenValue.Scopes, "https://www.googleapis.com/auth/drive") ||
+		!slices.Contains(store.setTokenValue.Scopes, "https://www.googleapis.com/auth/gmail.modify") {
+		t.Fatalf("expected existing and requested scopes, got %v", store.setTokenValue.Scopes)
 	}
 
 	if !strings.Contains(rr.Body.String(), "me@example.com") {
@@ -900,9 +930,19 @@ func TestManageServer_HandleAuthUpgrade(t *testing.T) {
 
 	t.Cleanup(func() { _ = ln.Close() })
 
+	existingScopes, err := ScopesForManage([]Service{ServiceDrive})
+	if err != nil {
+		t.Fatalf("ScopesForManage: %v", err)
+	}
+	store := &fakeStore{tokens: []secrets.Token{{
+		Email:    "test@example.com",
+		Services: []string{"drive"},
+		Scopes:   existingScopes,
+	}}}
 	ms := &ManageServer{
 		listener: ln,
 		opts:     ManageServerOptions{Services: []Service{ServiceGmail}},
+		store:    store,
 	}
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/auth/upgrade?email=test@example.com", nil)
@@ -947,6 +987,10 @@ func TestManageServer_HandleAuthUpgrade(t *testing.T) {
 		if !scopeSet[s] {
 			t.Fatalf("expected scope %q in %q", s, scope)
 		}
+	}
+
+	if !scopeSet["https://www.googleapis.com/auth/drive"] {
+		t.Fatalf("expected existing Drive scope in %q", scope)
 	}
 
 	if scopeSet["https://www.googleapis.com/auth/keep.readonly"] {

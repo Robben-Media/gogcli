@@ -290,7 +290,7 @@ To request fewer scopes:
 gog auth add you@gmail.com --services drive,calendar
 ```
 
-To request read-only scopes (write operations will fail with 403 insufficient scopes):
+To request read-only scopes for a new account:
 
 ```bash
 gog auth add you@gmail.com --services drive,calendar --readonly
@@ -308,13 +308,24 @@ Notes:
 
 - `--drive-scope readonly` is enough for listing/downloading/exporting via Drive (write operations will 403).
 - `--drive-scope file` is write-capable (limited to files created/opened by this app) and can’t be combined with `--readonly`.
+- Reauthorization is additive by default. If the account already has write scopes, `--readonly` retains them; add `--replace-scopes` to intentionally downgrade the grant.
 
-If you need to add services later and Google doesn't return a refresh token, re-run with `--force-consent`:
+To add services later, re-run `auth add` with the additional services. Existing stored scopes are retained. If Google doesn't return a refresh token, add `--force-consent`:
+
+```bash
+gog auth add you@gmail.com --services sheets --force-consent
+```
+
+To intentionally replace the existing grant with exactly the selected services, use `--replace-scopes` (which implies `--force-consent`):
+
+```bash
+gog auth add you@gmail.com --services sheets --replace-scopes
+```
+
+To recover after replacing scopes accidentally, reauthorize with every service the account should retain. For the default user-service set:
 
 ```bash
 gog auth add you@gmail.com --services user --force-consent
-# Or add just Sheets
-gog auth add you@gmail.com --services sheets --force-consent
 ```
 
 `--services all` is accepted as an alias for `user` for backwards compatibility.

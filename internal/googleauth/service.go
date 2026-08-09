@@ -282,6 +282,63 @@ func manageServices(services []Service) []Service {
 	return filtered
 }
 
+// MergeAuthGrant preserves an existing OAuth grant while adding requested
+// services and scopes. Unknown historical service names are ignored.
+func MergeAuthGrant(
+	requestedServices []Service,
+	requestedScopes []string,
+	existingServices []string,
+	existingScopes []string,
+) ([]Service, []string) {
+	seenServices := make(map[Service]struct{}, len(requestedServices)+len(existingServices))
+
+	services := make([]Service, 0, len(requestedServices)+len(existingServices))
+	for _, service := range requestedServices {
+		if _, ok := seenServices[service]; ok {
+			continue
+		}
+		seenServices[service] = struct{}{}
+		services = append(services, service)
+	}
+
+	for _, name := range existingServices {
+		service, err := ParseService(name)
+		if err != nil || service == ServiceKeep {
+			continue
+		}
+
+		if _, ok := seenServices[service]; ok {
+			continue
+		}
+		seenServices[service] = struct{}{}
+		services = append(services, service)
+	}
+
+	sort.Slice(services, func(i, j int) bool { return services[i] < services[j] })
+
+	seenScopes := make(map[string]struct{}, len(requestedScopes)+len(existingScopes))
+
+	scopes := make([]string, 0, len(requestedScopes)+len(existingScopes))
+	for _, values := range [][]string{requestedScopes, existingScopes} {
+		for _, value := range values {
+			value = strings.TrimSpace(value)
+			if value == "" {
+				continue
+			}
+
+			if _, ok := seenScopes[value]; ok {
+				continue
+			}
+			seenScopes[value] = struct{}{}
+			scopes = append(scopes, value)
+		}
+	}
+
+	sort.Strings(scopes)
+
+	return services, scopes
+}
+
 func AllServices() []Service {
 	out := make([]Service, len(serviceOrder))
 	copy(out, serviceOrder)
