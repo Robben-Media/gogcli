@@ -28,6 +28,8 @@ If `gog tag-manager` or `gog gtm` fails with `unexpected argument`, the binary o
 GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com tag-manager accounts
 GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com tag-manager containers --account-id 12345
 GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com tag-manager tags --account-id 12345 --container-id 67890
+GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com gtm workspaces create-version accounts/12345/containers/67890/workspaces/7 --name "Release"
+GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com gtm versions publish accounts/12345/containers/67890/versions/42
 ```
 
 ## Available Commands
@@ -41,6 +43,8 @@ GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedi
 | `triggers` | List triggers in a container | `--account-id`, `--container-id`, `--workspace-id` |
 | `variables` | List variables in a container | `--account-id`, `--container-id`, `--workspace-id` |
 | `versions` | List container versions | `--account-id`, `--container-id` |
+| `versions publish` | Publish a container version | `<path>`, `--fingerprint` |
+| `workspaces create-version` | Create a container version from a workspace | `<path>`, `--name`, `--notes` |
 
 ## Resource Paths
 

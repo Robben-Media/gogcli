@@ -23,6 +23,7 @@ type TagManagerCmd struct {
 	Triggers        TagManagerTriggersCmd        `cmd:"" name:"triggers" group:"Read" help:"List triggers in a workspace"`
 	Variables       TagManagerVariablesCmd       `cmd:"" name:"variables" group:"Read" help:"List variables in a workspace"`
 	Versions        TagManagerVersionsCmd        `cmd:"" name:"versions" group:"Read" help:"List container version headers"`
+	Workspaces      TagManagerWorkspacesCmd      `cmd:"" name:"workspaces" group:"Write" help:"Manage GTM workspaces"`
 	UserPermissions TagManagerUserPermissionsCmd `cmd:"" name:"user-permissions" group:"Admin" help:"Manage GTM user permissions"`
 }
 
@@ -326,11 +327,16 @@ func (c *TagManagerVariablesCmd) Run(ctx context.Context, flags *RootFlags) erro
 // --- versions ---
 
 type TagManagerVersionsCmd struct {
+	List    TagManagerVersionsListCmd    `cmd:"" default:"withargs" help:"List container version headers"`
+	Publish TagManagerVersionsPublishCmd `cmd:"" name:"publish" help:"Publish a container version"`
+}
+
+type TagManagerVersionsListCmd struct {
 	AccountID   string `name:"account-id" required:"" help:"GTM account ID"`
 	ContainerID string `name:"container-id" required:"" help:"GTM container ID"`
 }
 
-func (c *TagManagerVersionsCmd) Run(ctx context.Context, flags *RootFlags) error {
+func (c *TagManagerVersionsListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u := ui.FromContext(ctx)
 	account, err := requireAccount(flags)
 	if err != nil {

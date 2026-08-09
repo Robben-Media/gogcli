@@ -108,7 +108,7 @@ Many resources also accept a full `path` positional arg (e.g. `accounts/123/cont
 - `delete`: confirm destructive, mock DELETE
 - `get`: mock full version payload with nested tags/triggers/variables
 - `live`: mock GET on `live` endpoint
-- `publish`: mock POST, verify fingerprint header if provided
+- `publish`: mock POST, verify fingerprint query parameter if provided
 - `set_latest`/`undelete`: mock POST for each
 - `update`: verify partial update with flagProvided
 
