@@ -4,6 +4,7 @@
 
 ### Added
 
+- Tag Manager: add workspace trigger and variable create/delete/get/revert/update commands plus built-in-variable management. (#12, #45, #46, #47)
 - Tag Manager: add composable workspace version creation and container-version publishing commands. (#11)
 
 ### Changed
