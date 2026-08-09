@@ -11,7 +11,7 @@
 #   6. Delete commands mention confirmDestructive
 #   7. Test requirements section exists
 
-set -uo pipefail
+set -euo pipefail
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -24,12 +24,12 @@ FILES_CHECKED=0
 
 warn() {
   echo -e "${YELLOW}  WARN${NC} [$1]: $2"
-  ((WARNINGS++))
+  ((WARNINGS += 1))
 }
 
 fail() {
   echo -e "${RED}  FAIL${NC} [$1]: $2"
-  ((ERRORS++))
+  ((ERRORS += 1))
 }
 
 pass() {
@@ -43,7 +43,7 @@ lint_spec() {
   echo ""
   echo "Linting: $basename"
   echo "─────────────────────────────────────"
-  ((FILES_CHECKED++))
+  ((FILES_CHECKED += 1))
 
   local content
   content=$(cat "$file")
@@ -144,7 +144,7 @@ if [ $# -gt 0 ]; then
       lint_spec "$f"
     else
       echo "File not found: $f"
-      ((ERRORS++))
+      ((ERRORS += 1))
     fi
   done
 else

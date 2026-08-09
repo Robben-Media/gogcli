@@ -6,7 +6,7 @@
 #   ./loop.sh 20        # Build mode, max 20 iterations
 #   ./loop.sh plan 5    # Plan mode, max 5 iterations
 
-set -e
+set -euo pipefail
 
 MODE="${1:-build}"
 MAX_ITERATIONS="${2:-999999}"
