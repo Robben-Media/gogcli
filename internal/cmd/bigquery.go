@@ -89,17 +89,24 @@ func (c *BigqueryQueryCmd) Run(ctx context.Context, flags *RootFlags) error {
 	for i, field := range resp.Schema.Fields {
 		headers[i] = field.Name
 	}
-	fmt.Fprintln(w, strings.Join(headers, "\t"))
+	writeTableRow(ctx, w, headers)
 
 	// Print rows
 	for _, row := range resp.Rows {
-		vals := make([]string, len(row.F))
+		rowWidth := len(row.F)
+		if outfmt.IsPlain(ctx) {
+			rowWidth = len(resp.Schema.Fields)
+		}
+		vals := make([]string, rowWidth)
 		for i, cell := range row.F {
+			if i >= len(vals) {
+				break
+			}
 			if cell.V != nil {
 				vals[i] = fmt.Sprintf("%v", cell.V)
 			}
 		}
-		fmt.Fprintln(w, strings.Join(vals, "\t"))
+		writeTableRow(ctx, w, vals)
 	}
 
 	u.Err().Printf("Total rows: %d", resp.TotalRows)
