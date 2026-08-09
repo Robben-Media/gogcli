@@ -195,22 +195,22 @@ func listCalendarIDsEvents(ctx context.Context, svc *calendar.Service, calendarI
 	w, flush := tableWriter(ctx)
 	defer flush()
 	if showWeekday {
-		fmt.Fprintln(w, "TYPE\tCALENDAR\tID\tSTART\tSTART_DOW\tEND\tEND_DOW\tSUMMARY\tERROR")
+		writeTableRow(ctx, w, []string{"TYPE", "CALENDAR", "ID", "START", "START_DOW", "END", "END_DOW", "SUMMARY", "ERROR"})
 		for _, e := range all {
-			fmt.Fprintf(w, "event\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n", e.CalendarID, e.Id, eventStart(e.Event), e.StartDayOfWeek, eventEnd(e.Event), e.EndDayOfWeek, e.Summary)
+			writeTableRow(ctx, w, []string{"event", e.CalendarID, e.Id, eventStart(e.Event), e.StartDayOfWeek, eventEnd(e.Event), e.EndDayOfWeek, e.Summary, ""})
 		}
 		for _, failure := range failures {
-			fmt.Fprintf(w, "calendar_error\t%s\t\t\t\t\t\t\t%s\n", failure.CalendarID, sanitizeTab(strings.NewReplacer("\r", " ", "\n", " ").Replace(failure.Error)))
+			writeTableRow(ctx, w, []string{"calendar_error", failure.CalendarID, "", "", "", "", "", "", sanitizeTab(failure.Error)})
 		}
 		return resultErr
 	}
 
-	fmt.Fprintln(w, "TYPE\tCALENDAR\tID\tSTART\tEND\tSUMMARY\tERROR")
+	writeTableRow(ctx, w, []string{"TYPE", "CALENDAR", "ID", "START", "END", "SUMMARY", "ERROR"})
 	for _, e := range all {
-		fmt.Fprintf(w, "event\t%s\t%s\t%s\t%s\t%s\t\n", e.CalendarID, e.Id, eventStart(e.Event), eventEnd(e.Event), e.Summary)
+		writeTableRow(ctx, w, []string{"event", e.CalendarID, e.Id, eventStart(e.Event), eventEnd(e.Event), e.Summary, ""})
 	}
 	for _, failure := range failures {
-		fmt.Fprintf(w, "calendar_error\t%s\t\t\t\t\t%s\n", failure.CalendarID, sanitizeTab(strings.NewReplacer("\r", " ", "\n", " ").Replace(failure.Error)))
+		writeTableRow(ctx, w, []string{"calendar_error", failure.CalendarID, "", "", "", "", sanitizeTab(failure.Error)})
 	}
 	return resultErr
 }

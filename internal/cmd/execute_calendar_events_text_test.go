@@ -78,7 +78,7 @@ func TestExecute_CalendarEvents_Text_AllReportsPartialFailure(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"items": []map[string]any{
-					{"id": "e1", "summary": "S1", "start": map[string]any{"dateTime": "2025-12-17T10:00:00Z"}, "end": map[string]any{"dateTime": "2025-12-17T11:00:00Z"}},
+					{"id": "e1", "summary": "S1\tteam\nsync", "start": map[string]any{"dateTime": "2025-12-17T10:00:00Z"}, "end": map[string]any{"dateTime": "2025-12-17T11:00:00Z"}},
 				},
 			})
 			return
@@ -120,7 +120,7 @@ func TestExecute_CalendarEvents_Text_AllReportsPartialFailure(t *testing.T) {
 	if lines[0] != "TYPE\tCALENDAR\tID\tSTART\tEND\tSUMMARY\tERROR" {
 		t.Fatalf("unexpected header=%q", lines[0])
 	}
-	if !strings.HasPrefix(lines[1], "event\tc1\te1\t") || !strings.Contains(lines[1], "\tS1\t") {
+	if !strings.HasPrefix(lines[1], "event\tc1\te1\t") || !strings.Contains(lines[1], "\tS1 team sync\t") {
 		t.Fatalf("unexpected event record=%q", lines[1])
 	}
 	if !strings.HasPrefix(lines[2], "calendar_error\tc2\t\t\t\t\t") || !strings.Contains(lines[2], "access denied") {
