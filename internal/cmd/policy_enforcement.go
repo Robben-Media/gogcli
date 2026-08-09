@@ -10,17 +10,20 @@ import (
 )
 
 var commandServiceAliases = map[string]string{
-	"bq":       "bigquery",
-	"business": "businessprofile",
-	"email":    serviceGmail,
-	"ga":       "analytics",
-	"ga4":      "analytics",
-	"gbp":      "businessprofile",
-	"gsc":      "searchconsole",
-	"gtm":      "tagmanager",
-	"mail":     serviceGmail,
-	"sc":       "searchconsole",
-	"yt":       "youtube",
+	"bq":               "bigquery",
+	"business":         "businessprofile",
+	"business-profile": "businessprofile",
+	"email":            serviceGmail,
+	"ga":               "analytics",
+	"ga4":              "analytics",
+	"gbp":              "businessprofile",
+	"gsc":              "searchconsole",
+	"gtm":              "tagmanager",
+	"mail":             serviceGmail,
+	"sc":               "searchconsole",
+	"search-console":   "searchconsole",
+	"tag-manager":      "tagmanager",
+	"yt":               "youtube",
 }
 
 type policyDecision struct {
