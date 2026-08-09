@@ -86,6 +86,14 @@ func (c *CalendarConflictsCmd) Run(ctx context.Context, flags *RootFlags) error 
 		})
 	}
 
+	if outfmt.IsPlain(ctx) {
+		writeTableRow(ctx, os.Stdout, []string{"START", "END", "CALENDARS"})
+		for _, c := range conflicts {
+			writeTableRow(ctx, os.Stdout, []string{c.Start, c.End, strings.Join(c.Calendars, ", ")})
+		}
+		return nil
+	}
+
 	if len(conflicts) == 0 {
 		u.Out().Println("No conflicts found")
 		return nil
