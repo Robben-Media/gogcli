@@ -348,6 +348,10 @@ func (c *SheetsClearCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("empty range")
 	}
 
+	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("clear range %s from spreadsheet %s", rangeSpec, spreadsheetID)); confirmErr != nil {
+		return confirmErr
+	}
+
 	svc, err := newSheetsService(ctx, account)
 	if err != nil {
 		return err

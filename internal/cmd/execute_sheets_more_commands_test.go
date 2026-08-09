@@ -6,11 +6,34 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 )
+
+func TestExecute_SheetsClear_NoInputRefusesBeforeServiceConstruction(t *testing.T) {
+	origNew := newSheetsService
+	t.Cleanup(func() { newSheetsService = origNew })
+
+	var serviceCalls atomic.Int32
+	newSheetsService = func(context.Context, string) (*sheets.Service, error) {
+		serviceCalls.Add(1)
+		return nil, nil
+	}
+
+	err := Execute([]string{"--no-input", "--account", "a@b.com", "sheets", "clear", "id1", "Sheet1!A1:B1"})
+	if err == nil {
+		t.Fatal("expected non-interactive clear to require --force")
+	}
+	if !strings.Contains(err.Error(), "without --force") {
+		t.Fatalf("expected --force guidance, got %v", err)
+	}
+	if got := serviceCalls.Load(); got != 0 {
+		t.Fatalf("expected refusal before Sheets service construction, got %d call(s)", got)
+	}
+}
 
 func TestExecute_SheetsMoreCommands(t *testing.T) {
 	origNew := newSheetsService
@@ -120,7 +143,7 @@ func TestExecute_SheetsMoreCommands(t *testing.T) {
 			}
 		})
 		_ = captureStdout(t, func() {
-			if err := Execute([]string{"--json", "sheets", "clear", "id1", "Sheet1!A1:B1"}); err != nil {
+			if err := Execute([]string{"--json", "--force", "sheets", "clear", "id1", "Sheet1!A1:B1"}); err != nil {
 				t.Fatalf("clear: %v", err)
 			}
 		})
