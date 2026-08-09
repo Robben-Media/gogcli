@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/steipete/gogcli/internal/config"
@@ -23,6 +24,20 @@ type serviceAccountJSONInfo struct {
 	ClientID    string
 }
 
+type serviceAccountTempFile interface {
+	Write([]byte) (int, error)
+	Chmod(os.FileMode) error
+	Close() error
+	Name() string
+}
+
+var (
+	createServiceAccountTempFile = func(dir, pattern string) (serviceAccountTempFile, error) {
+		return os.CreateTemp(dir, pattern)
+	}
+	renameServiceAccountFile = os.Rename
+)
+
 func parseServiceAccountJSON(data []byte) (serviceAccountJSONInfo, error) {
 	var saJSON map[string]any
 	if err := json.Unmarshal(data, &saJSON); err != nil {
@@ -40,6 +55,104 @@ func parseServiceAccountJSON(data []byte) (serviceAccountJSONInfo, error) {
 		info.ClientID = strings.TrimSpace(v)
 	}
 	return info, nil
+}
+
+type stagedServiceAccountFile struct {
+	path       string
+	tmpPath    string
+	backupPath string
+	existed    bool
+	committed  bool
+}
+
+func writeServiceAccountFile(path string, data []byte) error {
+	return writeServiceAccountFiles([]string{path}, data)
+}
+
+func writeServiceAccountFiles(paths []string, data []byte) error {
+	files := make([]stagedServiceAccountFile, 0, len(paths))
+	defer func() {
+		for _, file := range files {
+			_ = os.Remove(file.tmpPath)
+			_ = os.Remove(file.backupPath)
+		}
+	}()
+
+	for _, path := range paths {
+		tmp, err := createServiceAccountTempFile(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+		if err != nil {
+			return err
+		}
+		file := stagedServiceAccountFile{path: path, tmpPath: tmp.Name()}
+		files = append(files, file)
+		if _, err := tmp.Write(data); err != nil {
+			_ = tmp.Close()
+			return err
+		}
+		if err := tmp.Chmod(0o600); err != nil {
+			_ = tmp.Close()
+			return err
+		}
+		if err := tmp.Close(); err != nil {
+			return err
+		}
+	}
+
+	rollback := func() {
+		for i := len(files) - 1; i >= 0; i-- {
+			file := &files[i]
+			if file.committed {
+				_ = os.Remove(file.path)
+			}
+			if file.backupPath != "" {
+				_ = renameServiceAccountFile(file.backupPath, file.path)
+				file.backupPath = ""
+			} else if !file.existed {
+				_ = os.Remove(file.path)
+			}
+		}
+	}
+
+	for i := range files {
+		file := &files[i]
+		if _, err := os.Stat(file.path); err == nil {
+			file.existed = true
+			backup, createErr := os.CreateTemp(filepath.Dir(file.path), "."+filepath.Base(file.path)+".backup-*")
+			if createErr != nil {
+				rollback()
+				return createErr
+			}
+			backupPath := backup.Name()
+			if closeErr := backup.Close(); closeErr != nil {
+				_ = os.Remove(backupPath)
+				rollback()
+				return closeErr
+			}
+			if removeErr := os.Remove(backupPath); removeErr != nil {
+				rollback()
+				return removeErr
+			}
+			if renameErr := renameServiceAccountFile(file.path, backupPath); renameErr != nil {
+				rollback()
+				return renameErr
+			}
+			file.backupPath = backupPath
+		} else if !os.IsNotExist(err) {
+			rollback()
+			return err
+		}
+	}
+
+	for i := range files {
+		file := &files[i]
+		if err := renameServiceAccountFile(file.tmpPath, file.path); err != nil {
+			rollback()
+			return err
+		}
+		file.tmpPath = ""
+		file.committed = true
+	}
+	return nil
 }
 
 func storeServiceAccountKey(impersonateEmail string, keyPath string) (string, serviceAccountJSONInfo, error) {
@@ -71,7 +184,7 @@ func storeServiceAccountKey(impersonateEmail string, keyPath string) (string, se
 		return "", serviceAccountJSONInfo{}, err
 	}
 
-	if err := os.WriteFile(destPath, data, 0o600); err != nil {
+	if err := writeServiceAccountFile(destPath, data); err != nil {
 		return "", serviceAccountJSONInfo{}, fmt.Errorf("write service account: %w", err)
 	}
 
