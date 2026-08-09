@@ -136,16 +136,13 @@ func (c *CalendarProposeTimeCmd) Run(ctx context.Context, flags *RootFlags) erro
 		return outfmt.WriteJSON(os.Stdout, result)
 	}
 
-	// Text output
-	u.Out().Printf("# API Limitation: %s", proposeTimeAPILimitation)
-	u.Out().Printf("# Issue tracker: %s", proposeTimeIssueTrackerURL)
-	u.Out().Printf("# Action: %s", proposeTimeUpvoteAction)
-	u.Out().Printf("")
-	u.Out().Printf("event\t%s", orEmpty(event.Summary, "(no title)"))
-	if event.Start != nil {
-		start := event.Start.DateTime
-		if start == "" {
-			start = event.Start.Date
+	if outfmt.IsPlain(ctx) {
+		start := ""
+		if event.Start != nil {
+			start = event.Start.DateTime
+			if start == "" {
+				start = event.Start.Date
+			}
 		}
 		end := ""
 		if event.End != nil {
@@ -154,26 +151,66 @@ func (c *CalendarProposeTimeCmd) Run(ctx context.Context, flags *RootFlags) erro
 				end = event.End.Date
 			}
 		}
-		u.Out().Printf("current\t%s - %s", start, end)
-	}
-	u.Out().Printf("propose_url\t%s", proposeURL)
 
-	if decline {
-		u.Out().Printf("")
-		u.Out().Printf("declined\tyes")
-		if strings.TrimSpace(c.Comment) != "" {
-			u.Out().Printf("comment\t%s", strings.TrimSpace(c.Comment))
+		writeTableRow(ctx, os.Stdout, []string{"KEY", "VALUE"})
+		writeTableRow(ctx, os.Stdout, []string{"event_id", eventID})
+		writeTableRow(ctx, os.Stdout, []string{"calendar_id", calendarID})
+		writeTableRow(ctx, os.Stdout, []string{"summary", event.Summary})
+		writeTableRow(ctx, os.Stdout, []string{"current_start", start})
+		writeTableRow(ctx, os.Stdout, []string{"current_end", end})
+		writeTableRow(ctx, os.Stdout, []string{"propose_url", proposeURL})
+		writeTableRow(ctx, os.Stdout, []string{"declined", boolString(decline)})
+		if comment := strings.TrimSpace(c.Comment); comment != "" {
+			writeTableRow(ctx, os.Stdout, []string{"comment", comment})
+		}
+
+		u.Err().Printf("# API Limitation: %s", proposeTimeAPILimitation)
+		u.Err().Printf("# Issue tracker: %s", proposeTimeIssueTrackerURL)
+		u.Err().Printf("# Action: %s", proposeTimeUpvoteAction)
+		if !decline {
+			u.Err().Printf("Tip: To notify the organizer, decline with a comment:")
+			u.Err().Printf("  gog calendar propose-time %s %s --decline --comment \"Can we do 5pm instead?\"", calendarID, eventID)
 		}
 	} else {
+		// Human-readable text output.
+		u.Out().Printf("# API Limitation: %s", proposeTimeAPILimitation)
+		u.Out().Printf("# Issue tracker: %s", proposeTimeIssueTrackerURL)
+		u.Out().Printf("# Action: %s", proposeTimeUpvoteAction)
 		u.Out().Printf("")
-		u.Out().Printf("Tip: To notify the organizer, decline with a comment:")
-		u.Out().Printf("  gog calendar propose-time %s %s --decline --comment \"Can we do 5pm instead?\"", calendarID, eventID)
+		u.Out().Printf("event\t%s", orEmpty(event.Summary, "(no title)"))
+		if event.Start != nil {
+			start := event.Start.DateTime
+			if start == "" {
+				start = event.Start.Date
+			}
+			end := ""
+			if event.End != nil {
+				end = event.End.DateTime
+				if end == "" {
+					end = event.End.Date
+				}
+			}
+			u.Out().Printf("current\t%s - %s", start, end)
+		}
+		u.Out().Printf("propose_url\t%s", proposeURL)
+
+		if decline {
+			u.Out().Printf("")
+			u.Out().Printf("declined\tyes")
+			if strings.TrimSpace(c.Comment) != "" {
+				u.Out().Printf("comment\t%s", strings.TrimSpace(c.Comment))
+			}
+		} else {
+			u.Out().Printf("")
+			u.Out().Printf("Tip: To notify the organizer, decline with a comment:")
+			u.Out().Printf("  gog calendar propose-time %s %s --decline --comment \"Can we do 5pm instead?\"", calendarID, eventID)
+		}
 	}
 
-	// Open browser if requested
+	// Open browser if requested.
 	if c.Open {
-		u.Out().Printf("")
-		u.Out().Printf("Opening browser...")
+		u.Err().Printf("")
+		u.Err().Printf("Opening browser...")
 		if err := openProposeTimeBrowser(proposeURL); err != nil {
 			u.Err().Printf("Failed to open browser: %v", err)
 			u.Err().Printf("Please open the propose_url manually.")
