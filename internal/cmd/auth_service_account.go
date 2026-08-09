@@ -113,7 +113,12 @@ func (c *AuthServiceAccountSetCmd) Run(ctx context.Context) error {
 	if info.ClientID != "" {
 		u.Out().Printf("client_id\t%s", info.ClientID)
 	}
-	u.Out().Println("Service account configured. Use: gog <cmd> --account " + email)
+	advice := "Service account configured. Use: gog <cmd> --account " + email
+	if outfmt.IsPlain(ctx) {
+		u.Err().Println(advice)
+	} else {
+		u.Out().Println(advice)
+	}
 	return nil
 }
 
