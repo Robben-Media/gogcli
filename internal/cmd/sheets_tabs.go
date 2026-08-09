@@ -99,6 +99,9 @@ func (c *SheetsSheetDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 	if id == "" {
 		return usage("empty spreadsheetId")
 	}
+	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("delete sheet tab %d from spreadsheet %s", c.SheetID, id)); confirmErr != nil {
+		return confirmErr
+	}
 
 	svc, err := newSheetsService(ctx, account)
 	if err != nil {
