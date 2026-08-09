@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Tag Manager: add composable workspace version creation and container-version publishing commands. (#11)
+
 ### Changed
 
 - Distribution: use `Robben-Media/gogcli` as the sole install and release source; remove upstream Homebrew/tap assumptions.
