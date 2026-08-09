@@ -469,7 +469,7 @@ func (c *SheetsValuesBatchGetByFilterCmd) Run(ctx context.Context, flags *RootFl
 				for j, cell := range row {
 					cells[j] = fmt.Sprintf("%v", cell)
 				}
-				u.Out().Println(strings.Join(cells, "\t"))
+				u.Out().Println(strings.Join(plainTableFields(ctx, cells), "\t"))
 			}
 		}
 	}

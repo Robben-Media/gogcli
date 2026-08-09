@@ -28,13 +28,18 @@ func tableWriter(ctx context.Context) (io.Writer, func()) {
 }
 
 func writeTableRow(ctx context.Context, w io.Writer, fields []string) {
-	if outfmt.IsPlain(ctx) {
-		fields = append([]string(nil), fields...)
-		for i := range fields {
-			fields[i] = sanitizePlainField(fields[i])
-		}
+	fmt.Fprintln(w, strings.Join(plainTableFields(ctx, fields), "\t"))
+}
+
+func plainTableFields(ctx context.Context, fields []string) []string {
+	if !outfmt.IsPlain(ctx) {
+		return fields
 	}
-	fmt.Fprintln(w, strings.Join(fields, "\t"))
+	fields = append([]string(nil), fields...)
+	for i := range fields {
+		fields[i] = sanitizePlainField(fields[i])
+	}
+	return fields
 }
 
 func sanitizePlainField(s string) string {
