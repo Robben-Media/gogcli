@@ -65,6 +65,7 @@ type stagedServiceAccountFile struct {
 	backupPath     string
 	existed        bool
 	committed      bool
+	preserveTemp   bool
 	preserveBackup bool
 }
 
@@ -76,7 +77,9 @@ func writeServiceAccountFiles(paths []string, data []byte) error {
 	files := make([]stagedServiceAccountFile, 0, len(paths))
 	defer func() {
 		for _, file := range files {
-			_ = os.Remove(file.tmpPath)
+			if !file.preserveTemp {
+				_ = os.Remove(file.tmpPath)
+			}
 			if !file.preserveBackup {
 				_ = os.Remove(file.backupPath)
 			}
@@ -113,9 +116,22 @@ func writeServiceAccountFiles(paths []string, data []byte) error {
 		for i := len(files) - 1; i >= 0; i-- {
 			file := &files[i]
 			if file.backupPath != "" {
+				if file.committed {
+					if err := renameServiceAccountFile(file.path, file.tmpPath); err != nil {
+						file.preserveBackup = true
+						rollbackErr = errors.Join(rollbackErr, fmt.Errorf("stage failed install %s for rollback: %w", file.path, err))
+						continue
+					}
+				}
 				if err := renameServiceAccountFile(file.backupPath, file.path); err != nil {
 					file.preserveBackup = true
 					rollbackErr = errors.Join(rollbackErr, fmt.Errorf("restore %s from %s: %w", file.path, file.backupPath, err))
+					if file.committed {
+						if restoreErr := renameServiceAccountFile(file.tmpPath, file.path); restoreErr != nil {
+							file.preserveTemp = true
+							rollbackErr = errors.Join(rollbackErr, fmt.Errorf("restore failed install %s: %w", file.path, restoreErr))
+						}
+					}
 					continue
 				}
 				file.backupPath = ""
@@ -135,6 +151,9 @@ func writeServiceAccountFiles(paths []string, data []byte) error {
 		file := &files[i]
 		if _, err := os.Stat(file.path); err == nil {
 			file.existed = true
+			if chmodErr := os.Chmod(file.path, 0o600); chmodErr != nil {
+				return errors.Join(chmodErr, rollback())
+			}
 			backup, createErr := os.CreateTemp(filepath.Dir(file.path), "."+filepath.Base(file.path)+".backup-*")
 			if createErr != nil {
 				return errors.Join(createErr, rollback())
@@ -161,7 +180,6 @@ func writeServiceAccountFiles(paths []string, data []byte) error {
 		if err := renameServiceAccountFile(file.tmpPath, file.path); err != nil {
 			return errors.Join(err, rollback())
 		}
-		file.tmpPath = ""
 		file.committed = true
 	}
 	return nil

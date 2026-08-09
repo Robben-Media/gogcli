@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -179,7 +180,12 @@ func TestAuthKeep_SecondReplacementFailureRestoresPriorPairAndRemovesTemporaryFi
 	t.Cleanup(func() { renameServiceAccountFile = originalRename })
 	replacement := 0
 	renameServiceAccountFile = func(oldPath, newPath string) error {
-		if oldPath != keepPath && oldPath != genericPath {
+		if strings.Contains(oldPath, ".backup-") {
+			if _, statErr := os.Stat(newPath); statErr == nil {
+				return fs.ErrExist
+			}
+		}
+		if oldPath != keepPath && oldPath != genericPath && !strings.Contains(oldPath, ".backup-") {
 			replacement++
 			if replacement == 2 {
 				return errors.New("injected second replacement failure")
@@ -236,7 +242,7 @@ func TestAuthKeep_RollbackFailureIsReportedAndPreservesBackup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ServiceAccountPath: %v", err)
 	}
-	if writeErr := os.WriteFile(keepPath, oldKeep, 0o600); writeErr != nil {
+	if writeErr := os.WriteFile(keepPath, oldKeep, 0o644); writeErr != nil {
 		t.Fatalf("write prior Keep key: %v", writeErr)
 	}
 	if writeErr := os.WriteFile(genericPath, oldGeneric, 0o600); writeErr != nil {
@@ -279,6 +285,13 @@ func TestAuthKeep_RollbackFailureIsReportedAndPreservesBackup(t *testing.T) {
 	}
 	if string(gotBackup) != string(oldKeep) {
 		t.Fatalf("backup = %q, want prior Keep key %q", gotBackup, oldKeep)
+	}
+	backupInfo, statErr := os.Stat(backups[0])
+	if statErr != nil {
+		t.Fatalf("stat recoverable backup: %v", statErr)
+	}
+	if gotMode := backupInfo.Mode().Perm(); gotMode != 0o600 {
+		t.Fatalf("backup mode = %04o, want 0600", gotMode)
 	}
 }
 
