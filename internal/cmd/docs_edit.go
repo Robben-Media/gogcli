@@ -34,6 +34,10 @@ func (c *DocsDeleteRangeCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("start must be less than end")
 	}
 
+	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("delete range %d-%d from doc %s", c.Start, c.End, id)); confirmErr != nil {
+		return confirmErr
+	}
+
 	svc, err := newDocsService(ctx, account)
 	if err != nil {
 		return err
