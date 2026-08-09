@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 
 	"google.golang.org/api/gmail/v1"
@@ -22,9 +23,17 @@ type GmailBatchDeleteCmd struct {
 
 func (c *GmailBatchDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u := ui.FromContext(ctx)
+	if len(c.MessageIDs) == 0 {
+		return usage("at least one message ID is required")
+	}
+
 	account, err := requireAccount(flags)
 	if err != nil {
 		return err
+	}
+
+	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("permanently delete %d gmail message(s)", len(c.MessageIDs))); confirmErr != nil {
+		return confirmErr
 	}
 
 	svc, err := newGmailService(ctx, account)

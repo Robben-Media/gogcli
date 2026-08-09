@@ -163,6 +163,56 @@ func TestGmailSendAsGetCmd_JSON(t *testing.T) {
 	}
 }
 
+func TestGmailBatchDeleteCmd_RequiresMessageIDsBeforeServiceCreation(t *testing.T) {
+	origNew := newGmailService
+	t.Cleanup(func() { newGmailService = origNew })
+
+	serviceCreated := false
+	newGmailService = func(context.Context, string) (*gmail.Service, error) {
+		serviceCreated = true
+		return nil, context.Canceled
+	}
+
+	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
+	if uiErr != nil {
+		t.Fatalf("ui.New: %v", uiErr)
+	}
+	ctx := ui.WithUI(context.Background(), u)
+
+	err := (&GmailBatchDeleteCmd{}).Run(ctx, &RootFlags{Account: "a@b.com", Force: true})
+	if err == nil || !strings.Contains(err.Error(), "at least one message ID is required") {
+		t.Fatalf("expected missing message ID error, got %v", err)
+	}
+	if serviceCreated {
+		t.Fatal("service created for empty message IDs")
+	}
+}
+
+func TestGmailBatchDeleteCmd_RequiresConfirmationBeforeServiceCreation(t *testing.T) {
+	origNew := newGmailService
+	t.Cleanup(func() { newGmailService = origNew })
+
+	serviceCreated := false
+	newGmailService = func(context.Context, string) (*gmail.Service, error) {
+		serviceCreated = true
+		return nil, context.Canceled
+	}
+
+	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
+	if uiErr != nil {
+		t.Fatalf("ui.New: %v", uiErr)
+	}
+	ctx := ui.WithUI(context.Background(), u)
+
+	err := runKong(t, &GmailBatchDeleteCmd{}, []string{"msg1"}, ctx, &RootFlags{Account: "a@b.com", NoInput: true})
+	if err == nil || !strings.Contains(err.Error(), "without --force") {
+		t.Fatalf("expected destructive confirmation error, got %v", err)
+	}
+	if serviceCreated {
+		t.Fatal("service created after destructive deletion was refused")
+	}
+}
+
 func TestGmailBatchDeleteCmd_JSON(t *testing.T) {
 	origNew := newGmailService
 	t.Cleanup(func() { newGmailService = origNew })
@@ -193,7 +243,7 @@ func TestGmailBatchDeleteCmd_JSON(t *testing.T) {
 	}
 	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
-	flags := &RootFlags{Account: "a@b.com"}
+	flags := &RootFlags{Account: "a@b.com", Force: true}
 
 	out := captureStdout(t, func() {
 		u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
