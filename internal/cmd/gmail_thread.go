@@ -665,9 +665,9 @@ func downloadAttachment(ctx context.Context, svc *gmail.Service, messageID strin
 	}
 	filename := fmt.Sprintf("%s_%s_%s", messageID, shortID, safeFilename)
 	outPath := filepath.Join(dir, filename)
-	path, cached, bytes, err := downloadAttachmentToPath(ctx, svc, messageID, a.AttachmentID, outPath, a.Size)
+	path, cached, byteCount, err := downloadAttachmentToPath(ctx, svc, messageID, a.AttachmentID, outPath, a.Size)
 	if err != nil {
 		return "", false, 0, err
 	}
-	return path, cached, bytes, nil
+	return path, cached, byteCount, nil
 }
