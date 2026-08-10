@@ -302,6 +302,40 @@ func createTempImageFile(t *testing.T, data []byte) string {
 	return tmpFile.Name()
 }
 
+func TestContactsPhotoDelete_PlainTSV(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/people/123:deleteContactPhoto" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method != http.MethodDelete {
+			t.Fatalf("method = %s, want DELETE", r.Method)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{}"))
+	}))
+	usePeopleContactsTestServer(t, srv)
+
+	out := captureStdout(t, func() {
+		stderr := captureStderr(t, func() {
+			if execErr := Execute([]string{
+				"--plain", "--force", "--account", "a@b.com",
+				"contacts", "photo", "delete", "123",
+			}); execErr != nil {
+				t.Fatalf("Execute: %v", execErr)
+			}
+		})
+		if stderr != "" {
+			t.Fatalf("unexpected stderr under --plain: %q", stderr)
+		}
+	})
+
+	want := "RESOURCE\tSTATUS\npeople/123\tOK\n"
+	if out != want {
+		t.Fatalf("plain photo delete output = %q, want %q", out, want)
+	}
+}
+
 func TestContactsPhotoUpdate_PlainTSV(t *testing.T) {
 	testImageData := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01")
 	tmpFile := createTempImageFile(t, testImageData)

@@ -57,6 +57,14 @@ func (c *ContactsPhotoDeleteCmd) Run(ctx context.Context, flags *RootFlags) erro
 		return err
 	}
 
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		writeTableRow(ctx, w, []string{"RESOURCE", "STATUS"})
+		writeTableRow(ctx, w, []string{resourceName, "OK"})
+		return nil
+	}
+
 	return writeDeleteResult(ctx, u, fmt.Sprintf("photo for contact %s", resourceName))
 }
 
