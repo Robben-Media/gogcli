@@ -90,6 +90,15 @@ func TestExecute_GmailWatch_MoreCommands(t *testing.T) {
 			t.Fatalf("expected second watch call, got %d", watchCalls)
 		}
 
+		statePath, pathErr := gmailWatchStatePath("a@b.com")
+		if pathErr != nil {
+			t.Fatalf("state path: %v", pathErr)
+		}
+		legacyPath := filepath.Join(filepath.Dir(statePath), legacySanitizeAccountForPath("a@b.com")+".json")
+		if writeErr := os.WriteFile(legacyPath, []byte("{\"account\":\"a@b.com\"}\n"), 0o600); writeErr != nil {
+			t.Fatalf("write legacy state: %v", writeErr)
+		}
+
 		// Serve validations (should error before ListenAndServe).
 		if execErr := Execute([]string{"gmail", "watch", "serve", "--path", "nope"}); execErr == nil || !strings.Contains(execErr.Error(), "--path must start") {
 			t.Fatalf("expected path validation error, got: %v", execErr)
@@ -118,6 +127,10 @@ func TestExecute_GmailWatch_MoreCommands(t *testing.T) {
 	}
 	if _, err := os.Stat(p); err == nil {
 		t.Fatalf("expected watch state removed: %s", p)
+	}
+	legacyPath := filepath.Join(filepath.Dir(p), legacySanitizeAccountForPath("a@b.com")+".json")
+	if _, err := os.Stat(legacyPath); err == nil {
+		t.Fatalf("expected legacy watch state removed: %s", legacyPath)
 	}
 
 	// Ensure dir exists but file doesn't.

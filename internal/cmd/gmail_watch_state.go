@@ -39,6 +39,7 @@ var (
 	}
 	watchReplace = replaceFile
 	watchRemove  = os.Remove
+	watchLink    = os.Link
 )
 
 func gmailWatchStatePath(account string) (string, error) {
@@ -131,20 +132,28 @@ func loadGmailWatchStore(account string) (*gmailWatchStore, error) {
 }
 
 func migrateGmailWatchState(oldPath, newPath string, data []byte) error {
-	file, err := os.OpenFile(newPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) //nolint:gosec // derived from the configured watch directory and account hash
+	tmp, err := watchCreateTemp(filepath.Dir(newPath), "gmail-watch-migrate-*.tmp")
 	if err != nil {
 		return err
 	}
-	if _, err := file.Write(data); err != nil {
-		_ = file.Close()
-		_ = os.Remove(newPath)
+	tmpName := tmp.Name()
+	defer func() { _ = watchRemove(tmpName) }()
+
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
 		return err
 	}
-	if err := file.Close(); err != nil {
-		_ = os.Remove(newPath)
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
 		return err
 	}
-	return os.Remove(oldPath)
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := watchLink(tmpName, newPath); err != nil {
+		return err
+	}
+	return watchRemove(oldPath)
 }
 
 func (s *gmailWatchStore) Get() gmailWatchState {

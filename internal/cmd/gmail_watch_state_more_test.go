@@ -14,12 +14,17 @@ func TestGmailWatchStatePath_CollisionFreeForNormalizedAccounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("plus account path: %v", err)
 	}
-	underscorePath, err := gmailWatchStatePath("user_sales@example.com")
-	if err != nil {
-		t.Fatalf("underscore account path: %v", err)
-	}
-	if plusPath == underscorePath {
-		t.Fatalf("distinct normalized accounts share path %q", plusPath)
+	for _, other := range []string{
+		"user_sales@example.com",
+		"user!sales@example.com",
+	} {
+		otherPath, pathErr := gmailWatchStatePath(other)
+		if pathErr != nil {
+			t.Fatalf("account %q path: %v", other, pathErr)
+		}
+		if plusPath == otherPath {
+			t.Fatalf("distinct normalized accounts %q and %q share path %q", "user+sales@example.com", other, plusPath)
+		}
 	}
 
 	normalizedPath, err := gmailWatchStatePath("user+sales@example.com")
@@ -28,6 +33,17 @@ func TestGmailWatchStatePath_CollisionFreeForNormalizedAccounts(t *testing.T) {
 	}
 	if plusPath != normalizedPath {
 		t.Fatalf("equivalent normalized accounts resolved to %q and %q", plusPath, normalizedPath)
+	}
+	nonASCIIPath, err := gmailWatchStatePath("üser@example.com")
+	if err != nil {
+		t.Fatalf("non-ASCII account path: %v", err)
+	}
+	legacyCollisionPath, err := gmailWatchStatePath("_ser@example.com")
+	if err != nil {
+		t.Fatalf("legacy collision account path: %v", err)
+	}
+	if nonASCIIPath == legacyCollisionPath {
+		t.Fatalf("non-ASCII collision pair shares path %q", nonASCIIPath)
 	}
 	if filepath.Ext(plusPath) != ".json" {
 		t.Fatalf("watch state path must remain a JSON file: %q", plusPath)
@@ -66,6 +82,59 @@ func TestLoadGmailWatchStore_MigratesMatchingLegacyState(t *testing.T) {
 	}
 	if _, err := os.Stat(legacyPath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("legacy state still exists after migration: %v", err)
+	}
+}
+
+func TestLoadGmailWatchStore_RejectsUnparsableLegacyStateWithoutMutation(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	newPath, pathErr := gmailWatchStatePath("user+sales@example.com")
+	if pathErr != nil {
+		t.Fatalf("new state path: %v", pathErr)
+	}
+	legacyPath := filepath.Join(filepath.Dir(newPath), legacySanitizeAccountForPath("user+sales@example.com")+".json")
+	payload := []byte("not json\n")
+	if err := os.WriteFile(legacyPath, payload, 0o600); err != nil {
+		t.Fatalf("write legacy state: %v", err)
+	}
+
+	if _, err := loadGmailWatchStore("user+sales@example.com"); err == nil {
+		t.Fatal("unparsable legacy state was accepted")
+	}
+	if got, err := os.ReadFile(legacyPath); err != nil || string(got) != string(payload) {
+		t.Fatalf("unparsable legacy state changed: data=%q err=%v", got, err)
+	}
+	if _, err := os.Stat(newPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("unparsable legacy state was migrated: %v", err)
+	}
+}
+
+func TestLoadGmailWatchStore_PublishFailureLeavesLegacyStateIntact(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	newPath, pathErr := gmailWatchStatePath("user+sales@example.com")
+	if pathErr != nil {
+		t.Fatalf("new state path: %v", pathErr)
+	}
+	legacyPath := filepath.Join(filepath.Dir(newPath), legacySanitizeAccountForPath("user+sales@example.com")+".json")
+	payload := []byte("{\"account\":\"user+sales@example.com\",\"historyId\":\"123\"}\n")
+	if err := os.WriteFile(legacyPath, payload, 0o600); err != nil {
+		t.Fatalf("write legacy state: %v", err)
+	}
+
+	origLink := watchLink
+	t.Cleanup(func() { watchLink = origLink })
+	publishErr := errors.New("publish migrated state")
+	watchLink = func(_, _ string) error { return publishErr }
+
+	if _, err := loadGmailWatchStore("user+sales@example.com"); !errors.Is(err, publishErr) {
+		t.Fatalf("load error = %v, want %v", err, publishErr)
+	}
+	if got, err := os.ReadFile(legacyPath); err != nil || string(got) != string(payload) {
+		t.Fatalf("legacy state changed: data=%q err=%v", got, err)
+	}
+	if _, err := os.Stat(newPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("new state published after failure: %v", err)
 	}
 }
 
