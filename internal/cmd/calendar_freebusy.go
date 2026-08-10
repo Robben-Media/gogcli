@@ -63,10 +63,16 @@ func (c *CalendarFreeBusyCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	w, flush := tableWriter(ctx)
 	defer flush()
-	fmt.Fprintln(w, "CALENDAR\tSTART\tEND")
+	fmt.Fprintln(w, "CALENDAR\tSTATUS\tSTART\tEND\tERROR_DOMAIN\tERROR_REASON")
 	for id, data := range resp.Calendars {
 		for _, b := range data.Busy {
-			fmt.Fprintf(w, "%s\t%s\t%s\n", id, b.Start, b.End)
+			fmt.Fprintf(w, "%s\tbusy\t%s\t%s\t\t\n", id, b.Start, b.End)
+		}
+		for _, e := range data.Errors {
+			if e == nil {
+				continue
+			}
+			fmt.Fprintf(w, "%s\terror\t\t\t%s\t%s\n", id, e.Domain, e.Reason)
 		}
 	}
 	return nil

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -19,6 +20,12 @@ type conflict struct {
 	Start     string   `json:"start"`
 	End       string   `json:"end"`
 	Calendars []string `json:"calendars"`
+}
+
+type freeBusySourceError struct {
+	Calendar string `json:"calendar"`
+	Domain   string `json:"domain,omitempty"`
+	Reason   string `json:"reason,omitempty"`
 }
 
 type CalendarConflictsCmd struct {
@@ -77,13 +84,46 @@ func (c *CalendarConflictsCmd) Run(ctx context.Context, flags *RootFlags) error 
 		return err
 	}
 
+	sourceErrors := collectFreeBusySourceErrors(resp.Calendars)
 	conflicts := detectConflicts(resp.Calendars)
+	incomplete := len(sourceErrors) > 0
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
-			"conflicts": conflicts,
-			"count":     len(conflicts),
-		})
+		payload := map[string]any{
+			"conflicts":  conflicts,
+			"count":      len(conflicts),
+			"incomplete": incomplete,
+		}
+		if incomplete {
+			payload["errors"] = sourceErrors
+		}
+		if err := outfmt.WriteJSON(os.Stdout, payload); err != nil {
+			return err
+		}
+		if incomplete {
+			return &ExitError{Code: 1, Err: errors.New("incomplete free/busy data: one or more calendars failed")}
+		}
+		return nil
+	}
+
+	if incomplete {
+		fmt.Printf("INCOMPLETE: source calendar errors\n")
+		tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+		fmt.Fprintln(tw, "CALENDAR\tERROR_DOMAIN\tERROR_REASON")
+		for _, se := range sourceErrors {
+			fmt.Fprintf(tw, "%s\t%s\t%s\n", se.Calendar, se.Domain, se.Reason)
+		}
+		_ = tw.Flush()
+		if len(conflicts) > 0 {
+			fmt.Printf("\nCONFLICTS FOUND: %d\n\n", len(conflicts))
+			tw = tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+			fmt.Fprintln(tw, "START\tEND\tCALENDARS")
+			for _, c := range conflicts {
+				fmt.Fprintf(tw, "%s\t%s\t%s\n", c.Start, c.End, strings.Join(c.Calendars, ", "))
+			}
+			_ = tw.Flush()
+		}
+		return &ExitError{Code: 1, Err: errors.New("incomplete free/busy data: one or more calendars failed")}
 	}
 
 	if outfmt.IsPlain(ctx) {
@@ -107,6 +147,33 @@ func (c *CalendarConflictsCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 	_ = tw.Flush()
 	return nil
+}
+
+func collectFreeBusySourceErrors(calendars map[string]calendar.FreeBusyCalendar) []freeBusySourceError {
+	if len(calendars) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(calendars))
+	for id := range calendars {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	var out []freeBusySourceError
+	for _, id := range ids {
+		cal := calendars[id]
+		for _, e := range cal.Errors {
+			if e == nil {
+				continue
+			}
+			out = append(out, freeBusySourceError{
+				Calendar: id,
+				Domain:   e.Domain,
+				Reason:   e.Reason,
+			})
+		}
+	}
+	return out
 }
 
 // detectConflicts finds overlapping busy periods across calendars
