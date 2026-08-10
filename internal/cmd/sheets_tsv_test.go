@@ -31,6 +31,23 @@ const (
 		"Sheet3!A1:B2\t1\t1\td\n"
 )
 
+func installSheetsTestService(t *testing.T, srv *httptest.Server) {
+	t.Helper()
+	original := newSheetsService
+	t.Cleanup(func() { newSheetsService = original })
+	service, err := sheets.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newSheetsService = func(context.Context, string) (*sheets.Service, error) {
+		return service, nil
+	}
+}
+
 func TestSheetsValueReads_PlainTSVPreservesRows(t *testing.T) {
 	values := [][]any{{"tab\tvalue", "line\nfeed", "carriage\rreturn", "crlf\r\nvalue"}}
 	valueRanges := []map[string]any{
@@ -96,19 +113,7 @@ func TestSheetsValueReads_PlainTSVPreservesRows(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	original := newSheetsService
-	t.Cleanup(func() { newSheetsService = original })
-	service, err := sheets.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newSheetsService = func(context.Context, string) (*sheets.Service, error) {
-		return service, nil
-	}
+	installSheetsTestService(t, srv)
 
 	tests := []struct {
 		name    string
@@ -163,19 +168,7 @@ func TestSheetsBatchValueReads_PlainEmptyResultsPrintHeaderOnly(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	original := newSheetsService
-	t.Cleanup(func() { newSheetsService = original })
-	service, err := sheets.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newSheetsService = func(context.Context, string) (*sheets.Service, error) {
-		return service, nil
-	}
+	installSheetsTestService(t, srv)
 
 	commands := [][]string{
 		{"sheets", "batch-get", "s1", "Sheet1!A1"},
