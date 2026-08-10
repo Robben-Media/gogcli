@@ -164,11 +164,11 @@ func (c *CalendarTeamCmd) runFreeBusy(ctx context.Context, svc *calendar.Service
 
 func (c *CalendarTeamCmd) runEvents(ctx context.Context, svc *calendar.Service, u *ui.UI, emails []string, tr *TimeRange) error {
 	var (
-		mu     sync.Mutex
-		events []teamEvent
-		errors []string
-		wg     sync.WaitGroup
-		sem    = make(chan struct{}, 10) // max 10 concurrent requests
+		mu       sync.Mutex
+		events   []teamEvent
+		failures []calendarEventError
+		wg       sync.WaitGroup
+		sem      = make(chan struct{}, 10) // max 10 concurrent requests
 	)
 
 	queryLower := strings.ToLower(c.Query)
@@ -190,8 +190,9 @@ func (c *CalendarTeamCmd) runEvents(ctx context.Context, svc *calendar.Service, 
 
 			resp, err := call.Do()
 			if err != nil {
+				failure := calendarEventError{CalendarID: email, Error: err.Error()}
 				mu.Lock()
-				errors = append(errors, fmt.Sprintf("%s: %v", email, err))
+				failures = append(failures, failure)
 				mu.Unlock()
 				return
 			}
@@ -249,9 +250,17 @@ func (c *CalendarTeamCmd) runEvents(ctx context.Context, svc *calendar.Service, 
 
 	wg.Wait()
 
-	// Print warnings for errors
-	for _, e := range errors {
-		u.Err().Printf("Warning: %s", e)
+	// Stable order for deterministic output / diagnostics.
+	sort.Slice(failures, func(i, j int) bool {
+		if failures[i].CalendarID == failures[j].CalendarID {
+			return failures[i].Error < failures[j].Error
+		}
+		return failures[i].CalendarID < failures[j].CalendarID
+	})
+
+	// Print warnings for failed calendars.
+	for _, failure := range failures {
+		u.Err().Printf("Warning: %s: %s", failure.CalendarID, failure.Error)
 	}
 
 	// Sort by start time
@@ -264,23 +273,58 @@ func (c *CalendarTeamCmd) runEvents(ctx context.Context, svc *calendar.Service, 
 		events = dedupeTeamEvents(events)
 	}
 
+	var resultErr error
+	if len(failures) > 0 {
+		resultErr = fmt.Errorf("failed to fetch events from %d calendar(s)", len(failures))
+	}
+
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		if err := outfmt.WriteJSON(os.Stdout, map[string]any{
 			"group":    c.GroupEmail,
 			"timeMin":  tr.From.Format(time.RFC3339),
 			"timeMax":  tr.To.Format(time.RFC3339),
 			"timezone": tr.Location.String(),
 			"events":   events,
-		})
+			"errors":   failures,
+			"complete": len(failures) == 0,
+		}); err != nil {
+			return err
+		}
+		return resultErr
 	}
 
-	if len(events) == 0 {
+	if len(events) == 0 && len(failures) == 0 {
 		u.Err().Println("No events found")
 		return nil
 	}
 
 	w, flush := tableWriter(ctx)
 	defer flush()
+	if outfmt.IsPlain(ctx) || len(failures) > 0 {
+		writeTableRow(ctx, w, []string{"TYPE", "WHO", "START", "END", "SUMMARY", "ERROR"})
+		for _, ev := range events {
+			writeTableRow(ctx, w, []string{
+				"event",
+				ev.Who,
+				ev.Start,
+				ev.End,
+				truncate(ev.Summary, 40),
+				"",
+			})
+		}
+		for _, failure := range failures {
+			writeTableRow(ctx, w, []string{
+				"calendar_error",
+				failure.CalendarID,
+				"",
+				"",
+				"",
+				sanitizeTab(failure.Error),
+			})
+		}
+		return resultErr
+	}
+
 	fmt.Fprintln(w, "WHO\tSTART\tEND\tSUMMARY")
 	for _, ev := range events {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",

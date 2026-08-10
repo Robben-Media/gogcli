@@ -338,3 +338,415 @@ func TestExecute_CalendarTeam_Text(t *testing.T) {
 		t.Fatalf("missing event summary in output: %q", out)
 	}
 }
+
+func TestExecute_CalendarTeam_JSON_PartialFailure(t *testing.T) {
+	origCalSvc := newCalendarService
+	origCloudSvc := newCloudIdentityService
+	t.Cleanup(func() {
+		newCalendarService = origCalSvc
+		newCloudIdentityService = origCloudSvc
+	})
+
+	cloudSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "groups:lookup"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"name": "groups/abc123"})
+		case strings.Contains(r.URL.Path, "groups/abc123/memberships"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"memberships": []map[string]any{
+					{"preferredMemberKey": map[string]any{"id": "alice@example.com"}, "type": "USER"},
+					{"preferredMemberKey": map[string]any{"id": "bob@example.com"}, "type": "USER"},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer cloudSrv.Close()
+
+	cloudSvc, err := cloudidentity.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(cloudSrv.Client()),
+		option.WithEndpoint(cloudSrv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService (cloud): %v", err)
+	}
+	newCloudIdentityService = func(context.Context, string) (*cloudidentity.Service, error) { return cloudSvc, nil }
+
+	calSrv := httptest.NewServer(withPrimaryCalendar(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/calendars/alice@example.com/events"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"items": []map[string]any{
+					{
+						"id":      "ev1",
+						"summary": "Alice Sync",
+						"start":   map[string]any{"dateTime": "2026-01-05T09:00:00Z"},
+						"end":     map[string]any{"dateTime": "2026-01-05T09:30:00Z"},
+					},
+				},
+			})
+		case strings.Contains(r.URL.Path, "/calendars/bob@example.com/events"):
+			http.Error(w, "access denied", http.StatusForbidden)
+		default:
+			http.NotFound(w, r)
+		}
+	})))
+	defer calSrv.Close()
+
+	calSvc, err := calendar.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(calSrv.Client()),
+		option.WithEndpoint(calSrv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService (cal): %v", err)
+	}
+	newCalendarService = func(context.Context, string) (*calendar.Service, error) { return calSvc, nil }
+
+	var execErr error
+	var errOut string
+	out := captureStdout(t, func() {
+		errOut = captureStderr(t, func() {
+			execErr = Execute([]string{
+				"--json",
+				"--account", "a@b.com",
+				"calendar", "team", "engineering@example.com",
+				"--from", "2026-01-05T00:00:00Z",
+				"--to", "2026-01-06T00:00:00Z",
+			})
+		})
+	})
+	if execErr == nil {
+		t.Fatal("expected partial failure to return nonzero")
+	}
+	if ExitCode(execErr) == 0 {
+		t.Fatalf("expected nonzero exit code, got 0 (%v)", execErr)
+	}
+
+	var parsed struct {
+		Events []struct {
+			Who     string `json:"who"`
+			ID      string `json:"id"`
+			Summary string `json:"summary"`
+		} `json:"events"`
+		Errors []struct {
+			CalendarID string `json:"calendarId"`
+			Error      string `json:"error"`
+		} `json:"errors"`
+		Complete bool `json:"complete"`
+	}
+	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
+		t.Fatalf("json parse: %v\nout=%q", err, out)
+	}
+	if parsed.Complete {
+		t.Fatalf("expected complete=false: %#v", parsed)
+	}
+	if len(parsed.Events) != 1 || parsed.Events[0].ID != "ev1" || parsed.Events[0].Who != "alice@example.com" {
+		t.Fatalf("successful events not preserved: %#v", parsed.Events)
+	}
+	if len(parsed.Errors) != 1 || parsed.Errors[0].CalendarID != "bob@example.com" || !strings.Contains(parsed.Errors[0].Error, "access denied") {
+		t.Fatalf("failed calendar not reported: %#v", parsed.Errors)
+	}
+	if !strings.Contains(errOut, "bob@example.com") || !strings.Contains(errOut, "access denied") {
+		t.Fatalf("missing actionable diagnostic: %q", errOut)
+	}
+}
+
+func TestExecute_CalendarTeam_Plain_PartialFailure(t *testing.T) {
+	origCalSvc := newCalendarService
+	origCloudSvc := newCloudIdentityService
+	t.Cleanup(func() {
+		newCalendarService = origCalSvc
+		newCloudIdentityService = origCloudSvc
+	})
+
+	cloudSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "groups:lookup"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"name": "groups/abc123"})
+		case strings.Contains(r.URL.Path, "groups/abc123/memberships"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"memberships": []map[string]any{
+					{"preferredMemberKey": map[string]any{"id": "alice@example.com"}, "type": "USER"},
+					{"preferredMemberKey": map[string]any{"id": "bob@example.com"}, "type": "USER"},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer cloudSrv.Close()
+
+	cloudSvc, err := cloudidentity.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(cloudSrv.Client()),
+		option.WithEndpoint(cloudSrv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService (cloud): %v", err)
+	}
+	newCloudIdentityService = func(context.Context, string) (*cloudidentity.Service, error) { return cloudSvc, nil }
+
+	calSrv := httptest.NewServer(withPrimaryCalendar(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/calendars/alice@example.com/events"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"items": []map[string]any{
+					{
+						"id":      "ev1",
+						"summary": "Alice Sync",
+						"start":   map[string]any{"dateTime": "2026-01-05T09:00:00Z"},
+						"end":     map[string]any{"dateTime": "2026-01-05T09:30:00Z"},
+					},
+				},
+			})
+		case strings.Contains(r.URL.Path, "/calendars/bob@example.com/events"):
+			http.Error(w, "access denied", http.StatusForbidden)
+		default:
+			http.NotFound(w, r)
+		}
+	})))
+	defer calSrv.Close()
+
+	calSvc, err := calendar.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(calSrv.Client()),
+		option.WithEndpoint(calSrv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService (cal): %v", err)
+	}
+	newCalendarService = func(context.Context, string) (*calendar.Service, error) { return calSvc, nil }
+
+	var execErr error
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			execErr = Execute([]string{
+				"--plain",
+				"--account", "a@b.com",
+				"calendar", "team", "engineering@example.com",
+				"--from", "2026-01-05T00:00:00Z",
+				"--to", "2026-01-06T00:00:00Z",
+			})
+		})
+	})
+	if execErr == nil || ExitCode(execErr) == 0 {
+		t.Fatalf("plain execution error = %v, want nonzero incomplete result", execErr)
+	}
+
+	lines := nonEmptyLines(out)
+	if len(lines) < 2 {
+		t.Fatalf("expected event and error records, got %q", out)
+	}
+	if lines[0] != "TYPE\tWHO\tSTART\tEND\tSUMMARY\tERROR" {
+		t.Fatalf("unexpected header=%q", lines[0])
+	}
+	if !strings.HasPrefix(lines[1], "event\talice@example.com\t") || !strings.Contains(lines[1], "\tAlice Sync\t") {
+		t.Fatalf("unexpected event record=%q", lines[1])
+	}
+	foundError := false
+	for _, line := range lines[1:] {
+		if strings.HasPrefix(line, "calendar_error\tbob@example.com\t") && strings.Contains(line, "access denied") {
+			foundError = true
+			if strings.Count(line, "\t") != 5 {
+				t.Fatalf("error record is not parseable TSV: %q", line)
+			}
+		}
+	}
+	if !foundError {
+		t.Fatalf("missing calendar_error record: %q", out)
+	}
+	if strings.Contains(out, "No events found") {
+		t.Fatalf("must not use empty-result path on partial failure: %q", out)
+	}
+}
+
+func TestExecute_CalendarTeam_JSON_AllFailed(t *testing.T) {
+	origCalSvc := newCalendarService
+	origCloudSvc := newCloudIdentityService
+	t.Cleanup(func() {
+		newCalendarService = origCalSvc
+		newCloudIdentityService = origCloudSvc
+	})
+
+	cloudSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "groups:lookup"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"name": "groups/abc123"})
+		case strings.Contains(r.URL.Path, "groups/abc123/memberships"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"memberships": []map[string]any{
+					{"preferredMemberKey": map[string]any{"id": "alice@example.com"}, "type": "USER"},
+					{"preferredMemberKey": map[string]any{"id": "bob@example.com"}, "type": "USER"},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer cloudSrv.Close()
+
+	cloudSvc, err := cloudidentity.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(cloudSrv.Client()),
+		option.WithEndpoint(cloudSrv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService (cloud): %v", err)
+	}
+	newCloudIdentityService = func(context.Context, string) (*cloudidentity.Service, error) { return cloudSvc, nil }
+
+	calSrv := httptest.NewServer(withPrimaryCalendar(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/events") {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		http.NotFound(w, r)
+	})))
+	defer calSrv.Close()
+
+	calSvc, err := calendar.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(calSrv.Client()),
+		option.WithEndpoint(calSrv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService (cal): %v", err)
+	}
+	newCalendarService = func(context.Context, string) (*calendar.Service, error) { return calSvc, nil }
+
+	var execErr error
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			execErr = Execute([]string{
+				"--json",
+				"--account", "a@b.com",
+				"calendar", "team", "engineering@example.com",
+				"--from", "2026-01-05T00:00:00Z",
+				"--to", "2026-01-06T00:00:00Z",
+			})
+		})
+	})
+	if execErr == nil || ExitCode(execErr) == 0 {
+		t.Fatalf("all-failed execution error = %v, want nonzero", execErr)
+	}
+
+	var parsed struct {
+		Events   []map[string]any `json:"events"`
+		Errors   []map[string]any `json:"errors"`
+		Complete bool             `json:"complete"`
+	}
+	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
+		t.Fatalf("json parse: %v\nout=%q", err, out)
+	}
+	if parsed.Complete {
+		t.Fatalf("expected complete=false on all-failed run: %#v", parsed)
+	}
+	if len(parsed.Events) != 0 {
+		t.Fatalf("expected no events on all-failed run: %#v", parsed.Events)
+	}
+	if len(parsed.Errors) != 2 {
+		t.Fatalf("expected 2 errors, got %#v", parsed.Errors)
+	}
+}
+
+func TestExecute_CalendarTeam_JSON_SuccessfulEmpty(t *testing.T) {
+	origCalSvc := newCalendarService
+	origCloudSvc := newCloudIdentityService
+	t.Cleanup(func() {
+		newCalendarService = origCalSvc
+		newCloudIdentityService = origCloudSvc
+	})
+
+	cloudSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "groups:lookup"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"name": "groups/abc123"})
+		case strings.Contains(r.URL.Path, "groups/abc123/memberships"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"memberships": []map[string]any{
+					{"preferredMemberKey": map[string]any{"id": "alice@example.com"}, "type": "USER"},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer cloudSrv.Close()
+
+	cloudSvc, err := cloudidentity.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(cloudSrv.Client()),
+		option.WithEndpoint(cloudSrv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService (cloud): %v", err)
+	}
+	newCloudIdentityService = func(context.Context, string) (*cloudidentity.Service, error) { return cloudSvc, nil }
+
+	calSrv := httptest.NewServer(withPrimaryCalendar(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/calendars/alice@example.com/events") {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": []map[string]any{}})
+			return
+		}
+		http.NotFound(w, r)
+	})))
+	defer calSrv.Close()
+
+	calSvc, err := calendar.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(calSrv.Client()),
+		option.WithEndpoint(calSrv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService (cal): %v", err)
+	}
+	newCalendarService = func(context.Context, string) (*calendar.Service, error) { return calSvc, nil }
+
+	var execErr error
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			execErr = Execute([]string{
+				"--json",
+				"--account", "a@b.com",
+				"calendar", "team", "engineering@example.com",
+				"--from", "2026-01-05T00:00:00Z",
+				"--to", "2026-01-06T00:00:00Z",
+			})
+		})
+	})
+	if execErr != nil {
+		t.Fatalf("successful empty schedule must succeed: %v", execErr)
+	}
+
+	var parsed struct {
+		Events   []map[string]any `json:"events"`
+		Errors   []map[string]any `json:"errors"`
+		Complete bool             `json:"complete"`
+	}
+	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
+		t.Fatalf("json parse: %v\nout=%q", err, out)
+	}
+	if !parsed.Complete {
+		t.Fatalf("expected complete=true for successful empty schedule: %#v", parsed)
+	}
+	if len(parsed.Events) != 0 {
+		t.Fatalf("expected no events: %#v", parsed.Events)
+	}
+	if len(parsed.Errors) != 0 {
+		t.Fatalf("expected no errors: %#v", parsed.Errors)
+	}
+}
