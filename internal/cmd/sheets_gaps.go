@@ -337,6 +337,14 @@ func (c *SheetsValuesBatchClearCmd) Run(ctx context.Context, flags *RootFlags) e
 			"clearedRanges": resp.ClearedRanges,
 		})
 	}
+	if outfmt.IsPlain(ctx) {
+		spreadsheetIDOut := spreadsheetID
+		if strings.TrimSpace(resp.SpreadsheetId) != "" {
+			spreadsheetIDOut = resp.SpreadsheetId
+		}
+		writeSheetsValueMutationPlainClears(ctx, "batch-clear", spreadsheetIDOut, resp.ClearedRanges)
+		return nil
+	}
 
 	u.Out().Printf("Cleared %d range(s)", len(resp.ClearedRanges))
 	return nil
@@ -393,6 +401,14 @@ func (c *SheetsValuesBatchClearByFilterCmd) Run(ctx context.Context, flags *Root
 			"spreadsheetId": resp.SpreadsheetId,
 			"clearedRanges": resp.ClearedRanges,
 		})
+	}
+	if outfmt.IsPlain(ctx) {
+		spreadsheetIDOut := spreadsheetID
+		if strings.TrimSpace(resp.SpreadsheetId) != "" {
+			spreadsheetIDOut = resp.SpreadsheetId
+		}
+		writeSheetsValueMutationPlainClears(ctx, "batch-clear-by-filter", spreadsheetIDOut, resp.ClearedRanges)
+		return nil
 	}
 
 	u.Out().Printf("Cleared %d range(s)", len(resp.ClearedRanges))
@@ -561,6 +577,35 @@ func (c *SheetsValuesBatchUpdateByFilterCmd) Run(ctx context.Context, flags *Roo
 			"totalUpdatedSheets":  resp.TotalUpdatedSheets,
 			"responses":           resp.Responses,
 		})
+	}
+	if outfmt.IsPlain(ctx) {
+		spreadsheetIDOut := spreadsheetID
+		if strings.TrimSpace(resp.SpreadsheetId) != "" {
+			spreadsheetIDOut = resp.SpreadsheetId
+		}
+		if len(resp.Responses) > 0 {
+			rows := make([]sheetsValueMutationPlainRow, 0, len(resp.Responses))
+			for _, r := range resp.Responses {
+				if r == nil {
+					continue
+				}
+				rows = append(rows, sheetsValueMutationPlainRow{
+					Action:         "batch-update-by-filter",
+					SpreadsheetID:  spreadsheetIDOut,
+					Range:          r.UpdatedRange,
+					UpdatedRows:    formatInt64Field(r.UpdatedRows),
+					UpdatedColumns: formatInt64Field(r.UpdatedColumns),
+					UpdatedCells:   formatInt64Field(r.UpdatedCells),
+					Status:         "ok",
+				})
+			}
+			if len(rows) > 0 {
+				writeSheetsValueMutationPlain(ctx, rows)
+				return nil
+			}
+		}
+		writeSheetsValueMutationPlainSingle(ctx, "batch-update-by-filter", spreadsheetIDOut, "", resp.TotalUpdatedRows, resp.TotalUpdatedColumns, resp.TotalUpdatedCells, resp.TotalUpdatedSheets)
+		return nil
 	}
 
 	u.Out().Printf("Updated %d cells in %d row(s)", resp.TotalUpdatedCells, resp.TotalUpdatedRows)
