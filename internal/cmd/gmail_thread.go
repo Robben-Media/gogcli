@@ -27,6 +27,8 @@ import (
 )
 
 // HTML stripping patterns for cleaner text output.
+const gmailThreadRecordDownload = "download"
+
 var (
 	// Remove script blocks entirely (including content)
 	scriptPattern = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
@@ -247,7 +249,7 @@ func writeGmailThreadPlainTSV(
 			}
 			for _, a := range downloads {
 				writeTableRow(ctx, w, []string{
-					"download",
+					gmailThreadRecordDownload,
 					threadID,
 					msgID,
 					a.Filename,

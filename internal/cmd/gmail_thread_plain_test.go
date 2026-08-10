@@ -274,7 +274,7 @@ func TestGmailThreadGet_PlainTSV_RecordsAndSanitization(t *testing.T) {
 		t.Fatalf("attachment BYTES = %q, want %d", att[6], len(attachmentData))
 	}
 
-	downloads := byType["download"]
+	downloads := byType[gmailThreadRecordDownload]
 	if len(downloads) != 1 {
 		t.Fatalf("expected 1 download row, got %#v", downloads)
 	}
@@ -317,7 +317,7 @@ func TestGmailThreadGet_PlainTSV_RecordsAndSanitization(t *testing.T) {
 	var cachedDownload []string
 	for _, line := range cachedLines[1:] {
 		cols := strings.Split(line, "\t")
-		if cols[0] == "download" {
+		if cols[0] == gmailThreadRecordDownload {
 			cachedDownload = cols
 		}
 	}
@@ -405,8 +405,7 @@ func TestGmailThreadGet_PlainTSV_FullBodyAndJSONUnchanged(t *testing.T) {
 		})
 	})
 	var payload struct {
-		Thread     map[string]any   `json:"thread"`
-		Downloaded []map[string]any `json:"downloaded"`
+		Thread map[string]any `json:"thread"`
 	}
 	if err := json.Unmarshal([]byte(jsonOut), &payload); err != nil {
 		t.Fatalf("json decode: %v\nout=%q", err, jsonOut)
@@ -414,10 +413,6 @@ func TestGmailThreadGet_PlainTSV_FullBodyAndJSONUnchanged(t *testing.T) {
 	if payload.Thread == nil || payload.Thread["id"] != "t-full" {
 		t.Fatalf("unexpected json payload: %#v", payload)
 	}
-	if payload.Downloaded == nil {
-		// downloaded key present as empty slice is fine; missing is also ok for Go nil
-	}
-
 	humanOut := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
 			if err := Execute([]string{
