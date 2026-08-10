@@ -157,6 +157,11 @@ func (c *GmailSendAsCreateCmd) Run(ctx context.Context, flags *RootFlags) error 
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"sendAs": created})
 	}
 
+	if outfmt.IsPlain(ctx) {
+		writePlainRoutingReceipt(ctx, "send_as", "create", created.SendAsEmail, created.VerificationStatus)
+		return nil
+	}
+
 	u.Out().Printf("send_as_email\t%s", created.SendAsEmail)
 	u.Out().Printf("verification_status\t%s", created.VerificationStatus)
 	u.Err().Println("Verification email sent. Check your inbox to complete setup.")
@@ -193,6 +198,11 @@ func (c *GmailSendAsVerifyCmd) Run(ctx context.Context, flags *RootFlags) error 
 			"email":   sendAsEmail,
 			"message": "Verification email sent",
 		})
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainRoutingReceipt(ctx, "send_as", "verify", sendAsEmail, "success")
+		return nil
 	}
 
 	u.Out().Printf("Verification email sent to %s", sendAsEmail)
@@ -232,6 +242,11 @@ func (c *GmailSendAsDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 			"email":   sendAsEmail,
 			"deleted": true,
 		})
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainRoutingReceipt(ctx, "send_as", "delete", sendAsEmail, "success")
+		return nil
 	}
 
 	u.Out().Printf("Deleted send-as alias: %s", sendAsEmail)
@@ -293,6 +308,11 @@ func (c *GmailSendAsUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flag
 
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"sendAs": updated})
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainRoutingReceipt(ctx, "send_as", "update", updated.SendAsEmail, updated.VerificationStatus)
+		return nil
 	}
 
 	u.Out().Printf("Updated send-as alias: %s", updated.SendAsEmail)

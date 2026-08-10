@@ -126,6 +126,11 @@ func (c *GmailForwardingCreateCmd) Run(ctx context.Context, flags *RootFlags) er
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"forwardingAddress": created})
 	}
 
+	if outfmt.IsPlain(ctx) {
+		writePlainRoutingReceipt(ctx, "forwarding_address", "create", created.ForwardingEmail, created.VerificationStatus)
+		return nil
+	}
+
 	u.Out().Println("Forwarding address created successfully")
 	u.Out().Printf("forwarding_email\t%s", created.ForwardingEmail)
 	u.Out().Printf("verification_status\t%s", created.VerificationStatus)
@@ -168,6 +173,11 @@ func (c *GmailForwardingDeleteCmd) Run(ctx context.Context, flags *RootFlags) er
 			"success":         true,
 			"forwardingEmail": forwardingEmail,
 		})
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainRoutingReceipt(ctx, "forwarding_address", "delete", forwardingEmail, "success")
+		return nil
 	}
 
 	u.Out().Printf("Forwarding address %s deleted successfully", forwardingEmail)

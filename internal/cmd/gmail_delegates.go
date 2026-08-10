@@ -126,6 +126,11 @@ func (c *GmailDelegatesAddCmd) Run(ctx context.Context, flags *RootFlags) error 
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"delegate": created})
 	}
 
+	if outfmt.IsPlain(ctx) {
+		writePlainRoutingReceipt(ctx, "delegate", "create", created.DelegateEmail, created.VerificationStatus)
+		return nil
+	}
+
 	u.Out().Println("Delegate added successfully")
 	u.Out().Printf("delegate_email\t%s", created.DelegateEmail)
 	u.Out().Printf("verification_status\t%s", created.VerificationStatus)
@@ -167,6 +172,11 @@ func (c *GmailDelegatesRemoveCmd) Run(ctx context.Context, flags *RootFlags) err
 			"success":       true,
 			"delegateEmail": delegateEmail,
 		})
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainRoutingReceipt(ctx, "delegate", "delete", delegateEmail, "success")
+		return nil
 	}
 
 	u.Out().Printf("Delegate %s removed successfully", delegateEmail)

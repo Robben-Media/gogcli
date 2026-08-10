@@ -55,6 +55,20 @@ func writePlainReceipt(ctx context.Context, headers []string, fields []string) {
 	writeTableRow(ctx, w, fields)
 }
 
+// writePlainRoutingReceipt emits the shared Gmail routing mutation receipt:
+// RESOURCE_TYPE\tACTION\tRESOURCE\tSTATUS (header + one row).
+// resourceType/action are machine tokens (lowercase); status is a server
+// verification/lifecycle value when available, otherwise "success".
+func writePlainRoutingReceipt(ctx context.Context, resourceType, action, resource, status string) {
+	if status == "" {
+		status = "success"
+	}
+	writePlainReceipt(ctx,
+		[]string{"RESOURCE_TYPE", "ACTION", "RESOURCE", "STATUS"},
+		[]string{resourceType, action, resource, status},
+	)
+}
+
 func printNextPageHint(u *ui.UI, nextPageToken string) {
 	printNextPageHintWithFlag(u, "--page", nextPageToken)
 }
