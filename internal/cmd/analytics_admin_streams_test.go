@@ -380,7 +380,7 @@ func TestExecute_AADataStreamsGet_PlainStableSchema(t *testing.T) {
 				response := map[string]any{
 					"name":        "properties/123/dataStreams/456",
 					"type":        tt.streamType,
-					"displayName": "Healthcare LP",
+					"displayName": "Healthcare\tLP\r\nTeam",
 					"createTime":  "2026-01-01T00:00:00Z",
 					"updateTime":  "2026-01-02T00:00:00Z",
 				}
@@ -406,7 +406,7 @@ func TestExecute_AADataStreamsGet_PlainStableSchema(t *testing.T) {
 			})
 
 			want := "NAME\tTYPE\tDISPLAY_NAME\tCREATED\tUPDATED\tMEASUREMENT_ID\n" +
-				"properties/123/dataStreams/456\t" + tt.streamType + "\tHealthcare LP\t2026-01-01T00:00:00Z\t2026-01-02T00:00:00Z\t" + tt.measurementID + "\n"
+				"properties/123/dataStreams/456\t" + tt.streamType + "\tHealthcare LP Team\t2026-01-01T00:00:00Z\t2026-01-02T00:00:00Z\t" + tt.measurementID + "\n"
 			if out != want {
 				t.Fatalf("plain output mismatch:\nwant %q\ngot  %q", want, out)
 			}
