@@ -3,10 +3,10 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync/atomic"
 	"testing"
 
 	"google.golang.org/api/option"
@@ -17,10 +17,10 @@ func TestExecute_SheetsClear_NoInputRefusesBeforeServiceConstruction(t *testing.
 	origNew := newSheetsService
 	t.Cleanup(func() { newSheetsService = origNew })
 
-	var serviceCalls atomic.Int32
+	serviceCalls := 0
 	newSheetsService = func(context.Context, string) (*sheets.Service, error) {
-		serviceCalls.Add(1)
-		return nil, nil
+		serviceCalls++
+		return nil, errors.New("sheets service should not be created")
 	}
 
 	err := Execute([]string{"--no-input", "--account", "a@b.com", "sheets", "clear", "id1", "Sheet1!A1:B1"})
@@ -30,8 +30,11 @@ func TestExecute_SheetsClear_NoInputRefusesBeforeServiceConstruction(t *testing.
 	if !strings.Contains(err.Error(), "without --force") {
 		t.Fatalf("expected --force guidance, got %v", err)
 	}
-	if got := serviceCalls.Load(); got != 0 {
-		t.Fatalf("expected refusal before Sheets service construction, got %d call(s)", got)
+	if !strings.Contains(err.Error(), "clear range Sheet1!A1:B1 from spreadsheet id1") {
+		t.Fatalf("expected confirmation to identify spreadsheet and range, got %v", err)
+	}
+	if serviceCalls != 0 {
+		t.Fatalf("expected refusal before Sheets service construction, got %d call(s)", serviceCalls)
 	}
 }
 
