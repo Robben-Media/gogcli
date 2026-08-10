@@ -14,6 +14,63 @@ import (
 	"google.golang.org/api/option"
 )
 
+func TestExecute_GmailWatchStop_PreservesUnownedLegacyState(t *testing.T) {
+	origNew := newGmailService
+	t.Cleanup(func() { newGmailService = origNew })
+
+	for _, tc := range []struct {
+		name    string
+		payload []byte
+	}{
+		{name: "different account", payload: []byte("{\"account\":\"user_sales@example.com\"}\n")},
+		{name: "unparsable", payload: []byte("not json\n")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			t.Setenv("XDG_CONFIG_HOME", home)
+			t.Setenv("GOG_ACCOUNT", "user+sales@example.com")
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.Contains(r.URL.Path, "/gmail/v1/users/me/stop") && r.Method == http.MethodPost {
+					w.WriteHeader(http.StatusNoContent)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			defer srv.Close()
+
+			svc, err := gmail.NewService(context.Background(),
+				option.WithoutAuthentication(),
+				option.WithHTTPClient(srv.Client()),
+				option.WithEndpoint(srv.URL+"/"),
+			)
+			if err != nil {
+				t.Fatalf("NewService: %v", err)
+			}
+			newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
+
+			statePath, err := gmailWatchStatePath("user+sales@example.com")
+			if err != nil {
+				t.Fatalf("state path: %v", err)
+			}
+			legacyPath := filepath.Join(filepath.Dir(statePath), legacySanitizeAccountForPath("user+sales@example.com")+".json")
+			if err := os.WriteFile(legacyPath, tc.payload, 0o600); err != nil {
+				t.Fatalf("write legacy state: %v", err)
+			}
+
+			_ = captureStdout(t, func() {
+				if err := Execute([]string{"--json", "--force", "gmail", "watch", "stop"}); err != nil {
+					t.Fatalf("stop: %v", err)
+				}
+			})
+			if got, err := os.ReadFile(legacyPath); err != nil || string(got) != string(tc.payload) {
+				t.Fatalf("unowned legacy state changed: data=%q err=%v", got, err)
+			}
+		})
+	}
+}
+
 func TestExecute_GmailWatch_MoreCommands(t *testing.T) {
 	origNew := newGmailService
 	t.Cleanup(func() { newGmailService = origNew })

@@ -7,8 +7,15 @@ import (
 	"testing"
 )
 
+func setGmailWatchTestConfigDir(t *testing.T) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", home)
+}
+
 func TestGmailWatchStatePath_CollisionFreeForNormalizedAccounts(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	setGmailWatchTestConfigDir(t)
 
 	plusPath, err := gmailWatchStatePath(" User+Sales@Example.com ")
 	if err != nil {
@@ -51,7 +58,7 @@ func TestGmailWatchStatePath_CollisionFreeForNormalizedAccounts(t *testing.T) {
 }
 
 func TestLoadGmailWatchStore_MigratesMatchingLegacyState(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	setGmailWatchTestConfigDir(t)
 
 	newPath, pathErr := gmailWatchStatePath("user+sales@example.com")
 	if pathErr != nil {
@@ -86,7 +93,7 @@ func TestLoadGmailWatchStore_MigratesMatchingLegacyState(t *testing.T) {
 }
 
 func TestLoadGmailWatchStore_RejectsUnparsableLegacyStateWithoutMutation(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	setGmailWatchTestConfigDir(t)
 
 	newPath, pathErr := gmailWatchStatePath("user+sales@example.com")
 	if pathErr != nil {
@@ -110,7 +117,7 @@ func TestLoadGmailWatchStore_RejectsUnparsableLegacyStateWithoutMutation(t *test
 }
 
 func TestLoadGmailWatchStore_PublishFailureLeavesLegacyStateIntact(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	setGmailWatchTestConfigDir(t)
 
 	newPath, pathErr := gmailWatchStatePath("user+sales@example.com")
 	if pathErr != nil {
@@ -139,7 +146,7 @@ func TestLoadGmailWatchStore_PublishFailureLeavesLegacyStateIntact(t *testing.T)
 }
 
 func TestLoadGmailWatchStore_RejectsCollidingLegacyStateForAnotherAccount(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	setGmailWatchTestConfigDir(t)
 
 	requestedPath, pathErr := gmailWatchStatePath("user+sales@example.com")
 	if pathErr != nil {

@@ -88,6 +88,25 @@ func legacySanitizeAccountForPath(account string) string {
 	return b.String()
 }
 
+func removeMatchingLegacyGmailWatchState(account, currentPath string) {
+	legacyPath := filepath.Join(filepath.Dir(currentPath), legacySanitizeAccountForPath(account)+".json")
+	if legacyPath == currentPath {
+		return
+	}
+	data, err := os.ReadFile(legacyPath) //nolint:gosec // derived from the configured watch directory and sanitized account
+	if err != nil {
+		return
+	}
+	var state gmailWatchState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return
+	}
+	if normalizeWatchAccount(state.Account) != normalizeWatchAccount(account) {
+		return
+	}
+	_ = watchRemove(legacyPath)
+}
+
 func newGmailWatchStore(account string) (*gmailWatchStore, error) {
 	path, err := gmailWatchStatePath(account)
 	if err != nil {

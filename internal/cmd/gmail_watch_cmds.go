@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -183,10 +182,7 @@ func (c *GmailWatchStopCmd) Run(ctx context.Context, flags *RootFlags) error {
 	store, err := newGmailWatchStore(account)
 	if err == nil && store.path != "" {
 		_ = os.Remove(store.path)
-		legacyPath := filepath.Join(filepath.Dir(store.path), legacySanitizeAccountForPath(account)+".json")
-		if legacyPath != store.path {
-			_ = os.Remove(legacyPath)
-		}
+		removeMatchingLegacyGmailWatchState(account, store.path)
 	}
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"stopped": true})
