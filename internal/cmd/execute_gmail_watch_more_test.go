@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -124,11 +125,23 @@ func TestExecute_GmailWatch_MoreCommands(t *testing.T) {
 	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
 	_ = captureStderr(t, func() {
+		statePath, pathErr := gmailWatchStatePath("a@b.com")
+		if pathErr != nil {
+			t.Fatalf("state path: %v", pathErr)
+		}
+		legacyPath := filepath.Join(filepath.Dir(statePath), legacySanitizeAccountForPath("a@b.com")+".json")
+		if writeErr := os.WriteFile(legacyPath, []byte("{\"account\":\"a@b.com\"}\n"), 0o600); writeErr != nil {
+			t.Fatalf("write legacy state: %v", writeErr)
+		}
+
 		_ = captureStdout(t, func() {
 			if execErr := Execute([]string{"--json", "gmail", "watch", "start", "--topic", "projects/p/topics/t", "--label", "INBOX"}); execErr != nil {
 				t.Fatalf("start: %v", execErr)
 			}
 		})
+		if _, statErr := os.Stat(legacyPath); !errors.Is(statErr, os.ErrNotExist) {
+			t.Fatalf("legacy state still exists after start: %v", statErr)
+		}
 		if watchCalls != 1 {
 			t.Fatalf("expected watch call, got %d", watchCalls)
 		}
@@ -147,11 +160,11 @@ func TestExecute_GmailWatch_MoreCommands(t *testing.T) {
 			t.Fatalf("expected second watch call, got %d", watchCalls)
 		}
 
-		statePath, pathErr := gmailWatchStatePath("a@b.com")
+		statePath, pathErr = gmailWatchStatePath("a@b.com")
 		if pathErr != nil {
 			t.Fatalf("state path: %v", pathErr)
 		}
-		legacyPath := filepath.Join(filepath.Dir(statePath), legacySanitizeAccountForPath("a@b.com")+".json")
+		legacyPath = filepath.Join(filepath.Dir(statePath), legacySanitizeAccountForPath("a@b.com")+".json")
 		if writeErr := os.WriteFile(legacyPath, []byte("{\"account\":\"a@b.com\"}\n"), 0o600); writeErr != nil {
 			t.Fatalf("write legacy state: %v", writeErr)
 		}

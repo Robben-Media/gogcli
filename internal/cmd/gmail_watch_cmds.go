@@ -92,6 +92,7 @@ func (c *GmailWatchStartCmd) Run(ctx context.Context, kctx *kong.Context, flags 
 	}); err != nil {
 		return err
 	}
+	removeMatchingLegacyGmailWatchState(account, store.path)
 
 	return writeWatchState(ctx, state)
 }

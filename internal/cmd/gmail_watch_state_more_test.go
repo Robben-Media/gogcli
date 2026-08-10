@@ -116,6 +116,41 @@ func TestLoadGmailWatchStore_RejectsUnparsableLegacyStateWithoutMutation(t *test
 	}
 }
 
+func TestLoadGmailWatchStore_LegacyCleanupFailureKeepsPublishedStateUsable(t *testing.T) {
+	setGmailWatchTestConfigDir(t)
+
+	newPath, pathErr := gmailWatchStatePath("user+sales@example.com")
+	if pathErr != nil {
+		t.Fatalf("new state path: %v", pathErr)
+	}
+	legacyPath := filepath.Join(filepath.Dir(newPath), legacySanitizeAccountForPath("user+sales@example.com")+".json")
+	payload := []byte("{\"account\":\"user+sales@example.com\",\"historyId\":\"123\"}\n")
+	if err := os.WriteFile(legacyPath, payload, 0o600); err != nil {
+		t.Fatalf("write legacy state: %v", err)
+	}
+
+	origRemove := watchRemove
+	t.Cleanup(func() { watchRemove = origRemove })
+	cleanupErr := errors.New("remove legacy state")
+	watchRemove = func(path string) error {
+		if path == legacyPath {
+			return cleanupErr
+		}
+		return os.Remove(path)
+	}
+
+	store, err := loadGmailWatchStore("user+sales@example.com")
+	if err != nil {
+		t.Fatalf("load matching legacy state: %v", err)
+	}
+	if store.Get().HistoryID != "123" {
+		t.Fatalf("loaded history ID = %q, want 123", store.Get().HistoryID)
+	}
+	if got, err := os.ReadFile(newPath); err != nil || string(got) != string(payload) {
+		t.Fatalf("published state unusable: data=%q err=%v", got, err)
+	}
+}
+
 func TestLoadGmailWatchStore_PublishFailureLeavesLegacyStateIntact(t *testing.T) {
 	setGmailWatchTestConfigDir(t)
 

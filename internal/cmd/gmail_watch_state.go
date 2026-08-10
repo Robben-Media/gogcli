@@ -172,7 +172,8 @@ func migrateGmailWatchState(oldPath, newPath string, data []byte) error {
 	if err := watchLink(tmpName, newPath); err != nil {
 		return err
 	}
-	return watchRemove(oldPath)
+	_ = watchRemove(oldPath)
+	return nil
 }
 
 func (s *gmailWatchStore) Get() gmailWatchState {
