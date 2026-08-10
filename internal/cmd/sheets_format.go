@@ -99,6 +99,14 @@ func (c *SheetsFormatCmd) Run(ctx context.Context, flags *RootFlags) error {
 			"fields": formatFields,
 		})
 	}
+	if outfmt.IsPlain(ctx) {
+		sheetID := ""
+		if gridRange != nil {
+			sheetID = fmt.Sprintf("%d", gridRange.SheetId)
+		}
+		writeSheetsStructuralPlain(ctx, "format", spreadsheetID, sheetID, "", rangeSpec)
+		return nil
+	}
 
 	u.Out().Printf("Formatted %s", rangeSpec)
 	return nil

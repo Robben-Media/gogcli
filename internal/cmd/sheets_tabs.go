@@ -75,6 +75,15 @@ func (c *SheetsSheetAddCmd) Run(ctx context.Context, flags *RootFlags) error {
 		}
 		return outfmt.WriteJSON(os.Stdout, out)
 	}
+	if outfmt.IsPlain(ctx) {
+		sheetID, title := "", ""
+		if addedProps != nil {
+			sheetID = fmt.Sprintf("%d", addedProps.SheetId)
+			title = addedProps.Title
+		}
+		writeSheetsStructuralPlain(ctx, "add", resp.SpreadsheetId, sheetID, title, "")
+		return nil
+	}
 
 	u := ui.FromContext(ctx)
 	if addedProps != nil {
@@ -126,6 +135,10 @@ func (c *SheetsSheetDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 			"spreadsheetId":  resp.SpreadsheetId,
 			"deletedSheetId": c.SheetID,
 		})
+	}
+	if outfmt.IsPlain(ctx) {
+		writeSheetsStructuralPlain(ctx, "delete", resp.SpreadsheetId, fmt.Sprintf("%d", c.SheetID), "", "")
+		return nil
 	}
 
 	u := ui.FromContext(ctx)
@@ -204,6 +217,10 @@ func (c *SheetsSheetUpdateCmd) Run(ctx context.Context, flags *RootFlags) error 
 			"sheetId":       c.SheetID,
 			"updatedFields": fields,
 		})
+	}
+	if outfmt.IsPlain(ctx) {
+		writeSheetsStructuralPlain(ctx, "update", resp.SpreadsheetId, fmt.Sprintf("%d", c.SheetID), strings.TrimSpace(c.Title), "")
+		return nil
 	}
 
 	u := ui.FromContext(ctx)
