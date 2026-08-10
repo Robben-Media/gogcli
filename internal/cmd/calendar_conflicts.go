@@ -108,15 +108,12 @@ func (c *CalendarConflictsCmd) Run(ctx context.Context, flags *RootFlags) error 
 
 	if outfmt.IsPlain(ctx) {
 		if incomplete {
-			writeTableRow(ctx, os.Stdout, []string{"STATUS", "CALENDAR", "ERROR_DOMAIN", "ERROR_REASON"})
+			writeTableRow(ctx, os.Stdout, []string{"TYPE", "STATUS", "CALENDAR", "ERROR_DOMAIN", "ERROR_REASON", "START", "END", "CALENDARS"})
 			for _, sourceErr := range sourceErrors {
-				writeTableRow(ctx, os.Stdout, []string{"incomplete", sourceErr.Calendar, sourceErr.Domain, sourceErr.Reason})
+				writeTableRow(ctx, os.Stdout, []string{"error", "incomplete", sourceErr.Calendar, sourceErr.Domain, sourceErr.Reason, "", "", ""})
 			}
-			if len(conflicts) > 0 {
-				writeTableRow(ctx, os.Stdout, []string{"START", "END", "CALENDARS"})
-				for _, conflict := range conflicts {
-					writeTableRow(ctx, os.Stdout, []string{conflict.Start, conflict.End, strings.Join(conflict.Calendars, ", ")})
-				}
+			for _, conflict := range conflicts {
+				writeTableRow(ctx, os.Stdout, []string{"conflict", "incomplete", "", "", "", conflict.Start, conflict.End, strings.Join(conflict.Calendars, ", ")})
 			}
 			return &ExitError{Code: 1, Err: errors.New("incomplete free/busy data: one or more calendars failed")}
 		}
