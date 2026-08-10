@@ -648,7 +648,8 @@ func TestContactsBatchUpdate_PlainEmptyResponseStillEmitsRequestRow(t *testing.T
 		}
 	})
 
-	want := "REQUEST_KEY\tRESOURCE\tNAME\tEMAIL\tSTATUS\tERROR\npeople/1\tpeople/1\tA\t\tOK\t\n"
+	resource := "people/1"
+	want := "REQUEST_KEY\tRESOURCE\tNAME\tEMAIL\tSTATUS\tERROR\n" + resource + "\t" + resource + "\tA\t\tOK\t\n"
 	if out != want {
 		t.Fatalf("plain update output with empty response = %q, want %q", out, want)
 	}
