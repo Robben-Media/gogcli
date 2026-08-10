@@ -913,7 +913,7 @@ func downloadDriveFile(ctx context.Context, svc *drive.Service, meta *drive.File
 		return "", 0, fmt.Errorf("download failed: %s: %s", resp.Status, strings.TrimSpace(string(body)))
 	}
 
-	n, err := writeDownloadFile(outPath, func(w io.Writer) (int64, error) {
+	n, err := writeDownloadFile(outPath, 0o644, func(w io.Writer) (int64, error) {
 		return io.Copy(w, resp.Body)
 	})
 	if err != nil {

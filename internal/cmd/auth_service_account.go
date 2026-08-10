@@ -105,21 +105,6 @@ func (c *AuthServiceAccountSetCmd) Run(ctx context.Context) error {
 			"client_id":    info.ClientID,
 		})
 	}
-	advice := "Service account configured. Use: gog <cmd> --account " + email
-	if outfmt.IsPlain(ctx) {
-		writeTableRow(ctx, os.Stdout, []string{"KEY", "VALUE"})
-		writeTableRow(ctx, os.Stdout, []string{"email", email})
-		writeTableRow(ctx, os.Stdout, []string{"path", destPath})
-		if info.ClientEmail != "" {
-			writeTableRow(ctx, os.Stdout, []string{"client_email", info.ClientEmail})
-		}
-		if info.ClientID != "" {
-			writeTableRow(ctx, os.Stdout, []string{"client_id", info.ClientID})
-		}
-		u.Err().Println(advice)
-		return nil
-	}
-
 	u.Out().Printf("email\t%s", email)
 	u.Out().Printf("path\t%s", destPath)
 	if info.ClientEmail != "" {
@@ -128,7 +113,12 @@ func (c *AuthServiceAccountSetCmd) Run(ctx context.Context) error {
 	if info.ClientID != "" {
 		u.Out().Printf("client_id\t%s", info.ClientID)
 	}
-	u.Out().Println(advice)
+	advice := "Service account configured. Use: gog <cmd> --account " + email
+	if outfmt.IsPlain(ctx) {
+		u.Err().Println(advice)
+	} else {
+		u.Out().Println(advice)
+	}
 	return nil
 }
 

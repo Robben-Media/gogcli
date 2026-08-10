@@ -188,7 +188,7 @@ func (c *ChatMediaDownloadCmd) Run(ctx context.Context, flags *RootFlags) error 
 		return fmt.Errorf("expanding output path: %w", err)
 	}
 
-	n, err := writeDownloadFile(destPath, func(w io.Writer) (int64, error) {
+	n, err := writeDownloadFile(destPath, 0o644, func(w io.Writer) (int64, error) {
 		return io.Copy(w, resp.Body)
 	})
 	if err != nil {

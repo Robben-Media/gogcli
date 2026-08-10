@@ -87,10 +87,17 @@ func TestDownloadAttachmentToPath_Base64Fallback(t *testing.T) {
 	if gotPath != path || cached || bytes != 5 {
 		t.Fatalf("unexpected result: path=%q cached=%v bytes=%d", gotPath, cached, bytes)
 	}
-	if data, err := os.ReadFile(path); err != nil {
-		t.Fatalf("ReadFile: %v", err)
+	if data, readErr := os.ReadFile(path); readErr != nil {
+		t.Fatalf("ReadFile: %v", readErr)
 	} else if string(data) != "hello" {
 		t.Fatalf("unexpected data: %q", string(data))
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("mode = %04o, want 0600", got)
 	}
 }
 

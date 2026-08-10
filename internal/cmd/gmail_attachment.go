@@ -127,7 +127,7 @@ func downloadAttachmentToPath(
 	if mkdirErr := os.MkdirAll(filepath.Dir(outPath), 0o700); mkdirErr != nil {
 		return "", false, 0, mkdirErr
 	}
-	written, err := writeDownloadFile(outPath, func(w io.Writer) (int64, error) {
+	written, err := writeDownloadFile(outPath, 0o600, func(w io.Writer) (int64, error) {
 		return io.Copy(w, stdbytes.NewReader(data))
 	})
 	if err != nil {

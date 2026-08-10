@@ -56,6 +56,13 @@ func TestDownloadDriveFile_NonGoogleDoc(t *testing.T) {
 	if string(b) != body {
 		t.Fatalf("unexpected body: %q", string(b))
 	}
+	info, err := os.Stat(dest)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o644 {
+		t.Fatalf("mode = %04o, want 0644", got)
+	}
 }
 
 func TestDownloadDriveFile_NonGoogleDocFormatRejected(t *testing.T) {
@@ -128,6 +135,46 @@ func TestDownloadDriveFile_GoogleDocExport(t *testing.T) {
 	}
 	if string(b) != body {
 		t.Fatalf("unexpected body: %q", string(b))
+	}
+}
+
+func TestDownloadDriveFile_InterruptedExportPreservesDestination(t *testing.T) {
+	origExport := driveExportDownload
+	t.Cleanup(func() { driveExportDownload = origExport })
+	driveExportDownload = func(context.Context, *drive.Service, string, string) (*http.Response, error) {
+		return &http.Response{
+			Status:     "200 OK",
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(io.MultiReader(strings.NewReader("partial"), errorReader{err: errors.New("connection lost")})),
+		}, nil
+	}
+
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "doc.pdf")
+	if err := os.WriteFile(dest, []byte("original"), 0o640); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	outPath, _, err := downloadDriveFile(context.Background(), &drive.Service{}, &drive.File{Id: "id1", MimeType: "application/vnd.google-apps.document"}, filepath.Join(dir, "doc.txt"), "")
+	if err == nil {
+		t.Fatal("expected interrupted export error")
+	}
+	if outPath != "" {
+		t.Fatalf("outPath = %q, want empty on failure", outPath)
+	}
+	data, readErr := os.ReadFile(dest)
+	if readErr != nil {
+		t.Fatalf("ReadFile: %v", readErr)
+	}
+	if string(data) != "original" {
+		t.Fatalf("destination changed: %q", data)
+	}
+	entries, readDirErr := os.ReadDir(dir)
+	if readDirErr != nil {
+		t.Fatalf("ReadDir: %v", readDirErr)
+	}
+	if len(entries) != 1 || entries[0].Name() != "doc.pdf" {
+		t.Fatalf("temporary artifact left behind: %#v", entries)
 	}
 }
 
@@ -252,6 +299,12 @@ func (f *closeErrorTempFile) Close() error {
 	return f.file.Close()
 }
 
+func TestApplyDownloadModeMask_RespectsRestrictiveUmask(t *testing.T) {
+	if got := applyDownloadModeMask(0o644, 0o077); got != 0o600 {
+		t.Fatalf("mode = %04o, want 0600", got)
+	}
+}
+
 func TestWriteDownloadFile_RetriesCloseBeforeCleanup(t *testing.T) {
 	originalCreate := createDownloadTempFile
 	t.Cleanup(func() { createDownloadTempFile = originalCreate })
@@ -267,7 +320,7 @@ func TestWriteDownloadFile_RetriesCloseBeforeCleanup(t *testing.T) {
 	}
 
 	dest := filepath.Join(t.TempDir(), "file.bin")
-	if _, err := writeDownloadFile(dest, func(w io.Writer) (int64, error) {
+	if _, err := writeDownloadFile(dest, 0o644, func(w io.Writer) (int64, error) {
 		n, writeErr := io.WriteString(w, "replacement")
 		return int64(n), writeErr
 	}); err == nil {
@@ -381,7 +434,7 @@ func TestWriteDownloadFile_FollowsSymlinkAndPreservesTargetMode(t *testing.T) {
 		t.Fatalf("create symlink: %v", err)
 	}
 
-	if _, err := writeDownloadFile(link, func(w io.Writer) (int64, error) {
+	if _, err := writeDownloadFile(link, 0o644, func(w io.Writer) (int64, error) {
 		n, writeErr := io.WriteString(w, "replacement")
 		return int64(n), writeErr
 	}); err != nil {
@@ -422,7 +475,7 @@ func TestWriteDownloadFile_FollowsDanglingSymlinkChain(t *testing.T) {
 		t.Fatalf("create destination symlink: %v", err)
 	}
 
-	if _, err := writeDownloadFile(link, func(w io.Writer) (int64, error) {
+	if _, err := writeDownloadFile(link, 0o644, func(w io.Writer) (int64, error) {
 		n, writeErr := io.WriteString(w, "replacement")
 		return int64(n), writeErr
 	}); err != nil {
@@ -455,7 +508,7 @@ func TestWriteDownloadFile_PreservesZeroMode(t *testing.T) {
 		t.Fatalf("chmod destination: %v", err)
 	}
 
-	if _, err := writeDownloadFile(dest, func(w io.Writer) (int64, error) {
+	if _, err := writeDownloadFile(dest, 0o644, func(w io.Writer) (int64, error) {
 		n, writeErr := io.WriteString(w, "replacement")
 		return int64(n), writeErr
 	}); err != nil {

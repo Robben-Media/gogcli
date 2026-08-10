@@ -170,7 +170,7 @@ func downloadRevision(ctx context.Context, svc *drive.Service, fileID, revisionI
 		outputPath = fmt.Sprintf("%s-revision-%s", fileID, revisionID)
 	}
 
-	size, err := writeDownloadFile(outputPath, func(w io.Writer) (int64, error) {
+	size, err := writeDownloadFile(outputPath, 0o644, func(w io.Writer) (int64, error) {
 		return io.Copy(w, resp.Body)
 	})
 	if err != nil {
