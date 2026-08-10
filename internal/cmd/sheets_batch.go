@@ -61,7 +61,7 @@ func (c *SheetsBatchGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 			for i, cell := range row {
 				cells[i] = fmt.Sprintf("%v", cell)
 			}
-			u.Out().Println(strings.Join(cells, "\t"))
+			u.Out().Println(strings.Join(plainTableFields(ctx, cells), "\t"))
 		}
 	}
 	return nil
