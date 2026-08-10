@@ -426,7 +426,7 @@ func TestExecute_BusinessProfileAccountAdminsDelete_Human(t *testing.T) {
 	}
 }
 
-func TestExecute_BusinessProfileAccountAdminsDelete_JSONWriteErrorPreservesDiagnostic(t *testing.T) {
+func TestExecute_BusinessProfileAccountAdminsDelete_WriteErrorPreservesDiagnostic(t *testing.T) {
 	origAccounts := newBusinessProfileAccountsService
 	t.Cleanup(func() { newBusinessProfileAccountsService = origAccounts })
 
@@ -452,28 +452,32 @@ func TestExecute_BusinessProfileAccountAdminsDelete_JSONWriteErrorPreservesDiagn
 		return svc, nil
 	}
 
-	oldStdout := os.Stdout
-	readEnd, closedStdout, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
-	_ = readEnd.Close()
-	_ = closedStdout.Close()
-	os.Stdout = closedStdout
-	t.Cleanup(func() { os.Stdout = oldStdout })
+	for _, mode := range []string{"--json", "--plain"} {
+		t.Run(mode, func(t *testing.T) {
+			oldStdout := os.Stdout
+			readEnd, closedStdout, pipeErr := os.Pipe()
+			if pipeErr != nil {
+				t.Fatalf("os.Pipe: %v", pipeErr)
+			}
+			_ = readEnd.Close()
+			_ = closedStdout.Close()
+			os.Stdout = closedStdout
+			t.Cleanup(func() { os.Stdout = oldStdout })
 
-	var executeErr error
-	stderr := captureStderr(t, func() {
-		executeErr = Execute([]string{
-			"--json", "--account", "a@b.com", "--force",
-			"business-profile", "account-admins", "delete", "accounts/123/admins/456",
+			var executeErr error
+			stderr := captureStderr(t, func() {
+				executeErr = Execute([]string{
+					mode, "--account", "a@b.com", "--force",
+					"business-profile", "account-admins", "delete", "accounts/123/admins/456",
+				})
+			})
+			if executeErr == nil {
+				t.Fatal("expected stdout write error")
+			}
+			if !strings.Contains(stderr, "Deleted") {
+				t.Fatalf("expected success diagnostic before write error, got %q", stderr)
+			}
 		})
-	})
-	if executeErr == nil {
-		t.Fatal("expected stdout write error")
-	}
-	if !strings.Contains(stderr, "Deleted") {
-		t.Fatalf("expected success diagnostic before write error, got %q", stderr)
 	}
 }
 

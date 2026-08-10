@@ -41,7 +41,7 @@ func writeBusinessProfileMutationReceipt(ctx context.Context, action, resource, 
 			headers = append(headers, "DESTINATION")
 			fields = append(fields, destination)
 		}
-		writePlainReceipt(ctx, headers, fields)
+		return writePlainReceiptError(ctx, headers, fields)
 	}
 
 	return nil
