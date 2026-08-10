@@ -160,6 +160,14 @@ func (c *GmailCseIdentitiesCreateCmd) Run(ctx context.Context, flags *RootFlags)
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"cseIdentity": created})
 	}
 
+	if outfmt.IsPlain(ctx) {
+		writePlainReceipt(ctx,
+			[]string{"ACTION", "EMAIL", "PRIMARY_KEY_PAIR_ID", "STATUS"},
+			[]string{"create", created.EmailAddress, created.PrimaryKeyPairId, "ok"},
+		)
+		return nil
+	}
+
 	u.Out().Println("CSE identity created successfully")
 	u.Out().Printf("email_address\t%s", created.EmailAddress)
 	u.Out().Printf("primary_keypair_id\t%s", created.PrimaryKeyPairId)
@@ -203,6 +211,15 @@ func (c *GmailCseIdentitiesDeleteCmd) Run(ctx context.Context, flags *RootFlags)
 			"success": true,
 			"email":   email,
 		})
+	}
+
+	if outfmt.IsPlain(ctx) {
+		// Delete has no server primary key pair after success.
+		writePlainReceipt(ctx,
+			[]string{"ACTION", "EMAIL", "PRIMARY_KEY_PAIR_ID", "STATUS"},
+			[]string{"delete", email, "", "ok"},
+		)
+		return nil
 	}
 
 	u.Out().Printf("CSE identity deleted: %s", email)
@@ -270,6 +287,14 @@ func (c *GmailCseIdentitiesPatchCmd) Run(ctx context.Context, kctx *kong.Context
 
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"cseIdentity": updated})
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainReceipt(ctx,
+			[]string{"ACTION", "EMAIL", "PRIMARY_KEY_PAIR_ID", "STATUS"},
+			[]string{"patch", updated.EmailAddress, updated.PrimaryKeyPairId, "ok"},
+		)
+		return nil
 	}
 
 	u.Out().Println("CSE identity patched successfully")
@@ -429,6 +454,14 @@ func (c *GmailCseKeypairsCreateCmd) Run(ctx context.Context, flags *RootFlags) e
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"cseKeyPair": created})
 	}
 
+	if outfmt.IsPlain(ctx) {
+		writePlainReceipt(ctx,
+			[]string{"ACTION", "KEY_PAIR_ID", "ENABLEMENT_STATE", "DISABLE_TIME", "STATUS"},
+			[]string{"create", created.KeyPairId, created.EnablementState, created.DisableTime, "ok"},
+		)
+		return nil
+	}
+
 	u.Out().Println("CSE key pair created successfully")
 	u.Out().Printf("key_pair_id\t%s", created.KeyPairId)
 	u.Out().Printf("enablement_state\t%s", created.EnablementState)
@@ -465,6 +498,14 @@ func (c *GmailCseKeypairsEnableCmd) Run(ctx context.Context, flags *RootFlags) e
 
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"cseKeyPair": enabled})
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainReceipt(ctx,
+			[]string{"ACTION", "KEY_PAIR_ID", "ENABLEMENT_STATE", "DISABLE_TIME", "STATUS"},
+			[]string{"enable", enabled.KeyPairId, enabled.EnablementState, enabled.DisableTime, "ok"},
+		)
+		return nil
 	}
 
 	u.Out().Printf("CSE key pair enabled: %s", keyPairID)
@@ -507,6 +548,14 @@ func (c *GmailCseKeypairsDisableCmd) Run(ctx context.Context, flags *RootFlags) 
 
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"cseKeyPair": disabled})
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainReceipt(ctx,
+			[]string{"ACTION", "KEY_PAIR_ID", "ENABLEMENT_STATE", "DISABLE_TIME", "STATUS"},
+			[]string{"disable", disabled.KeyPairId, disabled.EnablementState, disabled.DisableTime, "ok"},
+		)
+		return nil
 	}
 
 	u.Out().Printf("CSE key pair disabled: %s", keyPairID)
@@ -556,6 +605,15 @@ func (c *GmailCseKeypairsObliterateCmd) Run(ctx context.Context, flags *RootFlag
 			"keyPairId":   keyPairID,
 			"obliterated": true,
 		})
+	}
+
+	if outfmt.IsPlain(ctx) {
+		// Obliterate has no server enablement/disable fields after success.
+		writePlainReceipt(ctx,
+			[]string{"ACTION", "KEY_PAIR_ID", "ENABLEMENT_STATE", "DISABLE_TIME", "STATUS"},
+			[]string{"obliterate", keyPairID, "", "", "ok"},
+		)
+		return nil
 	}
 
 	u.Out().Printf("CSE key pair OBLITERATED: %s (this action is irreversible)", keyPairID)

@@ -46,6 +46,15 @@ func sanitizePlainField(s string) string {
 	return plainFieldReplacer.Replace(s)
 }
 
+// writePlainReceipt writes a fixed-schema TSV receipt (header + one data row)
+// for --plain mutation output. Fields are sanitized for tab/newline safety.
+func writePlainReceipt(ctx context.Context, headers []string, fields []string) {
+	w, flush := tableWriter(ctx)
+	defer flush()
+	writeTableRow(ctx, w, headers)
+	writeTableRow(ctx, w, fields)
+}
+
 func printNextPageHint(u *ui.UI, nextPageToken string) {
 	printNextPageHintWithFlag(u, "--page", nextPageToken)
 }
