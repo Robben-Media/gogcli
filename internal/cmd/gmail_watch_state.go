@@ -21,6 +21,22 @@ type gmailWatchStore struct {
 	state gmailWatchState
 }
 
+// watchTempFile is the temp-file surface used by Save for injectable failure tests.
+type watchTempFile interface {
+	Name() string
+	Write(p []byte) (int, error)
+	Close() error
+	Chmod(mode os.FileMode) error
+}
+
+var (
+	watchCreateTemp = func(dir, pattern string) (watchTempFile, error) {
+		return os.CreateTemp(dir, pattern)
+	}
+	watchRename = os.Rename
+	watchRemove = os.Remove
+)
+
 func gmailWatchStatePath(account string) (string, error) {
 	dir, err := config.EnsureGmailWatchDir()
 	if err != nil {
@@ -89,21 +105,65 @@ func (s *gmailWatchStore) Get() gmailWatchState {
 func (s *gmailWatchStore) Update(fn func(*gmailWatchState) error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := fn(&s.state); err != nil {
+
+	next := s.state
+	if err := fn(&next); err != nil {
 		return err
 	}
-	return s.Save()
+	if err := s.saveState(next); err != nil {
+		return err
+	}
+	s.state = next
+	return nil
 }
 
 func (s *gmailWatchStore) Save() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.saveState(s.state)
+}
+
+// saveState persists state atomically. Caller must hold s.mu when coordinating
+// with in-memory updates; Save holds the lock, Update holds it around save+publish.
+func (s *gmailWatchStore) saveState(state gmailWatchState) error {
 	if s.path == "" {
 		return errors.New("missing watch state path")
 	}
-	payload, err := json.MarshalIndent(s.state, "", "  ")
+	payload, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.path, append(payload, '\n'), 0o600)
+	payload = append(payload, '\n')
+
+	dir := filepath.Dir(s.path)
+	tmp, err := watchCreateTemp(dir, "gmail-watch-*.tmp")
+	if err != nil {
+		return fmt.Errorf("create watch state temp: %w", err)
+	}
+	tmpName := tmp.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = watchRemove(tmpName)
+		}
+	}()
+
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("chmod watch state temp: %w", err)
+	}
+	if _, err := tmp.Write(payload); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write watch state temp: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close watch state temp: %w", err)
+	}
+	if err := watchRename(tmpName, s.path); err != nil {
+		return fmt.Errorf("replace watch state: %w", err)
+	}
+	cleanup = false
+	return nil
 }
 
 func (s *gmailWatchStore) StartHistoryID(pushHistory string) (uint64, error) {
@@ -123,9 +183,13 @@ func (s *gmailWatchStore) StartHistoryID(pushHistory string) (uint64, error) {
 		if pushErr != nil {
 			return 0, pushErr
 		}
-		s.state.HistoryID = formatHistoryID(pushID)
-		s.state.UpdatedAtMs = time.Now().UnixMilli()
-		_ = s.Save()
+		next := s.state
+		next.HistoryID = formatHistoryID(pushID)
+		next.UpdatedAtMs = time.Now().UnixMilli()
+		if err := s.saveState(next); err != nil {
+			return 0, err
+		}
+		s.state = next
 		return pushID, nil
 	}
 
