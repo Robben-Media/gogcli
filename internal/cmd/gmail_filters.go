@@ -327,15 +327,19 @@ func (c *GmailFiltersDeleteCmd) Run(ctx context.Context, flags *RootFlags) error
 		return err
 	}
 
+	filterID := strings.TrimSpace(c.FilterID)
+	if filterID == "" {
+		return usage("empty filterId")
+	}
+	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("delete gmail filter %s", filterID)); confirmErr != nil {
+		return confirmErr
+	}
+
 	svc, err := newGmailService(ctx, account)
 	if err != nil {
 		return err
 	}
 
-	filterID := strings.TrimSpace(c.FilterID)
-	if filterID == "" {
-		return usage("empty filterId")
-	}
 	err = svc.Users.Settings.Filters.Delete("me", filterID).Do()
 	if err != nil {
 		return err

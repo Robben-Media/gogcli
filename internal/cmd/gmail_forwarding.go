@@ -145,15 +145,19 @@ func (c *GmailForwardingDeleteCmd) Run(ctx context.Context, flags *RootFlags) er
 		return err
 	}
 
+	forwardingEmail := strings.TrimSpace(c.ForwardingEmail)
+	if forwardingEmail == "" {
+		return usage("empty forwardingEmail")
+	}
+	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("delete gmail forwarding address %s", forwardingEmail)); confirmErr != nil {
+		return confirmErr
+	}
+
 	svc, err := newGmailService(ctx, account)
 	if err != nil {
 		return err
 	}
 
-	forwardingEmail := strings.TrimSpace(c.ForwardingEmail)
-	if forwardingEmail == "" {
-		return usage("empty forwardingEmail")
-	}
 	err = svc.Users.Settings.ForwardingAddresses.Delete("me", forwardingEmail).Do()
 	if err != nil {
 		return err
