@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/steipete/gogcli/internal/config"
@@ -15,11 +16,15 @@ type failingServiceAccountTempFile struct {
 }
 
 func (f *failingServiceAccountTempFile) Write(p []byte) (int, error) {
-	if f.operation == "write" {
+	switch f.operation {
+	case "write":
 		n, _ := f.File.Write(p[:len(p)/2])
 		return n, errors.New("injected write failure")
+	case "short_write":
+		return f.File.Write(p[:len(p)/2])
+	default:
+		return f.File.Write(p)
 	}
-	return f.File.Write(p)
 }
 
 func (f *failingServiceAccountTempFile) Chmod(mode os.FileMode) error {
@@ -207,8 +212,78 @@ func TestAuthKeep_SecondReplacementFailureRestoresPriorPairAndRemovesTemporaryFi
 	}
 }
 
+func TestAuthKeep_RollbackFailureIsReportedAndPreservesBackup(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg-config"))
+
+	const email = "user@example.com"
+	oldKeep := []byte(`{"type":"service_account","client_email":"old-keep@example.com"}`)
+	oldGeneric := []byte(`{"type":"service_account","client_email":"old-generic@example.com"}`)
+	newData := []byte(`{"type":"service_account","client_email":"new@example.com"}`)
+	keyPath := filepath.Join(t.TempDir(), "service-account.json")
+	if err := os.WriteFile(keyPath, newData, 0o600); err != nil {
+		t.Fatalf("write source key: %v", err)
+	}
+	if _, err := config.EnsureDir(); err != nil {
+		t.Fatalf("EnsureDir: %v", err)
+	}
+	keepPath, err := config.KeepServiceAccountPath(email)
+	if err != nil {
+		t.Fatalf("KeepServiceAccountPath: %v", err)
+	}
+	genericPath, err := config.ServiceAccountPath(email)
+	if err != nil {
+		t.Fatalf("ServiceAccountPath: %v", err)
+	}
+	if writeErr := os.WriteFile(keepPath, oldKeep, 0o600); writeErr != nil {
+		t.Fatalf("write prior Keep key: %v", writeErr)
+	}
+	if writeErr := os.WriteFile(genericPath, oldGeneric, 0o600); writeErr != nil {
+		t.Fatalf("write prior generic key: %v", writeErr)
+	}
+
+	originalRename := renameServiceAccountFile
+	t.Cleanup(func() { renameServiceAccountFile = originalRename })
+	replacements := 0
+	renameServiceAccountFile = func(oldPath, newPath string) error {
+		if strings.Contains(oldPath, ".backup-") && newPath == keepPath {
+			return errors.New("injected rollback failure")
+		}
+		if !strings.Contains(oldPath, ".backup-") && oldPath != keepPath && oldPath != genericPath {
+			replacements++
+			if replacements == 2 {
+				return errors.New("injected second replacement failure")
+			}
+		}
+		return os.Rename(oldPath, newPath)
+	}
+
+	err = Execute([]string{"auth", "keep", email, "--key", keyPath})
+	if err == nil || !strings.Contains(err.Error(), "restore") || !strings.Contains(err.Error(), "injected rollback failure") {
+		t.Fatalf("Execute error = %v, want replacement and rollback failure", err)
+	}
+	if _, statErr := os.Stat(keepPath); statErr != nil {
+		t.Fatalf("final Keep credential missing after rollback failure: %v", statErr)
+	}
+	backups, globErr := filepath.Glob(filepath.Join(filepath.Dir(keepPath), "."+filepath.Base(keepPath)+".backup-*"))
+	if globErr != nil {
+		t.Fatalf("glob backups: %v", globErr)
+	}
+	if len(backups) != 1 {
+		t.Fatalf("recoverable backup count = %d, want 1: %v", len(backups), backups)
+	}
+	gotBackup, readErr := os.ReadFile(backups[0])
+	if readErr != nil {
+		t.Fatalf("read recoverable backup: %v", readErr)
+	}
+	if string(gotBackup) != string(oldKeep) {
+		t.Fatalf("backup = %q, want prior Keep key %q", gotBackup, oldKeep)
+	}
+}
+
 func TestAuthServiceAccountSet_FailuresPreservePriorKeyAndRemoveTemporaryFiles(t *testing.T) {
-	for _, operation := range []string{"write", "close", "permission", "replacement"} {
+	for _, operation := range []string{"write", "short_write", "close", "permission", "replacement"} {
 		t.Run(operation, func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)

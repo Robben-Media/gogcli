@@ -3,7 +3,9 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,11 +60,12 @@ func parseServiceAccountJSON(data []byte) (serviceAccountJSONInfo, error) {
 }
 
 type stagedServiceAccountFile struct {
-	path       string
-	tmpPath    string
-	backupPath string
-	existed    bool
-	committed  bool
+	path           string
+	tmpPath        string
+	backupPath     string
+	existed        bool
+	committed      bool
+	preserveBackup bool
 }
 
 func writeServiceAccountFile(path string, data []byte) error {
@@ -74,7 +77,9 @@ func writeServiceAccountFiles(paths []string, data []byte) error {
 	defer func() {
 		for _, file := range files {
 			_ = os.Remove(file.tmpPath)
-			_ = os.Remove(file.backupPath)
+			if !file.preserveBackup {
+				_ = os.Remove(file.backupPath)
+			}
 		}
 	}()
 
@@ -85,9 +90,14 @@ func writeServiceAccountFiles(paths []string, data []byte) error {
 		}
 		file := stagedServiceAccountFile{path: path, tmpPath: tmp.Name()}
 		files = append(files, file)
-		if _, err := tmp.Write(data); err != nil {
+		n, err := tmp.Write(data)
+		if err != nil {
 			_ = tmp.Close()
 			return err
+		}
+		if n != len(data) {
+			_ = tmp.Close()
+			return io.ErrShortWrite
 		}
 		if err := tmp.Chmod(0o600); err != nil {
 			_ = tmp.Close()
@@ -98,19 +108,27 @@ func writeServiceAccountFiles(paths []string, data []byte) error {
 		}
 	}
 
-	rollback := func() {
+	rollback := func() error {
+		var rollbackErr error
 		for i := len(files) - 1; i >= 0; i-- {
 			file := &files[i]
-			if file.committed {
-				_ = os.Remove(file.path)
-			}
 			if file.backupPath != "" {
-				_ = renameServiceAccountFile(file.backupPath, file.path)
+				if err := renameServiceAccountFile(file.backupPath, file.path); err != nil {
+					file.preserveBackup = true
+					rollbackErr = errors.Join(rollbackErr, fmt.Errorf("restore %s from %s: %w", file.path, file.backupPath, err))
+					continue
+				}
 				file.backupPath = ""
-			} else if !file.existed {
-				_ = os.Remove(file.path)
+				file.committed = false
+				continue
+			}
+			if file.committed && !file.existed {
+				if err := os.Remove(file.path); err != nil && !os.IsNotExist(err) {
+					rollbackErr = errors.Join(rollbackErr, fmt.Errorf("remove newly installed %s: %w", file.path, err))
+				}
 			}
 		}
+		return rollbackErr
 	}
 
 	for i := range files {
@@ -119,35 +137,29 @@ func writeServiceAccountFiles(paths []string, data []byte) error {
 			file.existed = true
 			backup, createErr := os.CreateTemp(filepath.Dir(file.path), "."+filepath.Base(file.path)+".backup-*")
 			if createErr != nil {
-				rollback()
-				return createErr
+				return errors.Join(createErr, rollback())
 			}
 			backupPath := backup.Name()
 			if closeErr := backup.Close(); closeErr != nil {
 				_ = os.Remove(backupPath)
-				rollback()
-				return closeErr
+				return errors.Join(closeErr, rollback())
 			}
 			if removeErr := os.Remove(backupPath); removeErr != nil {
-				rollback()
-				return removeErr
+				return errors.Join(removeErr, rollback())
 			}
 			if renameErr := renameServiceAccountFile(file.path, backupPath); renameErr != nil {
-				rollback()
-				return renameErr
+				return errors.Join(renameErr, rollback())
 			}
 			file.backupPath = backupPath
 		} else if !os.IsNotExist(err) {
-			rollback()
-			return err
+			return errors.Join(err, rollback())
 		}
 	}
 
 	for i := range files {
 		file := &files[i]
 		if err := renameServiceAccountFile(file.tmpPath, file.path); err != nil {
-			rollback()
-			return err
+			return errors.Join(err, rollback())
 		}
 		file.tmpPath = ""
 		file.committed = true
