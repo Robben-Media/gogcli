@@ -17,40 +17,14 @@ import (
 )
 
 func TestGmailBatchDeleteCmd_Plain(t *testing.T) {
-	origNew := newGmailService
-	t.Cleanup(func() { newGmailService = origNew })
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	out := captureGmailBatchPlainOutput(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/messages/batchDelete") && r.Method == http.MethodPost {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		http.NotFound(w, r)
-	}))
-	defer srv.Close()
-
-	svc, err := gmail.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
-
-	flags := &RootFlags{Account: "a@b.com", Force: true}
-	out := captureStdout(t, func() {
-		u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-		if uiErr != nil {
-			t.Fatalf("ui.New: %v", uiErr)
-		}
-		ctx := ui.WithUI(context.Background(), u)
-		ctx = outfmt.WithMode(ctx, outfmt.Mode{Plain: true})
-
-		if runErr := runKong(t, &GmailBatchDeleteCmd{}, []string{"msg1", "msg2", "msg3"}, ctx, flags); runErr != nil {
-			t.Fatalf("execute: %v", runErr)
-		}
+	}), func(ctx context.Context, flags *RootFlags) error {
+		return runKong(t, &GmailBatchDeleteCmd{}, []string{"msg1", "msg2", "msg3"}, ctx, flags)
 	})
 
 	const want = "ACTION\tCOUNT\tADDED_LABELS\tREMOVED_LABELS\ndelete\t3\t\t\n"
@@ -63,10 +37,7 @@ func TestGmailBatchDeleteCmd_Plain(t *testing.T) {
 }
 
 func TestGmailBatchModifyCmd_Plain(t *testing.T) {
-	origNew := newGmailService
-	t.Cleanup(func() { newGmailService = origNew })
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	out := captureGmailBatchPlainOutput(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/users/me/labels"):
 			w.Header().Set("Content-Type", "application/json")
@@ -83,8 +54,31 @@ func TestGmailBatchModifyCmd_Plain(t *testing.T) {
 			return
 		}
 		http.NotFound(w, r)
-	}))
-	defer srv.Close()
+	}), func(ctx context.Context, flags *RootFlags) error {
+		return runKong(t, &GmailBatchModifyCmd{}, []string{
+			"msg1", "msg2",
+			"--add", "Work,INBOX",
+			"--remove", "SPAM",
+		}, ctx, flags)
+	})
+
+	const want = "ACTION\tCOUNT\tADDED_LABELS\tREMOVED_LABELS\nmodify\t2\tLabel_1,INBOX\tSPAM\n"
+	if out != want {
+		t.Fatalf("plain output mismatch:\nwant %q\ngot  %q", want, out)
+	}
+	if strings.Contains(strings.ToLower(out), "modified") {
+		t.Fatalf("plain stdout must not include prose, got %q", out)
+	}
+}
+
+func captureGmailBatchPlainOutput(t *testing.T, handler http.Handler, run func(context.Context, *RootFlags) error) string {
+	t.Helper()
+
+	origNew := newGmailService
+	t.Cleanup(func() { newGmailService = origNew })
+
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
 
 	svc, err := gmail.NewService(context.Background(),
 		option.WithoutAuthentication(),
@@ -97,7 +91,7 @@ func TestGmailBatchModifyCmd_Plain(t *testing.T) {
 	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
 	flags := &RootFlags{Account: "a@b.com", Force: true}
-	out := captureStdout(t, func() {
+	return captureStdout(t, func() {
 		u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
 		if uiErr != nil {
 			t.Fatalf("ui.New: %v", uiErr)
@@ -105,20 +99,8 @@ func TestGmailBatchModifyCmd_Plain(t *testing.T) {
 		ctx := ui.WithUI(context.Background(), u)
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{Plain: true})
 
-		if runErr := runKong(t, &GmailBatchModifyCmd{}, []string{
-			"msg1", "msg2",
-			"--add", "Work,INBOX",
-			"--remove", "SPAM",
-		}, ctx, flags); runErr != nil {
+		if runErr := run(ctx, flags); runErr != nil {
 			t.Fatalf("execute: %v", runErr)
 		}
 	})
-
-	const want = "ACTION\tCOUNT\tADDED_LABELS\tREMOVED_LABELS\nmodify\t2\tLabel_1,INBOX\tSPAM\n"
-	if out != want {
-		t.Fatalf("plain output mismatch:\nwant %q\ngot  %q", want, out)
-	}
-	if strings.Contains(strings.ToLower(out), "modified") {
-		t.Fatalf("plain stdout must not include prose, got %q", out)
-	}
 }
