@@ -47,7 +47,7 @@ func TestGmailDelegatesAddCmd_PlainReceipt(t *testing.T) {
 	}
 	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
-	flags := &RootFlags{Account: "a@b.com"}
+	flags := &RootFlags{Account: "a@b.com", Force: true}
 	out := captureStdout(t, func() {
 		ctx := ui.WithUI(context.Background(), mustUI(t))
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{Plain: true})
@@ -87,7 +87,7 @@ func TestGmailDelegatesRemoveCmd_PlainReceipt(t *testing.T) {
 	}
 	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
-	flags := &RootFlags{Account: "a@b.com"}
+	flags := &RootFlags{Account: "a@b.com", Force: true}
 	out := captureStdout(t, func() {
 		ctx := ui.WithUI(context.Background(), mustUI(t))
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{Plain: true})
@@ -130,7 +130,7 @@ func TestGmailForwardingCreateCmd_PlainReceipt(t *testing.T) {
 	}
 	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
-	flags := &RootFlags{Account: "a@b.com"}
+	flags := &RootFlags{Account: "a@b.com", Force: true}
 	out := captureStdout(t, func() {
 		ctx := ui.WithUI(context.Background(), mustUI(t))
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{Plain: true})
@@ -170,7 +170,7 @@ func TestGmailForwardingDeleteCmd_PlainReceipt(t *testing.T) {
 	}
 	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
-	flags := &RootFlags{Account: "a@b.com"}
+	flags := &RootFlags{Account: "a@b.com", Force: true}
 	out := captureStdout(t, func() {
 		ctx := ui.WithUI(context.Background(), mustUI(t))
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{Plain: true})
@@ -213,7 +213,7 @@ func TestGmailSendAsCreateCmd_PlainReceipt(t *testing.T) {
 	}
 	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
-	flags := &RootFlags{Account: "a@b.com"}
+	flags := &RootFlags{Account: "a@b.com", Force: true}
 	out := captureStdout(t, func() {
 		ctx := ui.WithUI(context.Background(), mustUI(t))
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{Plain: true})
@@ -256,7 +256,7 @@ func TestGmailSendAsVerifyCmd_PlainReceipt(t *testing.T) {
 	}
 	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
-	flags := &RootFlags{Account: "a@b.com"}
+	flags := &RootFlags{Account: "a@b.com", Force: true}
 	out := captureStdout(t, func() {
 		ctx := ui.WithUI(context.Background(), mustUI(t))
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{Plain: true})
@@ -308,7 +308,7 @@ func TestGmailSendAsUpdateCmd_PlainReceipt(t *testing.T) {
 	}
 	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
-	flags := &RootFlags{Account: "a@b.com"}
+	flags := &RootFlags{Account: "a@b.com", Force: true}
 	out := captureStdout(t, func() {
 		ctx := ui.WithUI(context.Background(), mustUI(t))
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{Plain: true})
@@ -345,7 +345,7 @@ func TestGmailSendAsDeleteCmd_PlainReceipt(t *testing.T) {
 	}
 	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
-	flags := &RootFlags{Account: "a@b.com"}
+	flags := &RootFlags{Account: "a@b.com", Force: true}
 	out := captureStdout(t, func() {
 		ctx := ui.WithUI(context.Background(), mustUI(t))
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{Plain: true})
@@ -393,7 +393,7 @@ func TestGmailFiltersCreateCmd_PlainReceipt(t *testing.T) {
 	}
 	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
-	flags := &RootFlags{Account: "a@b.com"}
+	flags := &RootFlags{Account: "a@b.com", Force: true}
 	out := captureStdout(t, func() {
 		ctx := ui.WithUI(context.Background(), mustUI(t))
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{Plain: true})
@@ -433,7 +433,7 @@ func TestGmailFiltersDeleteCmd_PlainReceipt(t *testing.T) {
 	}
 	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
-	flags := &RootFlags{Account: "a@b.com"}
+	flags := &RootFlags{Account: "a@b.com", Force: true}
 	out := captureStdout(t, func() {
 		ctx := ui.WithUI(context.Background(), mustUI(t))
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{Plain: true})
@@ -471,7 +471,7 @@ func TestGmailDelegatesAddCmd_JSONUnchanged(t *testing.T) {
 	}
 	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
-	flags := &RootFlags{Account: "a@b.com"}
+	flags := &RootFlags{Account: "a@b.com", Force: true}
 	out := captureStdout(t, func() {
 		ctx := ui.WithUI(context.Background(), mustUI(t))
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{JSON: true})
