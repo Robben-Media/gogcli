@@ -422,6 +422,22 @@ func TestExecute_TagManagerTag_PlainTSV(t *testing.T) {
 	}
 }
 
+func TestTagManagerParamPathsAreUnambiguous(t *testing.T) {
+	t.Parallel()
+
+	literalDottedKey := tagManagerParamPath("", "a.b")
+	nestedKeys := tagManagerParamPath(tagManagerParamPath("", "a"), "b")
+	if literalDottedKey == nestedKeys {
+		t.Fatalf("literal dotted key %q collides with nested path %q", literalDottedKey, nestedKeys)
+	}
+
+	numericMapKey := tagManagerParamPath("items", "0")
+	listIndex := tagManagerParamListPath("items", 0)
+	if numericMapKey == listIndex {
+		t.Fatalf("numeric map key %q collides with list index %q", numericMapKey, listIndex)
+	}
+}
+
 func TestExecute_TagManagerTag_PlainNoDecorativeCounts(t *testing.T) {
 	setupTagManagerTest(t)
 

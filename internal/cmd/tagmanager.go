@@ -272,8 +272,9 @@ func tagManagerParamListPath(prefix string, index int) string {
 }
 
 // writeTagManagerParameterLeaves flattens nested GTM parameters into leaf rows.
-// List indexes and escaped map keys form unambiguous paths (e.g. list[0].mapKey).
-// ignoreKey is set for list children because GTM ignores keys on list values.
+// Map keys are dot-separated with backslash-escaped `\\.[]`; list indexes use
+// brackets, producing unambiguous paths such as list[0].mapKey. ignoreKey is set
+// for list children because GTM ignores keys on list values.
 func writeTagManagerParameterLeaves(ctx context.Context, w io.Writer, tagID, prefix string, p *tagmanager.Parameter, ignoreKey bool) {
 	if p == nil {
 		return
