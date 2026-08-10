@@ -195,6 +195,11 @@ func writeGmailThreadPlainTSV(
 	attachDir string,
 	svc *gmail.Service,
 ) error {
+	if download {
+		if err := validateGmailThreadPlainDownloadPaths(thread, attachDir); err != nil {
+			return err
+		}
+	}
 	writeTableRow(ctx, w, []string{"RECORD_TYPE", "THREAD_ID", "MESSAGE_ID", "NAME", "VALUE", "PATH", "BYTES", "CACHED"})
 	if thread == nil || len(thread.Messages) == 0 {
 		return nil
@@ -255,7 +260,7 @@ func writeGmailThreadPlainTSV(
 					a.Filename,
 					"",
 					a.Path,
-					strconv.FormatInt(a.Size, 10),
+					strconv.FormatInt(a.Bytes, 10),
 					strconv.FormatBool(a.Cached),
 				})
 			}
@@ -734,9 +739,9 @@ func decodeBase64URL(s string) (string, error) {
 	return string(b), nil
 }
 
-func downloadAttachment(ctx context.Context, svc *gmail.Service, messageID string, a attachmentInfo, dir string) (string, bool, int64, error) {
+func attachmentDownloadPath(messageID string, a attachmentInfo, dir string) (string, error) {
 	if strings.TrimSpace(messageID) == "" || strings.TrimSpace(a.AttachmentID) == "" {
-		return "", false, 0, errors.New("missing messageID/attachmentID")
+		return "", errors.New("missing messageID/attachmentID")
 	}
 	if strings.TrimSpace(dir) == "" {
 		dir = "."
@@ -745,13 +750,41 @@ func downloadAttachment(ctx context.Context, svc *gmail.Service, messageID strin
 	if len(shortID) > 8 {
 		shortID = shortID[:8]
 	}
-	// Sanitize filename to prevent path traversal attacks
+	// Sanitize filename to prevent path traversal attacks.
 	safeFilename := filepath.Base(a.Filename)
 	if safeFilename == "" || safeFilename == "." || safeFilename == ".." {
 		safeFilename = "attachment"
 	}
 	filename := fmt.Sprintf("%s_%s_%s", messageID, shortID, safeFilename)
-	outPath := filepath.Join(dir, filename)
+	return filepath.Join(dir, filename), nil
+}
+
+func validateGmailThreadPlainDownloadPaths(thread *gmail.Thread, dir string) error {
+	if thread == nil {
+		return nil
+	}
+	for _, msg := range thread.Messages {
+		if msg == nil {
+			continue
+		}
+		for _, a := range collectAttachments(msg.Payload) {
+			path, err := attachmentDownloadPath(msg.Id, a, dir)
+			if err != nil {
+				return err
+			}
+			if sanitizePlainField(path) != path {
+				return fmt.Errorf("attachment download path contains a tab or newline: %q", path)
+			}
+		}
+	}
+	return nil
+}
+
+func downloadAttachment(ctx context.Context, svc *gmail.Service, messageID string, a attachmentInfo, dir string) (string, bool, int64, error) {
+	outPath, err := attachmentDownloadPath(messageID, a, dir)
+	if err != nil {
+		return "", false, 0, err
+	}
 	path, cached, byteCount, err := downloadAttachmentToPath(ctx, svc, messageID, a.AttachmentID, outPath, a.Size)
 	if err != nil {
 		return "", false, 0, err
