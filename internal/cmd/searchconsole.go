@@ -233,6 +233,10 @@ func (c *SearchConsoleSubmitSitemapCmd) Run(ctx context.Context, flags *RootFlag
 		return err
 	}
 
+	if err := writeSearchConsoleMutationReceipt(ctx, "sitemaps.submit", siteURL, sitemapURL); err != nil {
+		return err
+	}
+	// Keep human confirmation on stderr in all modes (machine receipts go to stdout).
 	u.Err().Println("Sitemap submitted successfully")
 	return nil
 }
@@ -292,6 +296,31 @@ func (c *SearchConsoleInspectCmd) Run(ctx context.Context, flags *RootFlags) err
 	u.Out().Printf("pageFetchState\t%s", idx.PageFetchState)
 	u.Out().Printf("crawledAs\t%s", idx.CrawledAs)
 	u.Out().Printf("lastCrawlTime\t%s", idx.LastCrawlTime)
+	return nil
+}
+
+// writeSearchConsoleMutationReceipt emits a stable JSON/plain receipt for
+// successful site and sitemap mutations. Default text mode writes nothing to
+// stdout; callers retain existing stderr confirmations in all modes.
+func writeSearchConsoleMutationReceipt(ctx context.Context, action, siteURL, sitemapURL string) error {
+	if outfmt.IsJSON(ctx) {
+		payload := map[string]any{
+			"action":  action,
+			"siteUrl": siteURL,
+			"success": true,
+		}
+		if sitemapURL != "" {
+			payload["sitemapUrl"] = sitemapURL
+		}
+		return outfmt.WriteJSON(os.Stdout, payload)
+	}
+	if outfmt.IsPlain(ctx) {
+		writePlainReceipt(ctx,
+			[]string{"ACTION", "SITE_URL", "SITEMAP_URL", "SUCCESS"},
+			[]string{action, siteURL, sitemapURL, "true"},
+		)
+		return nil
+	}
 	return nil
 }
 

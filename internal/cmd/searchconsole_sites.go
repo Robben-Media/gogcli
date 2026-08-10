@@ -79,6 +79,10 @@ func (c *SearchConsoleSitesAddCmd) Run(ctx context.Context, flags *RootFlags) er
 		return err
 	}
 
+	if err := writeSearchConsoleMutationReceipt(ctx, "sites.add", siteURL, ""); err != nil {
+		return err
+	}
+	// Keep human confirmation on stderr in all modes (machine receipts go to stdout).
 	u.Err().Printf("Site added: %s. Verify ownership to access data.", siteURL)
 	return nil
 }
@@ -114,6 +118,10 @@ func (c *SearchConsoleSitesDeleteCmd) Run(ctx context.Context, flags *RootFlags)
 		return delErr
 	}
 
+	if err := writeSearchConsoleMutationReceipt(ctx, "sites.delete", siteURL, ""); err != nil {
+		return err
+	}
+	// Keep human confirmation on stderr in all modes (machine receipts go to stdout).
 	u.Err().Println("Site removed")
 	return nil
 }
