@@ -87,6 +87,11 @@ func (c *ConfigSetCmd) Run(ctx context.Context) error {
 		payload["saved"] = true
 		return outfmt.WriteJSON(os.Stdout, payload)
 	}
+	if outfmt.IsPlain(ctx) {
+		fmt.Fprintln(os.Stdout, "ACTION\tKEY\tVALUE")
+		writeTableRow(ctx, os.Stdout, []string{"set", key.String(), c.Value})
+		return nil
+	}
 	fmt.Fprintf(os.Stdout, "Set %s = %s\n", c.Key, c.Value)
 	return nil
 }
@@ -118,6 +123,11 @@ func (c *ConfigUnsetCmd) Run(ctx context.Context) error {
 		payload := outfmt.KeyValuePayload(key.String(), "")
 		payload["removed"] = true
 		return outfmt.WriteJSON(os.Stdout, payload)
+	}
+	if outfmt.IsPlain(ctx) {
+		fmt.Fprintln(os.Stdout, "ACTION\tKEY\tVALUE")
+		writeTableRow(ctx, os.Stdout, []string{"unset", key.String(), ""})
+		return nil
 	}
 	fmt.Fprintf(os.Stdout, "Unset %s\n", c.Key)
 	return nil
