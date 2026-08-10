@@ -483,6 +483,10 @@ func (c *SheetsCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 			"spreadsheetUrl": resp.SpreadsheetUrl,
 		})
 	}
+	if outfmt.IsPlain(ctx) {
+		writeSheetsStructuralPlain(ctx, "create", resp.SpreadsheetId, "", resp.Properties.Title, "", "ok")
+		return nil
+	}
 
 	u.Out().Printf("Created spreadsheet: %s", resp.Properties.Title)
 	u.Out().Printf("ID: %s", resp.SpreadsheetId)

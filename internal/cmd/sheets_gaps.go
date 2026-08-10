@@ -274,6 +274,10 @@ func (c *SheetsCopyToCmd) Run(ctx context.Context, flags *RootFlags) error {
 			"sheetType": resp.SheetType,
 		})
 	}
+	if outfmt.IsPlain(ctx) {
+		writeSheetsStructuralPlain(ctx, "copy-to", destID, fmt.Sprintf("%d", resp.SheetId), resp.Title, "", "ok")
+		return nil
+	}
 
 	u.Out().Printf("Sheet ID\t%d", resp.SheetId)
 	u.Out().Printf("Title\t%s", resp.Title)
