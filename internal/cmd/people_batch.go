@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
+	"strconv"
 	"strings"
 
 	"google.golang.org/api/people/v1"
@@ -98,6 +100,20 @@ func (c *ContactsBatchCreateCmd) Run(ctx context.Context, flags *RootFlags) erro
 			"createdContacts": resp.CreatedPeople,
 			"count":           len(resp.CreatedPeople),
 		})
+	}
+
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		writeTableRow(ctx, w, []string{"REQUEST_KEY", "RESOURCE", "NAME", "EMAIL", "STATUS", "ERROR"})
+		for i, contact := range contactsToCreate {
+			var result *people.PersonResponse
+			if i < len(resp.CreatedPeople) {
+				result = resp.CreatedPeople[i]
+			}
+			writePeopleBatchPlainRow(ctx, w, strconv.Itoa(i), result, contact.ContactPerson, "")
+		}
+		return nil
 	}
 
 	if len(resp.CreatedPeople) == 0 {
@@ -242,6 +258,27 @@ func (c *ContactsBatchUpdateCmd) Run(ctx context.Context, flags *RootFlags) erro
 		})
 	}
 
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		writeTableRow(ctx, w, []string{"REQUEST_KEY", "RESOURCE", "NAME", "EMAIL", "STATUS", "ERROR"})
+		keys := make([]string, 0, len(contactsMap))
+		for key := range contactsMap {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			contact := contactsMap[key]
+			result, ok := resp.UpdateResult[key]
+			if ok {
+				writePeopleBatchPlainRow(ctx, w, key, &result, &contact, key)
+				continue
+			}
+			writePeopleBatchPlainRow(ctx, w, key, nil, &contact, key)
+		}
+		return nil
+	}
+
 	u.Out().Printf("Updated %d contact(s)", len(contactsMap))
 	return nil
 }
@@ -329,6 +366,38 @@ func (c *ContactsBatchGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 		)
 	}
 	return nil
+}
+
+func writePeopleBatchPlainRow(ctx context.Context, w io.Writer, requestKey string, r *people.PersonResponse, fallbackPerson *people.Person, fallbackResource string) {
+	resource := ""
+	name := ""
+	email := ""
+	status := "OK"
+	errMsg := ""
+
+	if r == nil {
+		resource = fallbackResource
+		name = primaryName(fallbackPerson)
+		email = primaryEmail(fallbackPerson)
+	} else {
+		if r.Person != nil {
+			if r.Person.ResourceName != "" {
+				resource = r.Person.ResourceName
+			}
+			if responseName := primaryName(r.Person); responseName != "" {
+				name = responseName
+			}
+			if responseEmail := primaryEmail(r.Person); responseEmail != "" {
+				email = responseEmail
+			}
+		}
+		if r.Status != nil && r.Status.Code != 0 {
+			status = "ERROR"
+			errMsg = r.Status.Message
+		}
+	}
+
+	writeTableRow(ctx, w, []string{requestKey, resource, name, email, status, errMsg})
 }
 
 // readContactsJSON reads JSON input from either raw string or file path.

@@ -57,6 +57,14 @@ func (c *ContactsPhotoDeleteCmd) Run(ctx context.Context, flags *RootFlags) erro
 		return err
 	}
 
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		writeTableRow(ctx, w, []string{"RESOURCE", "STATUS"})
+		writeTableRow(ctx, w, []string{resourceName, "OK"})
+		return nil
+	}
+
 	return writeDeleteResult(ctx, u, fmt.Sprintf("photo for contact %s", resourceName))
 }
 
@@ -127,6 +135,18 @@ func (c *ContactsPhotoUpdateCmd) Run(ctx context.Context, flags *RootFlags) erro
 			"person":       resp.Person,
 			"resourceName": resourceName,
 		})
+	}
+
+	if outfmt.IsPlain(ctx) {
+		responseResourceName := resourceName
+		if resp.Person != nil && resp.Person.ResourceName != "" {
+			responseResourceName = resp.Person.ResourceName
+		}
+		w, flush := tableWriter(ctx)
+		defer flush()
+		writeTableRow(ctx, w, []string{"RESOURCE", "STATUS"})
+		writeTableRow(ctx, w, []string{responseResourceName, "OK"})
+		return nil
 	}
 
 	u.Out().Printf("Updated photo for %s", resourceName)

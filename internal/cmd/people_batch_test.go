@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"google.golang.org/api/option"
@@ -462,4 +463,242 @@ func TestContactsBatchGet(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestContactsBatchCreate_PlainTSV(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/people:batchCreateContacts" {
+			http.NotFound(w, r)
+			return
+		}
+		resp := &people.BatchCreateContactsResponse{
+			CreatedPeople: []*people.PersonResponse{
+				{
+					Person: &people.Person{
+						ResourceName:   "people/1",
+						Names:          []*people.Name{{DisplayName: "John\tDoe\nNorth"}},
+						EmailAddresses: []*people.EmailAddress{{Value: "john@example.com"}},
+					},
+				},
+				{
+					Status: &people.Status{Code: 3, Message: "invalid\targument\r\nline"},
+				},
+				{
+					Person: &people.Person{
+						ResourceName: "people/3",
+						Names:        []*people.Name{{DisplayName: "Only Name"}},
+					},
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	usePeopleContactsTestServer(t, srv)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if execErr := Execute([]string{
+				"--plain", "--account", "a@b.com",
+				"contacts", "batch", "create",
+				"--contacts-json", `[{"names":[{"givenName":"John"}]},{"names":[{"givenName":"Bad"}]},{"names":[{"givenName":"Only"}]}]`,
+			}); execErr != nil {
+				t.Fatalf("Execute: %v", execErr)
+			}
+		})
+	})
+
+	want := "" +
+		"REQUEST_KEY\tRESOURCE\tNAME\tEMAIL\tSTATUS\tERROR\n" +
+		"0\tpeople/1\tJohn Doe North\tjohn@example.com\tOK\t\n" +
+		"1\t\t\t\tERROR\tinvalid argument line\n" +
+		"2\tpeople/3\tOnly Name\t\tOK\t\n"
+	if out != want {
+		t.Fatalf("plain batch create output = %q, want %q", out, want)
+	}
+}
+
+func TestContactsBatchCreate_PlainEmptyResponseStillEmitsRequestRow(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(&people.BatchCreateContactsResponse{CreatedPeople: []*people.PersonResponse{}})
+	}))
+	usePeopleContactsTestServer(t, srv)
+
+	out := captureStdout(t, func() {
+		stderr := captureStderr(t, func() {
+			if execErr := Execute([]string{
+				"--plain", "--account", "a@b.com",
+				"contacts", "batch", "create",
+				"--contacts-json", `[{"names":[{"givenName":"X"}]}]`,
+			}); execErr != nil {
+				t.Fatalf("Execute: %v", execErr)
+			}
+		})
+		if stderr != "" {
+			t.Fatalf("unexpected stderr under --plain: %q", stderr)
+		}
+	})
+
+	want := "REQUEST_KEY\tRESOURCE\tNAME\tEMAIL\tSTATUS\tERROR\n0\t\tX\t\tOK\t\n"
+	if out != want {
+		t.Fatalf("plain create output with empty response = %q, want %q", out, want)
+	}
+}
+
+func TestContactsBatchCreate_HumanStillPrintsCount(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := &people.BatchCreateContactsResponse{
+			CreatedPeople: []*people.PersonResponse{
+				{Person: &people.Person{ResourceName: "people/1", Names: []*people.Name{{DisplayName: "A"}}, EmailAddresses: []*people.EmailAddress{{Value: "a@b.com"}}}},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	usePeopleContactsTestServer(t, srv)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if execErr := Execute([]string{
+				"--account", "a@b.com",
+				"contacts", "batch", "create",
+				"--contacts-json", `[{"names":[{"givenName":"A"}]}]`,
+			}); execErr != nil {
+				t.Fatalf("Execute: %v", execErr)
+			}
+		})
+	})
+	if !strings.Contains(out, "Created 1 contact(s)") {
+		t.Fatalf("human create output missing count prose: %q", out)
+	}
+	if strings.Contains(out, "REQUEST_KEY") {
+		t.Fatalf("human create output unexpectedly used plain schema: %q", out)
+	}
+}
+
+func TestContactsBatchUpdate_PlainTSV(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/people:batchUpdateContacts" {
+			http.NotFound(w, r)
+			return
+		}
+		resp := &people.BatchUpdateContactsResponse{
+			UpdateResult: map[string]people.PersonResponse{
+				"people/2": {
+					RequestedResourceName: "people/2",
+					Person: &people.Person{
+						ResourceName:   "people/2",
+						Names:          []*people.Name{{DisplayName: "Jane\nSmith"}},
+						EmailAddresses: []*people.EmailAddress{{Value: "jane@example.com"}},
+					},
+				},
+				"people/1": {
+					RequestedResourceName: "people/1",
+					Status:                &people.Status{Code: 5, Message: "not found"},
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	usePeopleContactsTestServer(t, srv)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if execErr := Execute([]string{
+				"--plain", "--account", "a@b.com",
+				"contacts", "batch", "update",
+				"--contacts-json", `{"people/1":{"names":[{"givenName":"A"}]},"people/2":{"names":[{"givenName":"B"}]}}`,
+			}); execErr != nil {
+				t.Fatalf("Execute: %v", execErr)
+			}
+		})
+	})
+
+	resource := "people/2"
+	want := "" +
+		"REQUEST_KEY\tRESOURCE\tNAME\tEMAIL\tSTATUS\tERROR\n" +
+		"people/1\t\t\t\tERROR\tnot found\n" +
+		resource + "\t" + resource + "\tJane Smith\tjane@example.com\tOK\t\n"
+	if out != want {
+		t.Fatalf("plain batch update output = %q, want %q", out, want)
+	}
+}
+
+func TestContactsBatchUpdate_PlainEmptyResponseStillEmitsRequestRow(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(&people.BatchUpdateContactsResponse{UpdateResult: map[string]people.PersonResponse{}})
+	}))
+	usePeopleContactsTestServer(t, srv)
+
+	out := captureStdout(t, func() {
+		stderr := captureStderr(t, func() {
+			if execErr := Execute([]string{
+				"--plain", "--account", "a@b.com",
+				"contacts", "batch", "update",
+				"--contacts-json", `{"people/1":{"names":[{"givenName":"A"}]}}`,
+			}); execErr != nil {
+				t.Fatalf("Execute: %v", execErr)
+			}
+		})
+		if stderr != "" {
+			t.Fatalf("unexpected stderr under --plain: %q", stderr)
+		}
+	})
+
+	resource := "people/1"
+	want := "REQUEST_KEY\tRESOURCE\tNAME\tEMAIL\tSTATUS\tERROR\n" + resource + "\t" + resource + "\tA\t\tOK\t\n"
+	if out != want {
+		t.Fatalf("plain update output with empty response = %q, want %q", out, want)
+	}
+}
+
+func TestContactsBatchUpdate_HumanStillPrintsCount(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := &people.BatchUpdateContactsResponse{
+			UpdateResult: map[string]people.PersonResponse{
+				"people/1": {Person: &people.Person{ResourceName: "people/1"}},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	usePeopleContactsTestServer(t, srv)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if execErr := Execute([]string{
+				"--account", "a@b.com",
+				"contacts", "batch", "update",
+				"--contacts-json", `{"people/1":{"names":[{"givenName":"A"}]}}`,
+			}); execErr != nil {
+				t.Fatalf("Execute: %v", execErr)
+			}
+		})
+	})
+	if out != "Updated 1 contact(s)\n" {
+		t.Fatalf("human update output = %q, want count prose", out)
+	}
+}
+
+func usePeopleContactsTestServer(t *testing.T, srv *httptest.Server) {
+	t.Helper()
+
+	origNew := newPeopleContactsService
+	t.Cleanup(func() {
+		newPeopleContactsService = origNew
+		srv.Close()
+	})
+
+	svc, err := people.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newPeopleContactsService = func(context.Context, string) (*people.Service, error) { return svc, nil }
 }
