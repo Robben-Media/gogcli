@@ -3,7 +3,9 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"google.golang.org/api/tagmanager/v2"
@@ -14,6 +16,8 @@ import (
 )
 
 var newTagManagerService = googleapi.NewTagManager
+
+const tagManagerParameterTypeList = "list"
 
 type TagManagerCmd struct {
 	Accounts         TagManagerAccountsCmd         `cmd:"" name:"accounts" group:"Read" help:"List GTM accounts"`
@@ -202,6 +206,9 @@ func (c *TagManagerTagCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"tag": tag})
 	}
+	if outfmt.IsPlain(ctx) {
+		return writeTagManagerTagPlain(ctx, tag)
+	}
 
 	u.Out().Printf("tagId\t%s", tag.TagId)
 	u.Out().Printf("name\t%s", tag.Name)
@@ -219,6 +226,77 @@ func (c *TagManagerTagCmd) Run(ctx context.Context, flags *RootFlags) error {
 		}
 	}
 	return nil
+}
+
+// writeTagManagerTagPlain emits stable TSV for a single tag detail:
+// RECORD_TYPE<TAB>TAG_ID<TAB>KEY<TAB>TYPE<TAB>VALUE
+// with one row per metadata field, firing/blocking trigger, and parameter leaf.
+func writeTagManagerTagPlain(ctx context.Context, tag *tagmanager.Tag) error {
+	w, flush := tableWriter(ctx)
+	defer flush()
+	writeTableRow(ctx, w, []string{"RECORD_TYPE", "TAG_ID", "KEY", "TYPE", "VALUE"})
+	if tag == nil {
+		return nil
+	}
+	tagID := tag.TagId
+	writeTableRow(ctx, w, []string{"METADATA", tagID, "name", "", tag.Name})
+	writeTableRow(ctx, w, []string{"METADATA", tagID, "type", "", tag.Type})
+	for _, id := range tag.FiringTriggerId {
+		writeTableRow(ctx, w, []string{"FIRING_TRIGGER", tagID, "", "", id})
+	}
+	for _, id := range tag.BlockingTriggerId {
+		writeTableRow(ctx, w, []string{"BLOCKING_TRIGGER", tagID, "", "", id})
+	}
+	for _, p := range tag.Parameter {
+		writeTagManagerParameterLeaves(ctx, w, tagID, "", p, false)
+	}
+	return nil
+}
+
+func tagManagerParamPath(prefix, segment string) string {
+	if segment == "" {
+		return prefix
+	}
+	if prefix == "" {
+		return segment
+	}
+	return prefix + "." + segment
+}
+
+// writeTagManagerParameterLeaves flattens nested GTM parameters into leaf rows.
+// List indexes and map keys form deterministic path-like keys (e.g. list.0.mapKey).
+// ignoreKey is set for list children because GTM ignores keys on list values.
+func writeTagManagerParameterLeaves(ctx context.Context, w io.Writer, tagID, prefix string, p *tagmanager.Parameter, ignoreKey bool) {
+	if p == nil {
+		return
+	}
+	segment := p.Key
+	if ignoreKey {
+		segment = ""
+	}
+	path := tagManagerParamPath(prefix, segment)
+	paramType := strings.ToLower(p.Type)
+	switch {
+	case len(p.List) > 0 || paramType == tagManagerParameterTypeList:
+		if len(p.List) == 0 {
+			writeTableRow(ctx, w, []string{"PARAMETER", tagID, path, p.Type, p.Value})
+			return
+		}
+		for i, child := range p.List {
+			childPrefix := tagManagerParamPath(path, strconv.Itoa(i))
+			writeTagManagerParameterLeaves(ctx, w, tagID, childPrefix, child, true)
+		}
+	case len(p.Map) > 0 || paramType == "map":
+		if len(p.Map) == 0 {
+			writeTableRow(ctx, w, []string{"PARAMETER", tagID, path, p.Type, p.Value})
+			return
+		}
+		for _, child := range p.Map {
+			writeTagManagerParameterLeaves(ctx, w, tagID, path, child, false)
+		}
+	default:
+		writeTableRow(ctx, w, []string{"PARAMETER", tagID, path, p.Type, p.Value})
+	}
 }
 
 // --- triggers ---

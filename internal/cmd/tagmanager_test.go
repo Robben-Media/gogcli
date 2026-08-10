@@ -336,3 +336,122 @@ func TestExecute_TagManagerTag_JSON(t *testing.T) {
 		t.Fatalf("unexpected tag name: %q", parsed.Tag.Name)
 	}
 }
+
+func TestExecute_TagManagerTag_PlainTSV(t *testing.T) {
+	// Seam: public CLI plain output for `gtm tag --plain`.
+	// Schema: RECORD_TYPE\tTAG_ID\tKEY\tTYPE\tVALUE
+	origNew := newTagManagerService
+	t.Cleanup(func() { newTagManagerService = origNew })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if !(strings.Contains(r.URL.Path, "/tags/") && r.Method == http.MethodGet) {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"tagId":             "t1",
+			"name":              "GA4\tConfig\nProd",
+			"type":              "gaawc",
+			"firingTriggerId":   []string{"tr1", "tr2"},
+			"blockingTriggerId": []string{"tr9"},
+			"parameter": []map[string]any{
+				{"key": "trackingId", "type": "template", "value": "G-XXXXX"},
+				{
+					"key":  "eventSettingsTable",
+					"type": "list",
+					"list": []map[string]any{
+						{
+							"type": "map",
+							"map": []map[string]any{
+								{"key": "parameter", "type": "template", "value": "page_path"},
+								{"key": "parameterValue", "type": "template", "value": "/home\tmain"},
+							},
+						},
+						{
+							"type": "map",
+							"map": []map[string]any{
+								{"key": "parameter", "type": "template", "value": "page_title"},
+								{"key": "parameterValue", "type": "template", "value": "Home"},
+							},
+						},
+					},
+				},
+				{
+					"key":  "fieldsToSet",
+					"type": "map",
+					"map": []map[string]any{
+						{"key": "user_id", "type": "template", "value": "{{User ID}}"},
+					},
+				},
+			},
+		})
+	}))
+	t.Cleanup(srv.Close)
+
+	svc, err := tagmanager.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newTagManagerService = func(context.Context, string) (*tagmanager.Service, error) { return svc, nil }
+
+	want := strings.Join([]string{
+		"RECORD_TYPE\tTAG_ID\tKEY\tTYPE\tVALUE",
+		"METADATA\tt1\tname\t\tGA4 Config Prod",
+		"METADATA\tt1\ttype\t\tgaawc",
+		"FIRING_TRIGGER\tt1\t\t\ttr1",
+		"FIRING_TRIGGER\tt1\t\t\ttr2",
+		"BLOCKING_TRIGGER\tt1\t\t\ttr9",
+		"PARAMETER\tt1\ttrackingId\ttemplate\tG-XXXXX",
+		"PARAMETER\tt1\teventSettingsTable.0.parameter\ttemplate\tpage_path",
+		"PARAMETER\tt1\teventSettingsTable.0.parameterValue\ttemplate\t/home main",
+		"PARAMETER\tt1\teventSettingsTable.1.parameter\ttemplate\tpage_title",
+		"PARAMETER\tt1\teventSettingsTable.1.parameterValue\ttemplate\tHome",
+		"PARAMETER\tt1\tfieldsToSet.user_id\ttemplate\t{{User ID}}",
+		"",
+	}, "\n")
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain", "--account", "a@b.com", "gtm", "tag",
+				"accounts/111/containers/c1/workspaces/0/tags/t1",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+	if out != want {
+		t.Fatalf("plain tag detail =\n%q\nwant\n%q", out, want)
+	}
+}
+
+func TestExecute_TagManagerTag_PlainNoDecorativeCounts(t *testing.T) {
+	setupTagManagerTest(t)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain", "--account", "a@b.com", "gtm", "tag",
+				"accounts/111/containers/c1/workspaces/0/tags/t1",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+	if strings.Contains(out, "parameters\t(") || strings.Contains(out, " parameters)") {
+		t.Fatalf("decorative parameter count present in plain output: %q", out)
+	}
+	if !strings.HasPrefix(out, "RECORD_TYPE\tTAG_ID\tKEY\tTYPE\tVALUE\n") {
+		t.Fatalf("missing TSV header, got %q", out)
+	}
+	for _, line := range strings.Split(strings.TrimSuffix(out, "\n"), "\n") {
+		if strings.HasPrefix(line, " ") {
+			t.Fatalf("indented plain row: %q", line)
+		}
+	}
+}
