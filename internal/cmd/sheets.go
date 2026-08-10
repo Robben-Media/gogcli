@@ -228,6 +228,10 @@ func (c *SheetsUpdateCmd) Run(ctx context.Context, flags *RootFlags) error {
 			"updatedCells":   resp.UpdatedCells,
 		})
 	}
+	if outfmt.IsPlain(ctx) {
+		writeSheetsValueMutationPlainSingle(ctx, "update", sheetsMutationSpreadsheetID(spreadsheetID, resp.SpreadsheetId), resp.UpdatedRange, resp.UpdatedRows, resp.UpdatedColumns, resp.UpdatedCells)
+		return nil
+	}
 
 	u.Out().Printf("Updated %d cells in %s", resp.UpdatedCells, resp.UpdatedRange)
 	return nil
@@ -322,6 +326,20 @@ func (c *SheetsAppendCmd) Run(ctx context.Context, flags *RootFlags) error {
 			"updatedCells":   resp.Updates.UpdatedCells,
 		})
 	}
+	if outfmt.IsPlain(ctx) {
+		spreadsheetIDOut := sheetsMutationSpreadsheetID(spreadsheetID, resp.SpreadsheetId)
+		var updatedRange string
+		var updatedRows, updatedColumns, updatedCells int64
+		if resp.Updates != nil {
+			spreadsheetIDOut = sheetsMutationSpreadsheetID(spreadsheetIDOut, resp.Updates.SpreadsheetId)
+			updatedRange = resp.Updates.UpdatedRange
+			updatedRows = resp.Updates.UpdatedRows
+			updatedColumns = resp.Updates.UpdatedColumns
+			updatedCells = resp.Updates.UpdatedCells
+		}
+		writeSheetsValueMutationPlainSingle(ctx, "append", spreadsheetIDOut, updatedRange, updatedRows, updatedColumns, updatedCells)
+		return nil
+	}
 
 	u.Out().Printf("Appended %d cells to %s", resp.Updates.UpdatedCells, resp.Updates.UpdatedRange)
 	return nil
@@ -366,6 +384,11 @@ func (c *SheetsClearCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{
 			"clearedRange": resp.ClearedRange,
 		})
+	}
+	if outfmt.IsPlain(ctx) {
+		spreadsheetIDOut := sheetsMutationSpreadsheetID(spreadsheetID, resp.SpreadsheetId)
+		writeSheetsValueMutationPlainClears(ctx, "clear", spreadsheetIDOut, []string{resp.ClearedRange})
+		return nil
 	}
 
 	u.Out().Printf("Cleared %s", resp.ClearedRange)

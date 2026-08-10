@@ -337,6 +337,11 @@ func (c *SheetsValuesBatchClearCmd) Run(ctx context.Context, flags *RootFlags) e
 			"clearedRanges": resp.ClearedRanges,
 		})
 	}
+	if outfmt.IsPlain(ctx) {
+		spreadsheetIDOut := sheetsMutationSpreadsheetID(spreadsheetID, resp.SpreadsheetId)
+		writeSheetsValueMutationPlainClears(ctx, "batch-clear", spreadsheetIDOut, resp.ClearedRanges)
+		return nil
+	}
 
 	u.Out().Printf("Cleared %d range(s)", len(resp.ClearedRanges))
 	return nil
@@ -393,6 +398,11 @@ func (c *SheetsValuesBatchClearByFilterCmd) Run(ctx context.Context, flags *Root
 			"spreadsheetId": resp.SpreadsheetId,
 			"clearedRanges": resp.ClearedRanges,
 		})
+	}
+	if outfmt.IsPlain(ctx) {
+		spreadsheetIDOut := sheetsMutationSpreadsheetID(spreadsheetID, resp.SpreadsheetId)
+		writeSheetsValueMutationPlainClears(ctx, "batch-clear-by-filter", spreadsheetIDOut, resp.ClearedRanges)
+		return nil
 	}
 
 	u.Out().Printf("Cleared %d range(s)", len(resp.ClearedRanges))
@@ -561,6 +571,25 @@ func (c *SheetsValuesBatchUpdateByFilterCmd) Run(ctx context.Context, flags *Roo
 			"totalUpdatedSheets":  resp.TotalUpdatedSheets,
 			"responses":           resp.Responses,
 		})
+	}
+	if outfmt.IsPlain(ctx) {
+		spreadsheetIDOut := sheetsMutationSpreadsheetID(spreadsheetID, resp.SpreadsheetId)
+		rows := make([]sheetsValueMutationPlainRow, 0, len(resp.Responses)+1)
+		for _, response := range resp.Responses {
+			if response != nil {
+				rows = append(rows, newSheetsValueMutationUpdateRow("batch-update-by-filter", spreadsheetIDOut, response.UpdatedRange, response.UpdatedRows, response.UpdatedColumns, response.UpdatedCells))
+			}
+		}
+		writeSheetsValueMutationPlain(ctx, sheetsValueMutationRowsWithTotals(
+			"batch-update-by-filter",
+			spreadsheetIDOut,
+			rows,
+			resp.TotalUpdatedRows,
+			resp.TotalUpdatedColumns,
+			resp.TotalUpdatedCells,
+			resp.TotalUpdatedSheets,
+		))
+		return nil
 	}
 
 	u.Out().Printf("Updated %d cells in %d row(s)", resp.TotalUpdatedCells, resp.TotalUpdatedRows)

@@ -160,6 +160,25 @@ func (c *SheetsBatchUpdateCmd) Run(ctx context.Context, flags *RootFlags) error 
 			"totalUpdatedSheets":  resp.TotalUpdatedSheets,
 		})
 	}
+	if outfmt.IsPlain(ctx) {
+		spreadsheetIDOut := sheetsMutationSpreadsheetID(id, resp.SpreadsheetId)
+		rows := make([]sheetsValueMutationPlainRow, 0, len(resp.Responses)+1)
+		for _, response := range resp.Responses {
+			if response != nil {
+				rows = append(rows, newSheetsValueMutationUpdateRow("batch-update", spreadsheetIDOut, response.UpdatedRange, response.UpdatedRows, response.UpdatedColumns, response.UpdatedCells))
+			}
+		}
+		writeSheetsValueMutationPlain(ctx, sheetsValueMutationRowsWithTotals(
+			"batch-update",
+			spreadsheetIDOut,
+			rows,
+			resp.TotalUpdatedRows,
+			resp.TotalUpdatedColumns,
+			resp.TotalUpdatedCells,
+			resp.TotalUpdatedSheets,
+		))
+		return nil
+	}
 
 	u := ui.FromContext(ctx)
 	u.Out().Printf("Updated %d cells across %d sheets", resp.TotalUpdatedCells, resp.TotalUpdatedSheets)
