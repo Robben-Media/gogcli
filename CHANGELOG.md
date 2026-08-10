@@ -19,6 +19,7 @@
 - BigQuery: preserve physical TSV row and column boundaries for query results in `--plain` output. (#52, #102)
 - Sheets: preserve physical TSV row and column boundaries for single-range, batch-range, and filter-range values in `--plain` output. (#53, #103)
 - Docs: require shared destructive confirmation before `docs delete-range` submits a content deletion. (#54)
+- Gmail: require message IDs and shared destructive confirmation before permanent batch deletion. (#55)
 
 ## 0.10.0 - 2026-08-07
 
