@@ -1063,10 +1063,7 @@ func (c *AuthKeepCmd) Run(ctx context.Context) error {
 		return err
 	}
 
-	if err := os.WriteFile(destPath, data, 0o600); err != nil {
-		return fmt.Errorf("write service account: %w", err)
-	}
-	if err := os.WriteFile(genericPath, data, 0o600); err != nil {
+	if err := writeServiceAccountFiles([]string{destPath, genericPath}, data); err != nil {
 		return fmt.Errorf("write service account: %w", err)
 	}
 

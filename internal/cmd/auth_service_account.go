@@ -3,8 +3,11 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/steipete/gogcli/internal/config"
@@ -23,6 +26,21 @@ type serviceAccountJSONInfo struct {
 	ClientID    string
 }
 
+type serviceAccountTempFile interface {
+	Write([]byte) (int, error)
+	Chmod(os.FileMode) error
+	Close() error
+	Name() string
+}
+
+var (
+	createServiceAccountTempFile = func(dir, pattern string) (serviceAccountTempFile, error) {
+		return os.CreateTemp(dir, pattern)
+	}
+	renameServiceAccountFile         = replaceServiceAccountFile
+	fallbackRenameServiceAccountFile = replaceServiceAccountFile
+)
+
 func parseServiceAccountJSON(data []byte) (serviceAccountJSONInfo, error) {
 	var saJSON map[string]any
 	if err := json.Unmarshal(data, &saJSON); err != nil {
@@ -40,6 +58,151 @@ func parseServiceAccountJSON(data []byte) (serviceAccountJSONInfo, error) {
 		info.ClientID = strings.TrimSpace(v)
 	}
 	return info, nil
+}
+
+type stagedServiceAccountFile struct {
+	path           string
+	tmpPath        string
+	backupPath     string
+	existed        bool
+	committed      bool
+	preserveBackup bool
+}
+
+func writeServiceAccountFile(path string, data []byte) error {
+	return writeServiceAccountFiles([]string{path}, data)
+}
+
+func stageServiceAccountFile(path, pattern string, data []byte) (string, error) {
+	tmp, err := createServiceAccountTempFile(filepath.Dir(path), pattern)
+	if err != nil {
+		return "", err
+	}
+	tmpPath := tmp.Name()
+	cleanup := func() {
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
+	}
+	if secureErr := secureServiceAccountFile(tmpPath); secureErr != nil {
+		cleanup()
+		return "", secureErr
+	}
+
+	n, err := tmp.Write(data)
+	if err != nil {
+		cleanup()
+		return "", err
+	}
+	if n != len(data) {
+		cleanup()
+		return "", io.ErrShortWrite
+	}
+	if err := tmp.Chmod(0o600); err != nil {
+		cleanup()
+		return "", err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return "", err
+	}
+	return tmpPath, nil
+}
+
+func writeServiceAccountFiles(paths []string, data []byte) error {
+	files := make([]stagedServiceAccountFile, 0, len(paths))
+	defer func() {
+		for _, file := range files {
+			_ = os.Remove(file.tmpPath)
+			if !file.preserveBackup {
+				_ = os.Remove(file.backupPath)
+			}
+		}
+	}()
+
+	for _, path := range paths {
+		file := stagedServiceAccountFile{path: path}
+		info, err := os.Lstat(path)
+		switch {
+		case err == nil:
+			if !info.Mode().IsRegular() {
+				return fmt.Errorf("service account destination is not a regular file: %s", path)
+			}
+			prior, readErr := os.ReadFile(path) //nolint:gosec // stored credential path
+			if readErr != nil {
+				return readErr
+			}
+			file.existed = true
+			file.backupPath, err = stageServiceAccountFile(path, "."+filepath.Base(path)+".backup-*", prior)
+			if err != nil {
+				return err
+			}
+		case os.IsNotExist(err):
+		default:
+			return err
+		}
+
+		file.tmpPath, err = stageServiceAccountFile(path, "."+filepath.Base(path)+".tmp-*", data)
+		if err != nil {
+			_ = os.Remove(file.backupPath)
+			return err
+		}
+		files = append(files, file)
+	}
+
+	rollback := func() error {
+		var rollbackErr error
+		for i := len(files) - 1; i >= 0; i-- {
+			file := &files[i]
+			if !file.committed {
+				continue
+			}
+			if file.existed {
+				if err := renameServiceAccountFile(file.backupPath, file.path); err == nil {
+					file.backupPath = ""
+					continue
+				} else {
+					prior, readErr := os.ReadFile(file.backupPath)
+					if readErr != nil {
+						file.preserveBackup = true
+						rollbackErr = errors.Join(rollbackErr, fmt.Errorf("restore %s after initial rename failure; prior credential preserved at %s: %w", file.path, file.backupPath, errors.Join(err, readErr)))
+						continue
+					}
+					restorePath, stageErr := stageServiceAccountFile(file.path, "."+filepath.Base(file.path)+".restore-*", prior)
+					if stageErr != nil {
+						file.preserveBackup = true
+						rollbackErr = errors.Join(rollbackErr, fmt.Errorf("restore %s after initial rename failure; prior credential preserved at %s: %w", file.path, file.backupPath, errors.Join(err, stageErr)))
+						continue
+					}
+					restoreErr := renameServiceAccountFile(restorePath, file.path)
+					if restoreErr == nil {
+						continue
+					}
+					if directErr := fallbackRenameServiceAccountFile(restorePath, file.path); directErr == nil {
+						continue
+					} else {
+						_ = os.Remove(restorePath)
+						file.preserveBackup = true
+						rollbackErr = errors.Join(rollbackErr, fmt.Errorf("restore %s after atomic replacements failed; prior credential preserved at %s: %w", file.path, file.backupPath, errors.Join(err, restoreErr, directErr)))
+					}
+					continue
+				}
+			}
+			if err := os.Remove(file.path); err != nil && !os.IsNotExist(err) {
+				rollbackErr = errors.Join(rollbackErr, fmt.Errorf("remove newly installed %s: %w", file.path, err))
+			}
+		}
+		return rollbackErr
+	}
+
+	for i := range files {
+		file := &files[i]
+		if err := renameServiceAccountFile(file.tmpPath, file.path); err != nil {
+			return errors.Join(err, rollback())
+		}
+		file.tmpPath = ""
+		file.committed = true
+	}
+	return nil
 }
 
 func storeServiceAccountKey(impersonateEmail string, keyPath string) (string, serviceAccountJSONInfo, error) {
@@ -71,7 +234,7 @@ func storeServiceAccountKey(impersonateEmail string, keyPath string) (string, se
 		return "", serviceAccountJSONInfo{}, err
 	}
 
-	if err := os.WriteFile(destPath, data, 0o600); err != nil {
+	if err := writeServiceAccountFile(destPath, data); err != nil {
 		return "", serviceAccountJSONInfo{}, fmt.Errorf("write service account: %w", err)
 	}
 
