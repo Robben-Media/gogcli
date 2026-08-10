@@ -46,6 +46,17 @@ func TestExecute_ChatSpacesList_PlainKeepsOneRowPerSpace(t *testing.T) {
 	}
 	newChatService = func(context.Context, string) (*chat.Service, error) { return svc, nil }
 
+	textOut := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--account", "a@b.com", "chat", "spaces", "list", "--max", "2"}); err != nil {
+				t.Fatalf("Execute default output: %v", err)
+			}
+		})
+	})
+	if !strings.Contains(textOut, "RESOURCE") || !strings.Contains(textOut, "spaces/aaa") || !strings.Contains(textOut, "Engineering North Floor Old Wing") {
+		t.Fatalf("unexpected default output=%q", textOut)
+	}
+
 	out := captureStdout(t, func() {
 		errOut := captureStderr(t, func() {
 			if err := Execute([]string{"--plain", "--account", "a@b.com", "chat", "spaces", "list", "--max", "2"}); err != nil {

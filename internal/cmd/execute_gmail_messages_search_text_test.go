@@ -84,6 +84,17 @@ func TestExecute_GmailMessagesSearch_PlainKeepsOneRowPerMessage(t *testing.T) {
 	}
 	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
+	textOut := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--account", "a@b.com", "gmail", "messages", "search", "from:example.com", "--max", "2"}); err != nil {
+				t.Fatalf("Execute default output: %v", err)
+			}
+		})
+	})
+	if !strings.Contains(textOut, "m1") || !strings.Contains(textOut, "m2") {
+		t.Fatalf("expected both message IDs in default output, got: %q", textOut)
+	}
+
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
 			if err := Execute([]string{"--plain", "--account", "a@b.com", "gmail", "messages", "search", "from:example.com", "--max", "2"}); err != nil {
