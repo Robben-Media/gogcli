@@ -336,51 +336,50 @@ func (c *GmailWatchServeCmd) Run(ctx context.Context, kctx *kong.Context, flags 
 }
 
 func writeWatchState(ctx context.Context, state gmailWatchState) error {
+	view := watchStatusView(state)
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"watch": state})
+		return outfmt.WriteJSON(os.Stdout, map[string]any{"watch": view})
 	}
 	u := ui.FromContext(ctx)
-	u.Out().Printf("account\t%s", state.Account)
-	u.Out().Printf("topic\t%s", state.Topic)
-	if len(state.Labels) > 0 {
-		u.Out().Printf("labels\t%s", strings.Join(state.Labels, ","))
+	u.Out().Printf("account\t%s", view.Account)
+	u.Out().Printf("topic\t%s", view.Topic)
+	if len(view.Labels) > 0 {
+		u.Out().Printf("labels\t%s", strings.Join(view.Labels, ","))
 	}
-	u.Out().Printf("history_id\t%s", state.HistoryID)
-	if state.ExpirationMs > 0 {
-		u.Out().Printf("expiration\t%s", formatUnixMillis(state.ExpirationMs))
+	u.Out().Printf("history_id\t%s", view.HistoryID)
+	if view.ExpirationMs > 0 {
+		u.Out().Printf("expiration\t%s", formatUnixMillis(view.ExpirationMs))
 	}
-	if state.ProviderExpirationMs > 0 {
-		u.Out().Printf("provider_expiration\t%s", formatUnixMillis(state.ProviderExpirationMs))
+	if view.ProviderExpirationMs > 0 {
+		u.Out().Printf("provider_expiration\t%s", formatUnixMillis(view.ProviderExpirationMs))
 	}
-	if state.RenewAfterMs > 0 {
-		u.Out().Printf("renew_after\t%s", formatUnixMillis(state.RenewAfterMs))
+	if view.RenewAfterMs > 0 {
+		u.Out().Printf("renew_after\t%s", formatUnixMillis(view.RenewAfterMs))
 	}
-	if state.UpdatedAtMs > 0 {
-		u.Out().Printf("updated_at\t%s", formatUnixMillis(state.UpdatedAtMs))
+	if view.UpdatedAtMs > 0 {
+		u.Out().Printf("updated_at\t%s", formatUnixMillis(view.UpdatedAtMs))
 	}
-	if state.Hook != nil {
-		u.Out().Printf("hook_url\t%s", state.Hook.URL)
-		if state.Hook.IncludeBody {
+	if view.Hook != nil {
+		u.Out().Printf("hook_url\t%s", view.Hook.URL)
+		if view.Hook.IncludeBody {
 			u.Out().Printf("hook_include_body\ttrue")
 		}
-		if state.Hook.MaxBytes > 0 {
-			u.Out().Printf("hook_max_bytes\t%d", state.Hook.MaxBytes)
-		}
-		if state.Hook.Token != "" {
-			u.Out().Printf("hook_token\t%s", state.Hook.Token)
+		if view.Hook.MaxBytes > 0 {
+			u.Out().Printf("hook_max_bytes\t%d", view.Hook.MaxBytes)
 		}
 	}
-	if state.LastDeliveryStatus != "" {
-		u.Out().Printf("last_delivery_status\t%s", state.LastDeliveryStatus)
+	u.Out().Printf("hook_token_configured\t%t", view.HookTokenConfigured)
+	if view.LastDeliveryStatus != "" {
+		u.Out().Printf("last_delivery_status\t%s", view.LastDeliveryStatus)
 	}
-	if state.LastDeliveryAtMs > 0 {
-		u.Out().Printf("last_delivery_at\t%s", formatUnixMillis(state.LastDeliveryAtMs))
+	if view.LastDeliveryAtMs > 0 {
+		u.Out().Printf("last_delivery_at\t%s", formatUnixMillis(view.LastDeliveryAtMs))
 	}
-	if state.LastDeliveryStatusNote != "" {
-		u.Out().Printf("last_delivery_note\t%s", state.LastDeliveryStatusNote)
+	if view.LastDeliveryStatusNote != "" {
+		u.Out().Printf("last_delivery_note\t%s", view.LastDeliveryStatusNote)
 	}
-	if state.LastPushMessageID != "" {
-		u.Out().Printf("last_push_message_id\t%s", state.LastPushMessageID)
+	if view.LastPushMessageID != "" {
+		u.Out().Printf("last_push_message_id\t%s", view.LastPushMessageID)
 	}
 	return nil
 }

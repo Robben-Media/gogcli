@@ -58,6 +58,7 @@ func TestGmailWatchRenewAndStop_JSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("store: %v", err)
 	}
+	const sentinelToken = "sentinel-hook-token-issue-88-secret"
 	_ = store.Update(func(s *gmailWatchState) error {
 		*s = gmailWatchState{
 			Account:      "a@b.com",
@@ -66,13 +67,17 @@ func TestGmailWatchRenewAndStop_JSON(t *testing.T) {
 			HistoryID:    "100",
 			RenewAfterMs: time.Now().Add(10 * time.Minute).UnixMilli(),
 			ExpirationMs: time.Now().Add(20 * time.Minute).UnixMilli(),
+			Hook: &gmailWatchHook{
+				URL:   "http://example.com/hook",
+				Token: sentinelToken,
+			},
 		}
 		return nil
 	})
 
 	flags := &RootFlags{Account: "a@b.com", Force: true}
 
-	_ = captureStdout(t, func() {
+	out := captureStdout(t, func() {
 		u, uiErr := ui.New(ui.Options{Stdout: os.Stdout, Stderr: os.Stderr, Color: "never"})
 		if uiErr != nil {
 			t.Fatalf("ui.New: %v", uiErr)
@@ -88,6 +93,27 @@ func TestGmailWatchRenewAndStop_JSON(t *testing.T) {
 			t.Fatalf("stop: %v", err)
 		}
 	})
+	if strings.Contains(out, sentinelToken) {
+		t.Fatalf("renew/stop json output leaked hook token: %q", out)
+	}
+	var renewParsed struct {
+		Watch struct {
+			Hook *struct {
+				Token string `json:"token"`
+			} `json:"hook"`
+			HookTokenConfigured bool `json:"hookTokenConfigured"`
+		} `json:"watch"`
+	}
+	// renew emits one JSON object before stop text; parse first object only.
+	if decodeErr := json.NewDecoder(strings.NewReader(out)).Decode(&renewParsed); decodeErr != nil {
+		t.Fatalf("renew json parse: %v (out=%q)", decodeErr, out)
+	}
+	if renewParsed.Watch.Hook != nil && renewParsed.Watch.Hook.Token != "" {
+		t.Fatalf("renew json must omit token value")
+	}
+	if !renewParsed.Watch.HookTokenConfigured {
+		t.Fatalf("expected hookTokenConfigured true after renew")
+	}
 
 	if _, statErr := os.Stat(store.path); !os.IsNotExist(statErr) {
 		t.Fatalf("expected watch state removed, err=%v", statErr)
@@ -105,12 +131,16 @@ func TestGmailWatchStatusAndStop_Text(t *testing.T) {
 	if err != nil {
 		t.Fatalf("store: %v", err)
 	}
+	const sentinelToken = "sentinel-hook-token-issue-88-secret"
 	_ = store.Update(func(s *gmailWatchState) error {
 		*s = gmailWatchState{
 			Account:   "a@b.com",
 			Topic:     "projects/p/topics/t",
 			HistoryID: "100",
-			Hook:      &gmailWatchHook{URL: "http://example.com/hook"},
+			Hook: &gmailWatchHook{
+				URL:   "http://example.com/hook",
+				Token: sentinelToken,
+			},
 		}
 		return nil
 	})
@@ -152,5 +182,11 @@ func TestGmailWatchStatusAndStop_Text(t *testing.T) {
 	})
 	if !strings.Contains(out, "account") || !strings.Contains(out, "stopped") {
 		t.Fatalf("unexpected output: %q", out)
+	}
+	if !strings.Contains(out, "hook_token_configured\ttrue") {
+		t.Fatalf("expected configured flag in status text, got: %q", out)
+	}
+	if strings.Contains(out, sentinelToken) || strings.Contains(out, "hook_token\t") {
+		t.Fatalf("status text leaked hook token: %q", out)
 	}
 }
