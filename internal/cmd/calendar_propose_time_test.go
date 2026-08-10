@@ -269,6 +269,9 @@ func TestCalendarProposeTimeCmd_Text(t *testing.T) {
 	if !strings.Contains(out, "Action: "+proposeTimeUpvoteAction) {
 		t.Errorf("output missing upvote action: %q", out)
 	}
+	if !strings.Contains(out, "Opening browser...") {
+		t.Errorf("output missing browser progress: %q", out)
+	}
 
 	// Verify browser was opened
 	if browserOpened == "" {

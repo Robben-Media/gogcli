@@ -209,8 +209,13 @@ func (c *CalendarProposeTimeCmd) Run(ctx context.Context, flags *RootFlags) erro
 
 	// Open browser if requested.
 	if c.Open {
-		u.Err().Printf("")
-		u.Err().Printf("Opening browser...")
+		if outfmt.IsPlain(ctx) {
+			u.Err().Printf("")
+			u.Err().Printf("Opening browser...")
+		} else {
+			u.Out().Printf("")
+			u.Out().Printf("Opening browser...")
+		}
 		if err := openProposeTimeBrowser(proposeURL); err != nil {
 			u.Err().Printf("Failed to open browser: %v", err)
 			u.Err().Printf("Please open the propose_url manually.")
