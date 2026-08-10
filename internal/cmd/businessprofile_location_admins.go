@@ -160,7 +160,7 @@ func (c *BusinessProfileLocationAdminsDeleteCmd) Run(ctx context.Context, flags 
 	}
 
 	u.Err().Println("Deleted")
-	return nil
+	return writeBusinessProfileMutationReceipt(ctx, "delete", name, "")
 }
 
 // BusinessProfileLocationAdminsPatchCmd patches a location admin's role.
@@ -269,5 +269,5 @@ func (c *BusinessProfileLocationTransferCmd) Run(ctx context.Context, flags *Roo
 	}
 
 	u.Err().Println("Location transferred")
-	return nil
+	return writeBusinessProfileMutationReceipt(ctx, "transfer", name, dest)
 }

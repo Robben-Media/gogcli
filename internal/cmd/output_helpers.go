@@ -49,10 +49,19 @@ func sanitizePlainField(s string) string {
 // writePlainReceipt writes a fixed-schema TSV receipt (header + one data row)
 // for --plain mutation output. Fields are sanitized for tab/newline safety.
 func writePlainReceipt(ctx context.Context, headers []string, fields []string) {
+	_ = writePlainReceiptError(ctx, headers, fields)
+}
+
+func writePlainReceiptError(ctx context.Context, headers []string, fields []string) error {
 	w, flush := tableWriter(ctx)
-	defer flush()
-	writeTableRow(ctx, w, headers)
-	writeTableRow(ctx, w, fields)
+	if _, err := fmt.Fprintln(w, strings.Join(plainTableFields(ctx, headers), "\t")); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, strings.Join(plainTableFields(ctx, fields), "\t")); err != nil {
+		return err
+	}
+	flush()
+	return nil
 }
 
 // writePlainRoutingReceipt emits the shared Gmail routing mutation receipt:

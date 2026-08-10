@@ -103,7 +103,7 @@ func (c *BusinessProfileInvitationsAcceptCmd) Run(ctx context.Context, flags *Ro
 	}
 
 	u.Err().Println("Invitation accepted")
-	return nil
+	return writeBusinessProfileMutationReceipt(ctx, "accept", name, "")
 }
 
 // BusinessProfileInvitationsDeclineCmd declines an invitation.
@@ -134,5 +134,5 @@ func (c *BusinessProfileInvitationsDeclineCmd) Run(ctx context.Context, flags *R
 	}
 
 	u.Err().Println("Invitation declined")
-	return nil
+	return writeBusinessProfileMutationReceipt(ctx, "decline", name, "")
 }

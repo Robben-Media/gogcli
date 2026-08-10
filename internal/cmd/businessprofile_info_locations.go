@@ -198,7 +198,7 @@ func (c *BusinessProfileInfoLocationsDeleteCmd) Run(ctx context.Context, flags *
 	}
 
 	u.Err().Println("Deleted")
-	return nil
+	return writeBusinessProfileMutationReceipt(ctx, "delete", name, "")
 }
 
 // BusinessProfileInfoLocationsGetGoogleUpdatedCmd gets the Google-updated version.

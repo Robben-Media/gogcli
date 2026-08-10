@@ -160,7 +160,7 @@ func (c *BusinessProfileAccountAdminsDeleteCmd) Run(ctx context.Context, flags *
 	}
 
 	u.Err().Println("Deleted")
-	return nil
+	return writeBusinessProfileMutationReceipt(ctx, "delete", name, "")
 }
 
 // BusinessProfileAccountAdminsPatchCmd patches an admin's role.

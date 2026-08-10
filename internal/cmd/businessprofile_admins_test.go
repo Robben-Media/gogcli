@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -297,8 +298,9 @@ func TestExecute_BusinessProfileAccountAdminsDelete_JSON(t *testing.T) {
 		return svc, nil
 	}
 
-	_ = captureStdout(t, func() {
-		_ = captureStderr(t, func() {
+	var stderr string
+	out := captureStdout(t, func() {
+		stderr = captureStderr(t, func() {
 			if err := Execute([]string{
 				"--json", "--account", "a@b.com", "--force",
 				"business-profile", "account-admins", "delete", "accounts/123/admins/456",
@@ -307,11 +309,175 @@ func TestExecute_BusinessProfileAccountAdminsDelete_JSON(t *testing.T) {
 			}
 		})
 	})
+	if !strings.Contains(stderr, "Deleted") {
+		t.Fatalf("expected success diagnostic, got %q", stderr)
+	}
 
 	mu.Lock()
 	defer mu.Unlock()
 	if gotMethod != http.MethodDelete {
 		t.Fatalf("expected DELETE method, got %q", gotMethod)
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatalf("parsing JSON: %v\nout=%q", err, out)
+	}
+	if result["action"] != "delete" {
+		t.Fatalf("expected action=delete, got %v", result["action"])
+	}
+	if result["resource"] != "accounts/123/admins/456" {
+		t.Fatalf("expected resource accounts/123/admins/456, got %v", result["resource"])
+	}
+	if result["success"] != true {
+		t.Fatalf("expected success=true, got %v", result["success"])
+	}
+}
+
+func TestExecute_BusinessProfileAccountAdminsDelete_Plain(t *testing.T) {
+	origAccounts := newBusinessProfileAccountsService
+	t.Cleanup(func() { newBusinessProfileAccountsService = origAccounts })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || !strings.Contains(r.URL.Path, "/admins/") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{})
+	}))
+	defer srv.Close()
+
+	svc, err := mybusinessaccountmanagement.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newBusinessProfileAccountsService = func(context.Context, string) (*mybusinessaccountmanagement.Service, error) {
+		return svc, nil
+	}
+
+	var stderr string
+	out := captureStdout(t, func() {
+		stderr = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain", "--account", "a@b.com", "--force",
+				"business-profile", "account-admins", "delete", "accounts/123/admins/456",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+	if !strings.Contains(stderr, "Deleted") {
+		t.Fatalf("expected success diagnostic, got %q", stderr)
+	}
+
+	want := "ACTION\tRESOURCE\tSUCCESS\ndelete\taccounts/123/admins/456\ttrue\n"
+	if out != want {
+		t.Fatalf("plain receipt mismatch:\n got %q\nwant %q", out, want)
+	}
+}
+
+func TestExecute_BusinessProfileAccountAdminsDelete_Human(t *testing.T) {
+	origAccounts := newBusinessProfileAccountsService
+	t.Cleanup(func() { newBusinessProfileAccountsService = origAccounts })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || !strings.Contains(r.URL.Path, "/admins/") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{})
+	}))
+	defer srv.Close()
+
+	svc, err := mybusinessaccountmanagement.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newBusinessProfileAccountsService = func(context.Context, string) (*mybusinessaccountmanagement.Service, error) {
+		return svc, nil
+	}
+
+	var stderr string
+	out := captureStdout(t, func() {
+		stderr = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--account", "a@b.com", "--force",
+				"business-profile", "account-admins", "delete", "accounts/123/admins/456",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+	if strings.TrimSpace(out) != "" {
+		t.Fatalf("expected empty stdout in human mode, got %q", out)
+	}
+	if !strings.Contains(stderr, "Deleted") {
+		t.Fatalf("expected human stderr Deleted, got %q", stderr)
+	}
+}
+
+func TestExecute_BusinessProfileAccountAdminsDelete_WriteErrorPreservesDiagnostic(t *testing.T) {
+	origAccounts := newBusinessProfileAccountsService
+	t.Cleanup(func() { newBusinessProfileAccountsService = origAccounts })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || !strings.Contains(r.URL.Path, "/admins/") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{})
+	}))
+	defer srv.Close()
+
+	svc, err := mybusinessaccountmanagement.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newBusinessProfileAccountsService = func(context.Context, string) (*mybusinessaccountmanagement.Service, error) {
+		return svc, nil
+	}
+
+	for _, mode := range []string{"--json", "--plain"} {
+		t.Run(mode, func(t *testing.T) {
+			oldStdout := os.Stdout
+			readEnd, closedStdout, pipeErr := os.Pipe()
+			if pipeErr != nil {
+				t.Fatalf("os.Pipe: %v", pipeErr)
+			}
+			_ = readEnd.Close()
+			_ = closedStdout.Close()
+			os.Stdout = closedStdout
+			t.Cleanup(func() { os.Stdout = oldStdout })
+
+			var executeErr error
+			stderr := captureStderr(t, func() {
+				executeErr = Execute([]string{
+					mode, "--account", "a@b.com", "--force",
+					"business-profile", "account-admins", "delete", "accounts/123/admins/456",
+				})
+			})
+			if executeErr == nil {
+				t.Fatal("expected stdout write error")
+			}
+			if !strings.Contains(stderr, "Deleted") {
+				t.Fatalf("expected success diagnostic before write error, got %q", stderr)
+			}
+		})
 	}
 }
 
