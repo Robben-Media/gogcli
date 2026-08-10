@@ -159,6 +159,12 @@ func (c *BusinessProfileLocationAdminsDeleteCmd) Run(ctx context.Context, flags 
 		return delErr
 	}
 
+	if wrote, err := writeBusinessProfileMutationReceipt(ctx, "delete", name, ""); err != nil {
+		return err
+	} else if wrote {
+		return nil
+	}
+
 	u.Err().Println("Deleted")
 	return nil
 }
@@ -266,6 +272,12 @@ func (c *BusinessProfileLocationTransferCmd) Run(ctx context.Context, flags *Roo
 
 	if _, transferErr := svc.Locations.Transfer(name, req).Do(); transferErr != nil {
 		return transferErr
+	}
+
+	if wrote, err := writeBusinessProfileMutationReceipt(ctx, "transfer", name, dest); err != nil {
+		return err
+	} else if wrote {
+		return nil
 	}
 
 	u.Err().Println("Location transferred")

@@ -18,6 +18,38 @@ var (
 	newBusinessProfileInfoService     = googleapi.NewBusinessProfileInfo
 )
 
+// writeBusinessProfileMutationReceipt emits a machine-readable success receipt for
+// empty-body Business Profile mutations. JSON: action/resource/success (+destination).
+// Plain: one TSV data row under stable headers. Returns true when a receipt was written.
+func writeBusinessProfileMutationReceipt(ctx context.Context, action, resource, destination string) (bool, error) {
+	if outfmt.IsJSON(ctx) {
+		payload := map[string]any{
+			"action":   action,
+			"resource": resource,
+			"success":  true,
+		}
+		if destination != "" {
+			payload["destination"] = destination
+		}
+		return true, outfmt.WriteJSON(os.Stdout, payload)
+	}
+
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		if destination != "" {
+			fmt.Fprintln(w, "ACTION\tRESOURCE\tSUCCESS\tDESTINATION")
+			writeTableRow(ctx, w, []string{action, resource, "true", destination})
+		} else {
+			fmt.Fprintln(w, "ACTION\tRESOURCE\tSUCCESS")
+			writeTableRow(ctx, w, []string{action, resource, "true"})
+		}
+		return true, nil
+	}
+
+	return false, nil
+}
+
 type BusinessProfileCmd struct {
 	Accounts        BusinessProfileAccountsCmd            `cmd:"" name:"accounts" help:"Account management"`
 	Admins          BusinessProfileAccountAdminsCmd       `cmd:"" name:"account-admins" help:"Account admin management"`
