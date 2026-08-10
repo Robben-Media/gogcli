@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -65,27 +66,8 @@ func TestVersionLess(t *testing.T) {
 
 func TestCheckAndApply(t *testing.T) {
 	binaryPayload := []byte("#!/bin/sh\necho fake-gog\n")
-
-	var archive bytes.Buffer
-
-	gz := gzip.NewWriter(&archive)
-	tw := tar.NewWriter(gz)
-	hdr := &tar.Header{Name: "gog", Mode: 0o755, Size: int64(len(binaryPayload))}
-
-	if err := tw.WriteHeader(hdr); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := tw.Write(binaryPayload); err != nil {
-		t.Fatal(err)
-	}
-
-	_ = tw.Close()
-	_ = gz.Close()
-
-	raw := archive.Bytes()
-	sum := sha256.Sum256(raw)
-	sumHex := hex.EncodeToString(sum[:])
+	raw := buildTarGzArchive(t, binaryPayload)
+	sumHex := sha256Hex(raw)
 	assetName := AssetNameFor("v9.9.9")
 
 	var srv *httptest.Server
@@ -146,16 +128,223 @@ func TestCheckAndApply(t *testing.T) {
 	}
 }
 
-func TestChecksumLineMatch(t *testing.T) {
+func TestChecksumManifestMatches(t *testing.T) {
 	t.Parallel()
 
-	if !checksumLineMatch("abc  file.tar.gz\n", "file.tar.gz", "abc") {
-		t.Fatal("expected match")
+	validSum := strings.Repeat("a", sha256.Size*2)
+	tests := []struct {
+		name      string
+		checksums string
+		want      bool
+	}{
+		{name: "matching entry", checksums: validSum + "  file.tar.gz\n", want: true},
+		{name: "matching binary entry", checksums: validSum + " *file.tar.gz\n", want: true},
+		{name: "missing entry", checksums: validSum + "  other.tar.gz\n"},
+		{name: "malformed entry", checksums: "not-a-checksum-line\n"},
+		{name: "invalid digest", checksums: strings.Repeat("z", sha256.Size*2) + "  file.tar.gz\n"},
+		{name: "extra field", checksums: validSum + " unexpected file.tar.gz\n"},
+		{name: "single-space separator", checksums: validSum + " file.tar.gz\n"},
+		{name: "tab separator", checksums: validSum + "\tfile.tar.gz\n"},
+		{name: "CRLF line ending", checksums: validSum + "  file.tar.gz\r\n"},
+		{name: "unrelated CRLF entry before matching", checksums: validSum + "  other.tar.gz\r\n" + validSum + "  file.tar.gz\n"},
+		{name: "tab in filename", checksums: validSum + "  other\tfile.tar.gz\n" + validSum + "  file.tar.gz\n"},
+		{name: "mixed malformed and matching", checksums: "malformed\n" + validSum + "  file.tar.gz\n"},
+		{name: "duplicate matching entries", checksums: validSum + "  file.tar.gz\n" + validSum + "  file.tar.gz\n"},
 	}
 
-	if checksumLineMatch("abc  other\n", "file.tar.gz", "abc") {
-		t.Fatal("unexpected match")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := checksumManifestMatches(tt.checksums, "file.tar.gz", validSum); got != tt.want {
+				t.Fatalf("checksumManifestMatches() = %v, want %v", got, tt.want)
+			}
+		})
 	}
+}
+
+func TestApplyRequiresChecksumVerification(t *testing.T) {
+	binaryPayload := []byte("#!/bin/sh\necho fake-gog\n")
+	raw := buildTarGzArchive(t, binaryPayload)
+	sumHex := sha256Hex(raw)
+	assetName := AssetNameFor("v9.9.9")
+	original := []byte("original-binary")
+
+	tests := []struct {
+		name                 string
+		includeChecksumAsset bool
+		checksumBody         string
+		checksumStatus       int
+		wantErrSub           string
+		wantSentinel         error
+	}{
+		{
+			name:         "missing checksum asset",
+			wantErrSub:   "checksum",
+			wantSentinel: errChecksumRequired,
+		},
+		{
+			name:                 "checksum download error",
+			includeChecksumAsset: true,
+			checksumStatus:       http.StatusNotFound,
+			wantErrSub:           "download checksums",
+		},
+		{
+			name:                 "missing archive entry",
+			includeChecksumAsset: true,
+			checksumBody:         fmt.Sprintf("%s  other-asset.tar.gz\n", sumHex),
+			wantErrSub:           "checksum",
+			wantSentinel:         errChecksumMismatch,
+		},
+		{
+			name:                 "malformed checksum content",
+			includeChecksumAsset: true,
+			checksumBody:         "not-a-checksum-line\n",
+			wantErrSub:           "checksum",
+			wantSentinel:         errChecksumMismatch,
+		},
+		{
+			name:                 "matching entry with extra token",
+			includeChecksumAsset: true,
+			checksumBody:         fmt.Sprintf("%s unexpected %s\n", sumHex, assetName),
+			wantErrSub:           "checksum",
+			wantSentinel:         errChecksumMismatch,
+		},
+		{
+			name:                 "matching entry with single-space separator",
+			includeChecksumAsset: true,
+			checksumBody:         fmt.Sprintf("%s %s\n", sumHex, assetName),
+			wantErrSub:           "checksum",
+			wantSentinel:         errChecksumMismatch,
+		},
+		{
+			name:                 "matching entry with tab separator",
+			includeChecksumAsset: true,
+			checksumBody:         fmt.Sprintf("%s\t%s\n", sumHex, assetName),
+			wantErrSub:           "checksum",
+			wantSentinel:         errChecksumMismatch,
+		},
+		{
+			name:                 "matching entry with CRLF line ending",
+			includeChecksumAsset: true,
+			checksumBody:         fmt.Sprintf("%s  %s\r\n", sumHex, assetName),
+			wantErrSub:           "checksum",
+			wantSentinel:         errChecksumMismatch,
+		},
+		{
+			name:                 "malformed line before matching entry",
+			includeChecksumAsset: true,
+			checksumBody:         fmt.Sprintf("malformed\n%s  %s\n", sumHex, assetName),
+			wantErrSub:           "checksum",
+			wantSentinel:         errChecksumMismatch,
+		},
+		{
+			name:                 "duplicate matching entries",
+			includeChecksumAsset: true,
+			checksumBody:         fmt.Sprintf("%s  %s\n%s  %s\n", sumHex, assetName, sumHex, assetName),
+			wantErrSub:           "checksum",
+			wantSentinel:         errChecksumMismatch,
+		},
+		{
+			name:                 "digest mismatch",
+			includeChecksumAsset: true,
+			checksumBody:         fmt.Sprintf("%s  %s\n", strings.Repeat("0", 64), assetName),
+			wantErrSub:           "checksum",
+			wantSentinel:         errChecksumMismatch,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var srv *httptest.Server
+			srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/releases/latest"):
+					assets := []Asset{{Name: assetName, BrowserDownloadURL: srv.URL + "/asset"}}
+					if tt.includeChecksumAsset {
+						assets = append(assets, Asset{Name: "checksums.txt", BrowserDownloadURL: srv.URL + "/checksums"})
+					}
+
+					_ = json.NewEncoder(w).Encode(Release{TagName: "v9.9.9", Assets: assets})
+				case r.URL.Path == "/asset":
+					_, _ = w.Write(raw)
+				case r.URL.Path == "/checksums":
+					if tt.checksumStatus != 0 {
+						http.Error(w, "checksum unavailable", tt.checksumStatus)
+
+						return
+					}
+
+					_, _ = io.WriteString(w, tt.checksumBody)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			t.Cleanup(srv.Close)
+
+			dest := filepath.Join(t.TempDir(), "gog")
+			if err := os.WriteFile(dest, original, 0o755); err != nil {
+				t.Fatal(err)
+			}
+
+			_, err := Apply(context.Background(), ApplyOptions{
+				Client:     &Client{BaseURL: srv.URL, HTTP: srv.Client()},
+				CurrentVer: "1.0.0",
+				DestPath:   dest,
+			})
+			if err == nil {
+				t.Fatal("Apply succeeded without required checksum verification")
+			}
+
+			if tt.wantSentinel != nil && !errors.Is(err, tt.wantSentinel) {
+				t.Fatalf("error = %v, want sentinel %v", err, tt.wantSentinel)
+			}
+
+			if !strings.Contains(strings.ToLower(err.Error()), strings.ToLower(tt.wantErrSub)) {
+				t.Fatalf("error = %q, want substring %q", err, tt.wantErrSub)
+			}
+
+			got, readErr := os.ReadFile(dest)
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+
+			if !bytes.Equal(got, original) {
+				t.Fatalf("installed executable changed: got %q, want %q", got, original)
+			}
+		})
+	}
+}
+
+func buildTarGzArchive(t *testing.T, binaryPayload []byte) []byte {
+	t.Helper()
+
+	var archive bytes.Buffer
+	gz := gzip.NewWriter(&archive)
+
+	tw := tar.NewWriter(gz)
+	if err := tw.WriteHeader(&tar.Header{Name: "gog", Mode: 0o755, Size: int64(len(binaryPayload))}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := tw.Write(binaryPayload); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	return archive.Bytes()
+}
+
+func sha256Hex(raw []byte) string {
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
 }
 
 func TestMaybeNotifyThrottlesFailedChecks(t *testing.T) {
@@ -202,36 +391,23 @@ func TestApplyPreservesExecutableWhenAtomicReplaceFails(t *testing.T) {
 	t.Cleanup(func() { renameFile = originalRename })
 
 	binaryPayload := []byte("#!/bin/sh\necho replacement\n")
-	var archive bytes.Buffer
-	gz := gzip.NewWriter(&archive)
-
-	tw := tar.NewWriter(gz)
-	if err := tw.WriteHeader(&tar.Header{Name: "gog", Mode: 0o755, Size: int64(len(binaryPayload))}); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := tw.Write(binaryPayload); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := tw.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := gz.Close(); err != nil {
-		t.Fatal(err)
-	}
-
+	raw := buildTarGzArchive(t, binaryPayload)
 	assetName := AssetNameFor("v9.9.9")
+	sumHex := sha256Hex(raw)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/repos/Robben-Media/gogcli/releases/latest":
 			_ = json.NewEncoder(w).Encode(Release{
 				TagName: "v9.9.9",
-				Assets:  []Asset{{Name: assetName, BrowserDownloadURL: "http://" + r.Host + "/asset"}},
+				Assets: []Asset{
+					{Name: assetName, BrowserDownloadURL: "http://" + r.Host + "/asset"},
+					{Name: "checksums.txt", BrowserDownloadURL: "http://" + r.Host + "/checksums"},
+				},
 			})
 		case "/asset":
-			_, _ = w.Write(archive.Bytes())
+			_, _ = w.Write(raw)
+		case "/checksums":
+			_, _ = fmt.Fprintf(w, "%s  %s\n", sumHex, assetName)
 		default:
 			http.NotFound(w, r)
 		}
