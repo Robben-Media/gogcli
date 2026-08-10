@@ -21,6 +21,7 @@
 - Docs: require shared destructive confirmation before `docs delete-range` submits a content deletion. (#54)
 - Gmail: require message IDs and shared destructive confirmation before permanent batch deletion. (#55)
 - Gmail: require shared destructive confirmation before deleting a resolved label. (#56)
+- Gmail: require shared destructive confirmation before removing a delegate, send-as alias, filter, or forwarding address. (#57)
 
 ## 0.10.0 - 2026-08-07
 
