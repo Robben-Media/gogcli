@@ -317,6 +317,13 @@ func (c *GmailThreadModifyCmd) Run(ctx context.Context, flags *RootFlags) error 
 			"removedLabels": removeIDs,
 		})
 	}
+	if outfmt.IsPlain(ctx) {
+		writePlainReceipt(ctx,
+			[]string{"THREAD_ID", "ADDED_LABELS", "REMOVED_LABELS"},
+			[]string{threadID, joinCSV(addIDs), joinCSV(removeIDs)},
+		)
+		return nil
+	}
 
 	u.Out().Printf("Modified thread %s", threadID)
 	return nil
@@ -356,6 +363,9 @@ func (c *GmailThreadAttachmentsCmd) Run(ctx context.Context, flags *RootFlags) e
 				"threadId":    threadID,
 				"attachments": []any{},
 			})
+		}
+		if outfmt.IsPlain(ctx) {
+			return writeGmailThreadAttachmentsPlainTSV(ctx, threadID, nil, false)
 		}
 		u.Err().Println("Empty thread")
 		return nil
@@ -397,6 +407,9 @@ func (c *GmailThreadAttachmentsCmd) Run(ctx context.Context, flags *RootFlags) e
 			"attachments": allAttachments,
 		})
 	}
+	if outfmt.IsPlain(ctx) {
+		return writeGmailThreadAttachmentsPlainTSV(ctx, threadID, allAttachments, c.Download)
+	}
 
 	if len(allAttachments) == 0 {
 		u.Out().Println("No attachments found")
@@ -415,6 +428,39 @@ func (c *GmailThreadAttachmentsCmd) Run(ctx context.Context, flags *RootFlags) e
 		return nil
 	}
 	printAttachmentLines(u.Out(), attachmentOutputsFromDownloads(allAttachments))
+	return nil
+}
+
+// writeGmailThreadAttachmentsPlainTSV emits the shared attachments plain schema:
+// THREAD_ID MESSAGE_ID ATTACHMENT_ID FILENAME MIME_TYPE BYTES PATH CACHED
+// Listing leaves PATH/CACHED empty and uses metadata size for BYTES.
+// Download fills PATH/CACHED and uses exact transfer/cache byte counts.
+func writeGmailThreadAttachmentsPlainTSV(ctx context.Context, threadID string, attachments []attachmentDownloadOutput, download bool) error {
+	w, flush := tableWriter(ctx)
+	defer flush()
+	writeTableRow(ctx, w, []string{
+		"THREAD_ID", "MESSAGE_ID", "ATTACHMENT_ID", "FILENAME", "MIME_TYPE", "BYTES", "PATH", "CACHED",
+	})
+	for _, a := range attachments {
+		bytesField := strconv.FormatInt(a.Size, 10)
+		pathField := ""
+		cachedField := ""
+		if download {
+			bytesField = strconv.FormatInt(a.Bytes, 10)
+			pathField = a.Path
+			cachedField = strconv.FormatBool(a.Cached)
+		}
+		writeTableRow(ctx, w, []string{
+			threadID,
+			a.MessageID,
+			a.AttachmentID,
+			a.Filename,
+			a.MimeType,
+			bytesField,
+			pathField,
+			cachedField,
+		})
+	}
 	return nil
 }
 
