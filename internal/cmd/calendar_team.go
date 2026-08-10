@@ -300,22 +300,24 @@ func (c *CalendarTeamCmd) runEvents(ctx context.Context, svc *calendar.Service, 
 
 	w, flush := tableWriter(ctx)
 	defer flush()
-	if outfmt.IsPlain(ctx) || len(failures) > 0 {
+	// Typed rows only for incomplete results so successful --plain keeps the
+	// historical 4-column WHO/START/END/SUMMARY schema.
+	if len(failures) > 0 {
 		writeTableRow(ctx, w, []string{"TYPE", "WHO", "START", "END", "SUMMARY", "ERROR"})
 		for _, ev := range events {
 			writeTableRow(ctx, w, []string{
 				"event",
-				ev.Who,
-				ev.Start,
-				ev.End,
-				truncate(ev.Summary, 40),
+				sanitizeTab(ev.Who),
+				sanitizeTab(ev.Start),
+				sanitizeTab(ev.End),
+				sanitizeTab(truncate(ev.Summary, 40)),
 				"",
 			})
 		}
 		for _, failure := range failures {
 			writeTableRow(ctx, w, []string{
 				"calendar_error",
-				failure.CalendarID,
+				sanitizeTab(failure.CalendarID),
 				"",
 				"",
 				"",

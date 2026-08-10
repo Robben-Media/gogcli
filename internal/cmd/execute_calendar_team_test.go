@@ -750,3 +750,202 @@ func TestExecute_CalendarTeam_JSON_SuccessfulEmpty(t *testing.T) {
 		t.Fatalf("expected no errors: %#v", parsed.Errors)
 	}
 }
+
+func TestExecute_CalendarTeam_Plain_SuccessfulKeepsFourColumnSchema(t *testing.T) {
+	origCalSvc := newCalendarService
+	origCloudSvc := newCloudIdentityService
+	t.Cleanup(func() {
+		newCalendarService = origCalSvc
+		newCloudIdentityService = origCloudSvc
+	})
+
+	cloudSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "groups:lookup"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"name": "groups/abc123"})
+		case strings.Contains(r.URL.Path, "groups/abc123/memberships"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"memberships": []map[string]any{
+					{"preferredMemberKey": map[string]any{"id": "alice@example.com"}, "type": "USER"},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer cloudSrv.Close()
+
+	cloudSvc, err := cloudidentity.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(cloudSrv.Client()),
+		option.WithEndpoint(cloudSrv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService (cloud): %v", err)
+	}
+	newCloudIdentityService = func(context.Context, string) (*cloudidentity.Service, error) { return cloudSvc, nil }
+
+	calSrv := httptest.NewServer(withPrimaryCalendar(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/calendars/alice@example.com/events") {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"items": []map[string]any{
+					{
+						"id":      "ev1",
+						"summary": "Standup\tplanning\nnotes",
+						"start":   map[string]any{"dateTime": "2026-01-05T09:00:00Z"},
+						"end":     map[string]any{"dateTime": "2026-01-05T09:30:00Z"},
+					},
+				},
+			})
+			return
+		}
+		http.NotFound(w, r)
+	})))
+	defer calSrv.Close()
+
+	calSvc, err := calendar.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(calSrv.Client()),
+		option.WithEndpoint(calSrv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService (cal): %v", err)
+	}
+	newCalendarService = func(context.Context, string) (*calendar.Service, error) { return calSvc, nil }
+
+	var execErr error
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			execErr = Execute([]string{
+				"--plain",
+				"--account", "a@b.com",
+				"calendar", "team", "engineering@example.com",
+				"--from", "2026-01-05T00:00:00Z",
+				"--to", "2026-01-06T00:00:00Z",
+			})
+		})
+	})
+	if execErr != nil {
+		t.Fatalf("successful plain schedule must succeed: %v", execErr)
+	}
+
+	lines := nonEmptyLines(out)
+	want := []string{
+		"WHO\tSTART\tEND\tSUMMARY",
+		"alice@example.com\t09:00\t09:30\tStandup planning notes",
+	}
+	if len(lines) != len(want) {
+		t.Fatalf("plain rows = %q, want %q", lines, want)
+	}
+	for i := range want {
+		if lines[i] != want[i] {
+			t.Fatalf("plain row %d = %q, want %q", i, lines[i], want[i])
+		}
+	}
+	if strings.Contains(out, "TYPE\t") || strings.Contains(out, "calendar_error") {
+		t.Fatalf("successful plain output must keep 4-column schema: %q", out)
+	}
+}
+
+func TestExecute_CalendarTeam_Plain_AllFailed(t *testing.T) {
+	origCalSvc := newCalendarService
+	origCloudSvc := newCloudIdentityService
+	t.Cleanup(func() {
+		newCalendarService = origCalSvc
+		newCloudIdentityService = origCloudSvc
+	})
+
+	cloudSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "groups:lookup"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"name": "groups/abc123"})
+		case strings.Contains(r.URL.Path, "groups/abc123/memberships"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"memberships": []map[string]any{
+					{"preferredMemberKey": map[string]any{"id": "bob@example.com"}, "type": "USER"},
+					{"preferredMemberKey": map[string]any{"id": "alice@example.com"}, "type": "USER"},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer cloudSrv.Close()
+
+	cloudSvc, err := cloudidentity.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(cloudSrv.Client()),
+		option.WithEndpoint(cloudSrv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService (cloud): %v", err)
+	}
+	newCloudIdentityService = func(context.Context, string) (*cloudidentity.Service, error) { return cloudSvc, nil }
+
+	calSrv := httptest.NewServer(withPrimaryCalendar(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/calendars/bob@example.com/events") {
+			http.Error(w, "bob denied\tsecret", http.StatusForbidden)
+			return
+		}
+		if strings.Contains(r.URL.Path, "/calendars/alice@example.com/events") {
+			http.Error(w, "alice missing", http.StatusNotFound)
+			return
+		}
+		http.NotFound(w, r)
+	})))
+	defer calSrv.Close()
+
+	calSvc, err := calendar.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(calSrv.Client()),
+		option.WithEndpoint(calSrv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService (cal): %v", err)
+	}
+	newCalendarService = func(context.Context, string) (*calendar.Service, error) { return calSvc, nil }
+
+	var execErr error
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			execErr = Execute([]string{
+				"--plain",
+				"--account", "a@b.com",
+				"calendar", "team", "engineering@example.com",
+				"--from", "2026-01-05T00:00:00Z",
+				"--to", "2026-01-06T00:00:00Z",
+			})
+		})
+	})
+	if execErr == nil || ExitCode(execErr) == 0 {
+		t.Fatalf("all-failed plain execution error = %v, want nonzero", execErr)
+	}
+
+	lines := nonEmptyLines(out)
+	if len(lines) != 3 {
+		t.Fatalf("expected header + 2 error rows, got %q", out)
+	}
+	if lines[0] != "TYPE\tWHO\tSTART\tEND\tSUMMARY\tERROR" {
+		t.Fatalf("unexpected header=%q", lines[0])
+	}
+	// Deterministic multi-error order by calendar id.
+	if !strings.HasPrefix(lines[1], "calendar_error\talice@example.com\t") || !strings.Contains(lines[1], "alice missing") {
+		t.Fatalf("expected alice error first: %q", lines[1])
+	}
+	if !strings.HasPrefix(lines[2], "calendar_error\tbob@example.com\t") || !strings.Contains(lines[2], "bob denied secret") {
+		t.Fatalf("expected bob error second and tab-safe: %q", lines[2])
+	}
+	if strings.Contains(out, "No events found") {
+		t.Fatalf("all-failed must not use empty success path: %q", out)
+	}
+	for _, line := range lines[1:] {
+		if strings.Count(line, "\t") != 5 {
+			t.Fatalf("error record is not parseable TSV: %q", line)
+		}
+	}
+}
