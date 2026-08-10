@@ -315,10 +315,10 @@ func writeSearchConsoleMutationReceipt(ctx context.Context, action, siteURL, sit
 		return outfmt.WriteJSON(os.Stdout, payload)
 	}
 	if outfmt.IsPlain(ctx) {
-		w, flush := tableWriter(ctx)
-		defer flush()
-		fmt.Fprintln(w, "ACTION\tSITE_URL\tSITEMAP_URL\tSUCCESS")
-		writeTableRow(ctx, w, []string{action, siteURL, sitemapURL, "true"})
+		writePlainReceipt(ctx,
+			[]string{"ACTION", "SITE_URL", "SITEMAP_URL", "SUCCESS"},
+			[]string{action, siteURL, sitemapURL, "true"},
+		)
 		return nil
 	}
 	return nil

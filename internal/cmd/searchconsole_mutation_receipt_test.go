@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -12,12 +13,82 @@ import (
 	"google.golang.org/api/searchconsole/v1"
 )
 
-func setupSearchConsoleMutationService(t *testing.T, handler http.HandlerFunc) {
+type searchConsoleMutationCase struct {
+	name       string
+	method     string
+	pathPart   string
+	args       []string
+	action     string
+	siteURL    string
+	sitemapURL string
+	stderr     string
+}
+
+var searchConsoleMutationCases = []searchConsoleMutationCase{
+	{
+		name:     "sites add",
+		method:   http.MethodPut,
+		pathPart: "/sites/",
+		args: []string{
+			"search-console", "sites", "add", "https://example.com/",
+		},
+		action:  "sites.add",
+		siteURL: "https://example.com/",
+		stderr:  "Site added: https://example.com/. Verify ownership to access data.",
+	},
+	{
+		name:     "sites delete",
+		method:   http.MethodDelete,
+		pathPart: "/sites/",
+		args: []string{
+			"--force", "search-console", "sites", "delete", "sc-domain:example.org",
+		},
+		action:  "sites.delete",
+		siteURL: "sc-domain:example.org",
+		stderr:  "Site removed",
+	},
+	{
+		name:     "sitemaps submit",
+		method:   http.MethodPut,
+		pathPart: "/sitemaps/",
+		args: []string{
+			"search-console", "submit-sitemap",
+			"--site-url", "https://example.com/",
+			"--sitemap-url", "https://example.com/sitemap.xml",
+		},
+		action:     "sitemaps.submit",
+		siteURL:    "https://example.com/",
+		sitemapURL: "https://example.com/sitemap.xml",
+		stderr:     "Sitemap submitted successfully",
+	},
+	{
+		name:     "sitemaps delete",
+		method:   http.MethodDelete,
+		pathPart: "/sitemaps/",
+		args: []string{
+			"--force", "search-console", "sitemaps", "delete",
+			"https://example.com/", "https://example.com/sitemap.xml",
+		},
+		action:     "sitemaps.delete",
+		siteURL:    "https://example.com/",
+		sitemapURL: "https://example.com/sitemap.xml",
+		stderr:     "Sitemap deleted",
+	},
+}
+
+func setupSearchConsoleMutationService(t *testing.T, tc searchConsoleMutationCase) {
 	t.Helper()
 	origNew := newSearchConsoleService
 	t.Cleanup(func() { newSearchConsoleService = origNew })
 
-	srv := httptest.NewServer(handler)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != tc.method || !strings.Contains(r.URL.Path, tc.pathPart) {
+			t.Errorf("request = %s %s, want %s path containing %q", r.Method, r.URL.Path, tc.method, tc.pathPart)
+			http.NotFound(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
 	t.Cleanup(srv.Close)
 
 	svc, err := searchconsole.NewService(context.Background(),
@@ -31,301 +102,64 @@ func setupSearchConsoleMutationService(t *testing.T, handler http.HandlerFunc) {
 	newSearchConsoleService = func(context.Context, string) (*searchconsole.Service, error) { return svc, nil }
 }
 
-func searchConsoleMutationOK(w http.ResponseWriter, _ *http.Request) {
-	// Mutation endpoints return empty success bodies (204 / empty JSON).
-	w.WriteHeader(http.StatusNoContent)
-}
+func executeSearchConsoleMutation(t *testing.T, tc searchConsoleMutationCase, outputFlag string) (string, string) {
+	t.Helper()
+	setupSearchConsoleMutationService(t, tc)
 
-func TestExecute_SearchConsoleSitesAdd_MutationReceiptJSON(t *testing.T) {
-	setupSearchConsoleMutationService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/sites/") {
-			searchConsoleMutationOK(w, r)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{
-				"--json", "--account", "a@b.com",
-				"search-console", "sites", "add",
-				"https://example.com/",
-			}); err != nil {
+	args := make([]string, 0, 3+len(tc.args))
+	args = append(args, outputFlag, "--account", "a@b.com")
+	args = append(args, tc.args...)
+	var stderr string
+	stdout := captureStdout(t, func() {
+		stderr = captureStderr(t, func() {
+			if err := Execute(args); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
 		})
 	})
+	return stdout, stderr
+}
 
-	var parsed struct {
-		Action     string `json:"action"`
-		SiteURL    string `json:"siteUrl"`
-		SitemapURL string `json:"sitemapUrl"`
-		Success    bool   `json:"success"`
-	}
-	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
-		t.Fatalf("json parse: %v\nout=%q", err, out)
-	}
-	if parsed.Action != "sites.add" {
-		t.Fatalf("action = %q, want sites.add", parsed.Action)
-	}
-	if parsed.SiteURL != "https://example.com/" {
-		t.Fatalf("siteUrl = %q, want https://example.com/", parsed.SiteURL)
-	}
-	if parsed.SitemapURL != "" {
-		t.Fatalf("sitemapUrl should be omitted/empty for site ops, got %q", parsed.SitemapURL)
-	}
-	if !parsed.Success {
-		t.Fatal("expected success=true")
-	}
-	if strings.Contains(out, "Site added") {
-		t.Fatalf("JSON stdout must not contain human prose: %q", out)
+func TestExecute_SearchConsoleMutationReceiptJSON(t *testing.T) {
+	for _, tc := range searchConsoleMutationCases {
+		t.Run(tc.name, func(t *testing.T) {
+			stdout, stderr := executeSearchConsoleMutation(t, tc, "--json")
+
+			want := map[string]any{
+				"action":  tc.action,
+				"siteUrl": tc.siteURL,
+				"success": true,
+			}
+			if tc.sitemapURL != "" {
+				want["sitemapUrl"] = tc.sitemapURL
+			}
+			var got map[string]any
+			if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+				t.Fatalf("json parse: %v\nout=%q", err, stdout)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("JSON receipt mismatch:\nwant %#v\ngot  %#v", want, got)
+			}
+			if !strings.Contains(stderr, tc.stderr) {
+				t.Fatalf("stderr = %q, want confirmation containing %q", stderr, tc.stderr)
+			}
+		})
 	}
 }
 
-func TestExecute_SearchConsoleSitesAdd_MutationReceiptPlain(t *testing.T) {
-	setupSearchConsoleMutationService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/sites/") {
-			searchConsoleMutationOK(w, r)
-			return
-		}
-		http.NotFound(w, r)
-	}))
+func TestExecute_SearchConsoleMutationReceiptPlain(t *testing.T) {
+	for _, tc := range searchConsoleMutationCases {
+		t.Run(tc.name, func(t *testing.T) {
+			stdout, stderr := executeSearchConsoleMutation(t, tc, "--plain")
 
-	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{
-				"--plain", "--account", "a@b.com",
-				"search-console", "sites", "add",
-				"https://example.com/",
-			}); err != nil {
-				t.Fatalf("Execute: %v", err)
+			want := "ACTION\tSITE_URL\tSITEMAP_URL\tSUCCESS\n" +
+				tc.action + "\t" + tc.siteURL + "\t" + tc.sitemapURL + "\ttrue\n"
+			if stdout != want {
+				t.Fatalf("plain output mismatch:\nwant %q\ngot  %q", want, stdout)
+			}
+			if !strings.Contains(stderr, tc.stderr) {
+				t.Fatalf("stderr = %q, want confirmation containing %q", stderr, tc.stderr)
 			}
 		})
-	})
-
-	const want = "ACTION\tSITE_URL\tSITEMAP_URL\tSUCCESS\nsites.add\thttps://example.com/\t\ttrue\n"
-	if out != want {
-		t.Fatalf("plain output mismatch:\nwant %q\ngot  %q", want, out)
-	}
-}
-
-func TestExecute_SearchConsoleSitesDelete_MutationReceiptJSON(t *testing.T) {
-	setupSearchConsoleMutationService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "/sites/") && !strings.Contains(r.URL.Path, "/sitemaps") {
-			searchConsoleMutationOK(w, r)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{
-				"--json", "--force", "--account", "a@b.com",
-				"search-console", "sites", "delete",
-				"sc-domain:example.org",
-			}); err != nil {
-				t.Fatalf("Execute: %v", err)
-			}
-		})
-	})
-
-	var parsed struct {
-		Action     string `json:"action"`
-		SiteURL    string `json:"siteUrl"`
-		SitemapURL string `json:"sitemapUrl"`
-		Success    bool   `json:"success"`
-	}
-	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
-		t.Fatalf("json parse: %v\nout=%q", err, out)
-	}
-	if parsed.Action != "sites.delete" {
-		t.Fatalf("action = %q, want sites.delete", parsed.Action)
-	}
-	if parsed.SiteURL != "sc-domain:example.org" {
-		t.Fatalf("siteUrl = %q, want sc-domain:example.org", parsed.SiteURL)
-	}
-	if parsed.SitemapURL != "" {
-		t.Fatalf("sitemapUrl should be empty for site ops, got %q", parsed.SitemapURL)
-	}
-	if !parsed.Success {
-		t.Fatal("expected success=true")
-	}
-}
-
-func TestExecute_SearchConsoleSitesDelete_MutationReceiptPlain(t *testing.T) {
-	setupSearchConsoleMutationService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "/sites/") && !strings.Contains(r.URL.Path, "/sitemaps") {
-			searchConsoleMutationOK(w, r)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{
-				"--plain", "--force", "--account", "a@b.com",
-				"search-console", "sites", "delete",
-				"sc-domain:example.org",
-			}); err != nil {
-				t.Fatalf("Execute: %v", err)
-			}
-		})
-	})
-
-	const want = "ACTION\tSITE_URL\tSITEMAP_URL\tSUCCESS\nsites.delete\tsc-domain:example.org\t\ttrue\n"
-	if out != want {
-		t.Fatalf("plain output mismatch:\nwant %q\ngot  %q", want, out)
-	}
-}
-
-func TestExecute_SearchConsoleSubmitSitemap_MutationReceiptJSON(t *testing.T) {
-	setupSearchConsoleMutationService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/sitemaps/") {
-			searchConsoleMutationOK(w, r)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{
-				"--json", "--account", "a@b.com",
-				"search-console", "submit-sitemap",
-				"--site-url", "https://example.com/",
-				"--sitemap-url", "https://example.com/sitemap.xml",
-			}); err != nil {
-				t.Fatalf("Execute: %v", err)
-			}
-		})
-	})
-
-	var parsed struct {
-		Action     string `json:"action"`
-		SiteURL    string `json:"siteUrl"`
-		SitemapURL string `json:"sitemapUrl"`
-		Success    bool   `json:"success"`
-	}
-	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
-		t.Fatalf("json parse: %v\nout=%q", err, out)
-	}
-	if parsed.Action != "sitemaps.submit" {
-		t.Fatalf("action = %q, want sitemaps.submit", parsed.Action)
-	}
-	if parsed.SiteURL != "https://example.com/" {
-		t.Fatalf("siteUrl = %q, want https://example.com/", parsed.SiteURL)
-	}
-	if parsed.SitemapURL != "https://example.com/sitemap.xml" {
-		t.Fatalf("sitemapUrl = %q, want https://example.com/sitemap.xml", parsed.SitemapURL)
-	}
-	if !parsed.Success {
-		t.Fatal("expected success=true")
-	}
-	if strings.Contains(out, "submitted") {
-		t.Fatalf("JSON stdout must not contain human prose: %q", out)
-	}
-}
-
-func TestExecute_SearchConsoleSubmitSitemap_MutationReceiptPlain(t *testing.T) {
-	setupSearchConsoleMutationService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/sitemaps/") {
-			searchConsoleMutationOK(w, r)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{
-				"--plain", "--account", "a@b.com",
-				"search-console", "submit-sitemap",
-				"--site-url", "https://example.com/",
-				"--sitemap-url", "https://example.com/sitemap.xml",
-			}); err != nil {
-				t.Fatalf("Execute: %v", err)
-			}
-		})
-	})
-
-	const want = "ACTION\tSITE_URL\tSITEMAP_URL\tSUCCESS\nsitemaps.submit\thttps://example.com/\thttps://example.com/sitemap.xml\ttrue\n"
-	if out != want {
-		t.Fatalf("plain output mismatch:\nwant %q\ngot  %q", want, out)
-	}
-}
-
-func TestExecute_SearchConsoleSitemapsDelete_MutationReceiptJSON(t *testing.T) {
-	setupSearchConsoleMutationService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "/sitemaps/") {
-			searchConsoleMutationOK(w, r)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{
-				"--json", "--force", "--account", "a@b.com",
-				"search-console", "sitemaps", "delete",
-				"https://example.com/",
-				"https://example.com/sitemap.xml",
-			}); err != nil {
-				t.Fatalf("Execute: %v", err)
-			}
-		})
-	})
-
-	var parsed struct {
-		Action     string `json:"action"`
-		SiteURL    string `json:"siteUrl"`
-		SitemapURL string `json:"sitemapUrl"`
-		Success    bool   `json:"success"`
-	}
-	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
-		t.Fatalf("json parse: %v\nout=%q", err, out)
-	}
-	if parsed.Action != "sitemaps.delete" {
-		t.Fatalf("action = %q, want sitemaps.delete", parsed.Action)
-	}
-	if parsed.SiteURL != "https://example.com/" {
-		t.Fatalf("siteUrl = %q, want https://example.com/", parsed.SiteURL)
-	}
-	if parsed.SitemapURL != "https://example.com/sitemap.xml" {
-		t.Fatalf("sitemapUrl = %q, want https://example.com/sitemap.xml", parsed.SitemapURL)
-	}
-	if !parsed.Success {
-		t.Fatal("expected success=true")
-	}
-}
-
-func TestExecute_SearchConsoleSitemapsDelete_MutationReceiptPlain(t *testing.T) {
-	setupSearchConsoleMutationService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "/sitemaps/") {
-			searchConsoleMutationOK(w, r)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{
-				"--plain", "--force", "--account", "a@b.com",
-				"search-console", "sitemaps", "delete",
-				"https://example.com/",
-				"https://example.com/sitemap.xml",
-			}); err != nil {
-				t.Fatalf("Execute: %v", err)
-			}
-		})
-	})
-
-	const want = "ACTION\tSITE_URL\tSITEMAP_URL\tSUCCESS\nsitemaps.delete\thttps://example.com/\thttps://example.com/sitemap.xml\ttrue\n"
-	if out != want {
-		t.Fatalf("plain output mismatch:\nwant %q\ngot  %q", want, out)
 	}
 }
