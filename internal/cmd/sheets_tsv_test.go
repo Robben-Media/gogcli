@@ -14,20 +14,21 @@ import (
 
 const (
 	sheetsSafeTSV      = "tab value\tline feed\tcarriage return\tcrlf value\n"
-	sheetsBatchSafeTSV = "range\trow\tcolumn\tvalue\n" +
-		"Sheet1!A1:D1\t1\t1\ttab value\n" +
-		"Sheet1!A1:D1\t1\t2\tline feed\n" +
-		"Sheet1!A1:D1\t1\t3\tcarriage return\n" +
-		"Sheet1!A1:D1\t1\t4\tcrlf value\n" +
-		"Sheet2!B2:D4\t1\t1\tsecond\n" +
-		"Sheet2!B2:D4\t1\t2\t\n" +
-		"Sheet2!B2:D4\t1\t3\tthird\n" +
-		"Sheet2!B2:D4\t3\t1\tlast\n"
-	sheetsColumnMajorSafeTSV = "range\trow\tcolumn\tvalue\n" +
-		"Sheet3!A1:B2\t1\t1\ta\n" +
-		"Sheet3!A1:B2\t2\t1\tb\n" +
-		"Sheet3!A1:B2\t1\t2\tc\n" +
-		"Sheet3!A1:B2\t2\t2\td\n"
+	sheetsBatchHeader  = "RANGE\tROW_INDEX\tCOLUMN_INDEX\tVALUE\n"
+	sheetsBatchSafeTSV = sheetsBatchHeader +
+		"Sheet1!A1:D1\t0\t0\ttab value\n" +
+		"Sheet1!A1:D1\t0\t1\tline feed\n" +
+		"Sheet1!A1:D1\t0\t2\tcarriage return\n" +
+		"Sheet1!A1:D1\t0\t3\tcrlf value\n" +
+		"Sheet2!B2:D4\t0\t0\tsecond\n" +
+		"Sheet2!B2:D4\t0\t1\t\n" +
+		"Sheet2!B2:D4\t0\t2\tthird\n" +
+		"Sheet2!B2:D4\t2\t0\tlast\n"
+	sheetsColumnMajorSafeTSV = sheetsBatchHeader +
+		"Sheet3!A1:B2\t0\t0\ta\n" +
+		"Sheet3!A1:B2\t1\t0\tb\n" +
+		"Sheet3!A1:B2\t0\t1\tc\n" +
+		"Sheet3!A1:B2\t1\t1\td\n"
 )
 
 func TestSheetsValueReads_PlainTSVPreservesRows(t *testing.T) {
@@ -148,6 +149,55 @@ func TestSheetsValueReads_PlainTSVPreservesRows(t *testing.T) {
 			})
 			if out != tt.want {
 				t.Fatalf("plain output = %q, want %q", out, tt.want)
+			}
+		})
+	}
+}
+
+func TestSheetsBatchValueReads_PlainEmptyResultsPrintHeaderOnly(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]any{"valueRanges": []any{}}); err != nil {
+			t.Errorf("encode response: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	original := newSheetsService
+	t.Cleanup(func() { newSheetsService = original })
+	service, err := sheets.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newSheetsService = func(context.Context, string) (*sheets.Service, error) {
+		return service, nil
+	}
+
+	commands := [][]string{
+		{"sheets", "batch-get", "s1", "Sheet1!A1"},
+		{"sheets", "batch-get-by-filter", "s1", "--filters-json", `[{"a1Range":"Sheet1!A1"}]`},
+	}
+	for _, command := range commands {
+		name := command[1]
+		t.Run(name, func(t *testing.T) {
+			var stderr string
+			stdout := captureStdout(t, func() {
+				stderr = captureStderr(t, func() {
+					args := append([]string{"--plain", "--account", "a@b.com"}, command...)
+					if err := Execute(args); err != nil {
+						t.Fatalf("Execute: %v", err)
+					}
+				})
+			})
+			if stdout != sheetsBatchHeader {
+				t.Fatalf("plain output = %q, want %q", stdout, sheetsBatchHeader)
+			}
+			if stderr != "" {
+				t.Fatalf("plain stderr = %q, want empty", stderr)
 			}
 		})
 	}

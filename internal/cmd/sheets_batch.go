@@ -19,19 +19,16 @@ type SheetsBatchGetCmd struct {
 }
 
 func writeSheetsValueRangesPlain(ctx context.Context, valueRanges []*sheets.ValueRange) {
-	if len(valueRanges) == 0 {
-		return
-	}
-	writeTableRow(ctx, os.Stdout, []string{"range", "row", "column", "value"})
+	writeTableRow(ctx, os.Stdout, []string{"RANGE", "ROW_INDEX", "COLUMN_INDEX", "VALUE"})
 	for _, valueRange := range valueRanges {
 		if valueRange == nil {
 			continue
 		}
 		for majorIndex, majorValues := range valueRange.Values {
 			for minorIndex, cell := range majorValues {
-				row, column := majorIndex+1, minorIndex+1
+				row, column := majorIndex, minorIndex
 				if strings.EqualFold(valueRange.MajorDimension, "COLUMNS") {
-					row, column = minorIndex+1, majorIndex+1
+					row, column = minorIndex, majorIndex
 				}
 				value := ""
 				if cell != nil {

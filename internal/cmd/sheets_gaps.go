@@ -456,10 +456,6 @@ func (c *SheetsValuesBatchGetByFilterCmd) Run(ctx context.Context, flags *RootFl
 		})
 	}
 
-	if len(resp.ValueRanges) == 0 {
-		u.Err().Println("No data found")
-		return nil
-	}
 	if outfmt.IsPlain(ctx) {
 		valueRanges := make([]*sheets.ValueRange, 0, len(resp.ValueRanges))
 		for _, matchedValueRange := range resp.ValueRanges {
@@ -468,6 +464,10 @@ func (c *SheetsValuesBatchGetByFilterCmd) Run(ctx context.Context, flags *RootFl
 			}
 		}
 		writeSheetsValueRangesPlain(ctx, valueRanges)
+		return nil
+	}
+	if len(resp.ValueRanges) == 0 {
+		u.Err().Println("No data found")
 		return nil
 	}
 
