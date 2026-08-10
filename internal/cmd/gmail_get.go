@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"os"
 	"strings"
+
+	"google.golang.org/api/gmail/v1"
 
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/ui"
@@ -99,6 +102,10 @@ func (c *GmailGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return outfmt.WriteJSON(os.Stdout, payload)
 	}
 
+	if outfmt.IsPlain(ctx) {
+		return printGmailGetPlain(ctx, msg, format, unsubscribe)
+	}
+
 	u.Out().Printf("id\t%s", msg.Id)
 	u.Out().Printf("thread_id\t%s", msg.ThreadId)
 	u.Out().Printf("label_ids\t%s", strings.Join(msg.LabelIds, ","))
@@ -142,4 +149,62 @@ func (c *GmailGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	default:
 		return nil
 	}
+}
+
+// printGmailGetPlain emits a stable 5-column TSV for message detail:
+// RECORD_TYPE, MESSAGE_ID, THREAD_ID, NAME, VALUE.
+// Free-form values are sanitized so each occupies one physical field/row.
+func printGmailGetPlain(ctx context.Context, msg *gmail.Message, format, unsubscribe string) error {
+	w, flush := tableWriter(ctx)
+	defer flush()
+
+	writeTableRow(ctx, w, []string{"RECORD_TYPE", "MESSAGE_ID", "THREAD_ID", "NAME", "VALUE"})
+
+	messageID := msg.Id
+	threadID := msg.ThreadId
+	writeGmailGetPlainRow(ctx, w, "metadata", messageID, threadID, "id", messageID)
+	writeGmailGetPlainRow(ctx, w, "metadata", messageID, threadID, "thread_id", threadID)
+	writeGmailGetPlainRow(ctx, w, "metadata", messageID, threadID, "label_ids", strings.Join(msg.LabelIds, ","))
+
+	switch format {
+	case gmailFormatRaw:
+		if msg.Raw == "" {
+			ui.FromContext(ctx).Err().Println("Empty raw message")
+			return nil
+		}
+		decoded, err := base64.RawURLEncoding.DecodeString(msg.Raw)
+		if err != nil {
+			return err
+		}
+		writeGmailGetPlainRow(ctx, w, "raw", messageID, threadID, "", string(decoded))
+		return nil
+	case gmailFormatMetadata, gmailFormatFull:
+		writeGmailGetPlainRow(ctx, w, "header", messageID, threadID, "from", headerValue(msg.Payload, "From"))
+		writeGmailGetPlainRow(ctx, w, "header", messageID, threadID, "to", headerValue(msg.Payload, "To"))
+		writeGmailGetPlainRow(ctx, w, "header", messageID, threadID, "cc", headerValue(msg.Payload, "Cc"))
+		writeGmailGetPlainRow(ctx, w, "header", messageID, threadID, "bcc", headerValue(msg.Payload, "Bcc"))
+		writeGmailGetPlainRow(ctx, w, "header", messageID, threadID, "subject", headerValue(msg.Payload, "Subject"))
+		writeGmailGetPlainRow(ctx, w, "header", messageID, threadID, "date", headerValue(msg.Payload, "Date"))
+		if unsubscribe != "" {
+			writeGmailGetPlainRow(ctx, w, "header", messageID, threadID, "unsubscribe", unsubscribe)
+		}
+		for _, a := range attachmentOutputs(collectAttachments(msg.Payload)) {
+			writeGmailGetPlainRow(ctx, w, "attachment", messageID, threadID, "filename", a.Filename)
+			writeGmailGetPlainRow(ctx, w, "attachment", messageID, threadID, "size_human", a.SizeHuman)
+			writeGmailGetPlainRow(ctx, w, "attachment", messageID, threadID, "mime_type", a.MimeType)
+			writeGmailGetPlainRow(ctx, w, "attachment", messageID, threadID, "attachment_id", a.AttachmentID)
+		}
+		if format == gmailFormatFull {
+			if body := bestBodyText(msg.Payload); body != "" {
+				writeGmailGetPlainRow(ctx, w, "body", messageID, threadID, "", body)
+			}
+		}
+		return nil
+	default:
+		return nil
+	}
+}
+
+func writeGmailGetPlainRow(ctx context.Context, w io.Writer, recordType, messageID, threadID, name, value string) {
+	writeTableRow(ctx, w, []string{recordType, messageID, threadID, name, value})
 }
