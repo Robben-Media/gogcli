@@ -518,7 +518,7 @@ func TestContactsBatchCreate_PlainTSV(t *testing.T) {
 	}
 }
 
-func TestContactsBatchCreate_PlainEmptyEmitsHeaderOnly(t *testing.T) {
+func TestContactsBatchCreate_PlainEmptyResponseStillEmitsRequestRow(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(&people.BatchCreateContactsResponse{CreatedPeople: []*people.PersonResponse{}})
@@ -540,9 +540,9 @@ func TestContactsBatchCreate_PlainEmptyEmitsHeaderOnly(t *testing.T) {
 		}
 	})
 
-	want := "REQUEST_KEY\tRESOURCE\tNAME\tEMAIL\tSTATUS\tERROR\n"
+	want := "REQUEST_KEY\tRESOURCE\tNAME\tEMAIL\tSTATUS\tERROR\n0\t\tX\t\tOK\t\n"
 	if out != want {
-		t.Fatalf("plain empty create output = %q, want %q", out, want)
+		t.Fatalf("plain create output with empty response = %q, want %q", out, want)
 	}
 }
 
@@ -626,7 +626,7 @@ func TestContactsBatchUpdate_PlainTSV(t *testing.T) {
 	}
 }
 
-func TestContactsBatchUpdate_PlainEmptyEmitsHeaderOnly(t *testing.T) {
+func TestContactsBatchUpdate_PlainEmptyResponseStillEmitsRequestRow(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(&people.BatchUpdateContactsResponse{UpdateResult: map[string]people.PersonResponse{}})
@@ -648,9 +648,9 @@ func TestContactsBatchUpdate_PlainEmptyEmitsHeaderOnly(t *testing.T) {
 		}
 	})
 
-	want := "REQUEST_KEY\tRESOURCE\tNAME\tEMAIL\tSTATUS\tERROR\n"
+	want := "REQUEST_KEY\tRESOURCE\tNAME\tEMAIL\tSTATUS\tERROR\npeople/1\tpeople/1\tA\t\tOK\t\n"
 	if out != want {
-		t.Fatalf("plain empty update output = %q, want %q", out, want)
+		t.Fatalf("plain update output with empty response = %q, want %q", out, want)
 	}
 }
 
