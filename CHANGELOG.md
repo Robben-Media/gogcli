@@ -25,6 +25,7 @@
 - Sheets: require shared destructive confirmation before deleting a sheet tab. (#58)
 - Sheets: require shared destructive confirmation before `sheets clear` removes values from a range. (#59)
 - Gmail: honor `--json` and `--plain` for tracking setup and status. (#60)
+- Analytics: include measurement IDs in the stable six-column data-stream detail TSV schema. (#61)
 
 ## 0.10.0 - 2026-08-07
 
