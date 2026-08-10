@@ -43,7 +43,7 @@ Adding 6 missing methods to the Search Console CLI commands. Covers mobile-frien
   - `feedpath` (required arg): sitemap URL (e.g., `https://example.com/sitemap.xml`)
   - `--force`: skip confirmation
 - **Behavior**: `confirmDestructive()` required. Deletes a sitemap from Search Console (does not delete the actual file).
-- **Output**: Empty on success; stderr shows confirmation
+- **Output**: JSON `{action:"sitemaps.delete",siteUrl,sitemapUrl,success:true}`; plain `ACTION\tSITE_URL\tSITEMAP_URL\tSUCCESS` receipt; stderr confirmation retained
 - **Test**: httptest mock DELETE `/webmasters/v3/sites/{siteUrl}/sitemaps/{feedpath}`
 
 ### `gog searchconsole sitemaps get`
@@ -67,7 +67,7 @@ Adding 6 missing methods to the Search Console CLI commands. Covers mobile-frien
 - **Args/Flags**:
   - `siteUrl` (required arg): site URL to add (e.g., `https://example.com/` or `sc-domain:example.com`)
 - **Behavior**: Adds a site to the user's Search Console. The user still needs to verify ownership separately.
-- **Output**: Empty on success (HTTP 204); stderr shows "Site added: {siteUrl}. Verify ownership to access data."
+- **Output**: JSON `{action:"sites.add",siteUrl,success:true}` (no sitemapUrl); plain `ACTION\tSITE_URL\tSITEMAP_URL\tSUCCESS` with empty sitemap field; stderr "Site added: {siteUrl}. Verify ownership to access data." retained
 - **Test**: httptest mock PUT `/webmasters/v3/sites/{siteUrl}` (note: this is PUT, not POST)
 
 ### `gog searchconsole sites delete`
@@ -78,7 +78,7 @@ Adding 6 missing methods to the Search Console CLI commands. Covers mobile-frien
   - `siteUrl` (required arg): site URL to remove
   - `--force`: skip confirmation
 - **Behavior**: `confirmDestructive()` required. Removes the site from the user's Search Console. Does not affect the actual website.
-- **Output**: Empty on success; stderr shows confirmation
+- **Output**: JSON `{action:"sites.delete",siteUrl,success:true}` (no sitemapUrl); plain `ACTION\tSITE_URL\tSITEMAP_URL\tSUCCESS` with empty sitemap field; stderr confirmation retained
 - **Test**: httptest mock DELETE `/webmasters/v3/sites/{siteUrl}`
 
 ### `gog searchconsole sites get`
