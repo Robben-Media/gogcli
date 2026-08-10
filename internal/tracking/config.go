@@ -16,15 +16,15 @@ var errMissingAccount = errors.New("missing account")
 
 const trackingConfigVersion = 1
 
-// Filesystem hooks allow tests to inject write/sync/close/rename failures.
+// Filesystem hooks allow tests to inject write/sync/close/replace failures.
 var (
-	createTrackingConfigTemp = os.CreateTemp
-	writeTrackingConfigFile  = func(f *os.File, data []byte) (int, error) { return f.Write(data) }
-	syncTrackingConfigFile   = func(f *os.File) error { return f.Sync() }
-	closeTrackingConfigFile  = func(f *os.File) error { return f.Close() }
-	renameTrackingConfigFile = os.Rename
-	removeTrackingConfigFile = os.Remove
-	chmodTrackingConfigFile  = os.Chmod
+	createTrackingConfigTemp  = os.CreateTemp
+	writeTrackingConfigFile   = func(f *os.File, data []byte) (int, error) { return f.Write(data) }
+	syncTrackingConfigFile    = func(f *os.File) error { return f.Sync() }
+	closeTrackingConfigFile   = func(f *os.File) error { return f.Close() }
+	replaceTrackingConfigFile = replaceTrackingConfig
+	removeTrackingConfigFile  = os.Remove
+	chmodTrackingConfigFile   = os.Chmod
 )
 
 // Config holds tracking configuration for a single account.
@@ -220,8 +220,8 @@ func writeConfigAtomic(path string, data []byte) error {
 		return fmt.Errorf("close tracking config: %w", closeErr)
 	}
 
-	if renameErr := renameTrackingConfigFile(tmpName, path); renameErr != nil {
-		return fmt.Errorf("commit tracking config: %w", renameErr)
+	if replaceErr := replaceTrackingConfigFile(tmpName, path); replaceErr != nil {
+		return fmt.Errorf("commit tracking config: %w", replaceErr)
 	}
 	cleanup = false
 

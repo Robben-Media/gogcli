@@ -3,7 +3,6 @@ package tracking
 import (
 	"encoding/json"
 	"errors"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -56,17 +55,12 @@ func TestSaveConfigRetainsAccountsAndOwnerOnlyPerms(t *testing.T) {
 		t.Fatalf("missing account b: %#v", fileCfg.Accounts)
 	}
 
-	temps, err := filepath.Glob(path + "*")
+	temps, err := filepath.Glob(filepath.Join(filepath.Dir(path), "tracking-*.tmp"))
 	if err != nil {
 		t.Fatalf("Glob: %v", err)
 	}
-	for _, temp := range temps {
-		if temp == path {
-			continue
-		}
-		if strings.Contains(filepath.Base(temp), "tmp") || strings.HasPrefix(filepath.Base(temp), ".") {
-			t.Fatalf("temporary artifact left behind: %s", temp)
-		}
+	if len(temps) != 0 {
+		t.Fatalf("temporary artifacts left behind: %v", temps)
 	}
 }
 
@@ -127,14 +121,14 @@ func TestSaveConfigFailurePreservesPriorBytesAndCleansTemp(t *testing.T) {
 			},
 		},
 		{
-			name: "rename",
+			name: "replace",
 			setup: func(t *testing.T) {
 				t.Helper()
-				original := renameTrackingConfigFile
-				renameTrackingConfigFile = func(string, string) error {
-					return errors.New("injected rename failure")
+				original := replaceTrackingConfigFile
+				replaceTrackingConfigFile = func(string, string) error {
+					return errors.New("injected replace failure")
 				}
-				t.Cleanup(func() { renameTrackingConfigFile = original })
+				t.Cleanup(func() { replaceTrackingConfigFile = original })
 			},
 		},
 	}
@@ -179,22 +173,17 @@ func TestSaveConfigFailurePreservesPriorBytesAndCleansTemp(t *testing.T) {
 func TestSaveConfigTempUsesOwnerOnlyPermissions(t *testing.T) {
 	setupTrackingConfigEnv(t)
 
-	var sawTempPerm fs.FileMode
-	originalCreate := createTrackingConfigTemp
-	createTrackingConfigTemp = func(dir, pattern string) (*os.File, error) {
-		f, err := originalCreate(dir, pattern)
+	var sawTempPerm os.FileMode
+	originalWrite := writeTrackingConfigFile
+	writeTrackingConfigFile = func(f *os.File, data []byte) (int, error) {
+		info, err := f.Stat()
 		if err != nil {
-			return nil, err
-		}
-		info, statErr := f.Stat()
-		if statErr != nil {
-			_ = f.Close()
-			return nil, statErr
+			return 0, err
 		}
 		sawTempPerm = info.Mode().Perm()
-		return f, nil
+		return originalWrite(f, data)
 	}
-	t.Cleanup(func() { createTrackingConfigTemp = originalCreate })
+	t.Cleanup(func() { writeTrackingConfigFile = originalWrite })
 
 	if err := SaveConfig("a@example.com", &Config{
 		Enabled:   true,
