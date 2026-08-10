@@ -700,6 +700,10 @@ gog calendar events <calendarId> --from 2025-01-01T00:00:00Z --to 2025-01-08T00:
 gog calendar events --all             # Fetch events from all calendars
 gog calendar events --calendars 1,3   # Fetch events from calendar indices (see gog calendar calendars)
 gog calendar events --cal Work --cal Personal  # Fetch events from calendars by name/ID
+# Multi-calendar --plain rows use: TYPE CALENDAR ID START END SUMMARY ERROR
+# With --weekday: TYPE CALENDAR ID START START_DOW END END_DOW SUMMARY ERROR
+# TYPE is "event" or "calendar_error"; errors occupy CALENDAR and ERROR.
+# Multi-calendar --json returns events, per-calendar errors, and a complete boolean.
 gog calendar event <calendarId> <eventId>
 gog calendar get <calendarId> <eventId>                     # Alias for event
 gog calendar search "meeting" --today
