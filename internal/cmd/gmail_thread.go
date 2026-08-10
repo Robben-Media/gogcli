@@ -255,7 +255,7 @@ func writeGmailThreadPlainTSV(
 					a.Filename,
 					"",
 					a.Path,
-					strconv.FormatInt(a.Bytes, 10),
+					strconv.FormatInt(a.Size, 10),
 					strconv.FormatBool(a.Cached),
 				})
 			}
