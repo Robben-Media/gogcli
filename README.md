@@ -619,6 +619,19 @@ gog gmail watch serve --bind 0.0.0.0 --verify-oidc --oidc-email <svc@...> --hook
 gog gmail history --since <historyId>
 ```
 
+`gog gmail get <messageId> --plain` uses the same five-column TSV schema for
+`full`, `metadata`, and `raw` fetch formats:
+
+```text
+RECORD_TYPE	MESSAGE_ID	THREAD_ID	NAME	VALUE
+```
+
+`RECORD_TYPE` is `metadata`, `header`, `attachment`, `body`, or `raw`.
+`NAME` identifies the metadata, header, or attachment field and is empty for
+body and raw records; `VALUE` contains its value. Every row includes the
+message and thread IDs. Tabs, newlines, and carriage returns in free-form
+fields are replaced with spaces so each record occupies one physical TSV row.
+
 Gmail watch (Pub/Sub push):
 - Create Pub/Sub topic + push subscription (OIDC preferred; shared token ok for dev).
 - Full flow + payload details: `docs/watch.md`.
