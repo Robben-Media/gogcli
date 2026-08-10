@@ -18,6 +18,33 @@ type SheetsBatchGetCmd struct {
 	Ranges        []string `arg:"" name:"ranges" help:"Ranges to read (e.g., Sheet1!A1:D10)"`
 }
 
+func writeSheetsValueRangesPlain(ctx context.Context, valueRanges []*sheets.ValueRange) {
+	writeTableRow(ctx, os.Stdout, []string{"RANGE", "ROW_INDEX", "COLUMN_INDEX", "VALUE"})
+	for _, valueRange := range valueRanges {
+		if valueRange == nil {
+			continue
+		}
+		for majorIndex, majorValues := range valueRange.Values {
+			for minorIndex, cell := range majorValues {
+				row, column := majorIndex, minorIndex
+				if strings.EqualFold(valueRange.MajorDimension, "COLUMNS") {
+					row, column = minorIndex, majorIndex
+				}
+				value := ""
+				if cell != nil {
+					value = fmt.Sprintf("%v", cell)
+				}
+				writeTableRow(ctx, os.Stdout, []string{
+					valueRange.Range,
+					fmt.Sprintf("%d", row),
+					fmt.Sprintf("%d", column),
+					value,
+				})
+			}
+		}
+	}
+}
+
 func (c *SheetsBatchGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	account, err := requireAccount(flags)
 	if err != nil {
@@ -51,6 +78,10 @@ func (c *SheetsBatchGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 			"spreadsheetId": resp.SpreadsheetId,
 			"valueRanges":   resp.ValueRanges,
 		})
+	}
+	if outfmt.IsPlain(ctx) {
+		writeSheetsValueRangesPlain(ctx, resp.ValueRanges)
+		return nil
 	}
 
 	u := ui.FromContext(ctx)
