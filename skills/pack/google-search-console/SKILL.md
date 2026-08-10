@@ -23,7 +23,7 @@ GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedi
 | Command | Description | Key Flags |
 |---------|-------------|-----------|
 | `sites` | List verified sites | |
-| `query` | Query search analytics data | `--site-url`, `--start-date`, `--end-date`, `--dimensions`, `--row-limit` |
+| `query` | Query search analytics data | `--site-url`, `--start-date`, `--end-date`, `--dimensions`, `--row-limit`, `--start-row` |
 | `sitemaps` | List sitemaps for a site | `--site-url` |
 | `submit-sitemap` | Submit a sitemap | `--site-url`, `--sitemap-url` |
 | `inspect` | Inspect URL indexing status | `--site-url`, `--url` |
