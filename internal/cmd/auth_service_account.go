@@ -37,7 +37,8 @@ var (
 	createServiceAccountTempFile = func(dir, pattern string) (serviceAccountTempFile, error) {
 		return os.CreateTemp(dir, pattern)
 	}
-	renameServiceAccountFile = os.Rename
+	renameServiceAccountFile         = replaceServiceAccountFile
+	fallbackRenameServiceAccountFile = replaceServiceAccountFile
 )
 
 func parseServiceAccountJSON(data []byte) (serviceAccountJSONInfo, error) {
@@ -65,7 +66,6 @@ type stagedServiceAccountFile struct {
 	backupPath     string
 	existed        bool
 	committed      bool
-	preserveTemp   bool
 	preserveBackup bool
 }
 
@@ -73,13 +73,46 @@ func writeServiceAccountFile(path string, data []byte) error {
 	return writeServiceAccountFiles([]string{path}, data)
 }
 
+func stageServiceAccountFile(path, pattern string, data []byte) (string, error) {
+	tmp, err := createServiceAccountTempFile(filepath.Dir(path), pattern)
+	if err != nil {
+		return "", err
+	}
+	tmpPath := tmp.Name()
+	cleanup := func() {
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
+	}
+	if secureErr := secureServiceAccountFile(tmpPath); secureErr != nil {
+		cleanup()
+		return "", secureErr
+	}
+
+	n, err := tmp.Write(data)
+	if err != nil {
+		cleanup()
+		return "", err
+	}
+	if n != len(data) {
+		cleanup()
+		return "", io.ErrShortWrite
+	}
+	if err := tmp.Chmod(0o600); err != nil {
+		cleanup()
+		return "", err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return "", err
+	}
+	return tmpPath, nil
+}
+
 func writeServiceAccountFiles(paths []string, data []byte) error {
 	files := make([]stagedServiceAccountFile, 0, len(paths))
 	defer func() {
 		for _, file := range files {
-			if !file.preserveTemp {
-				_ = os.Remove(file.tmpPath)
-			}
+			_ = os.Remove(file.tmpPath)
 			if !file.preserveBackup {
 				_ = os.Remove(file.backupPath)
 			}
@@ -87,61 +120,75 @@ func writeServiceAccountFiles(paths []string, data []byte) error {
 	}()
 
 	for _, path := range paths {
-		tmp, err := createServiceAccountTempFile(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
-		if err != nil {
+		file := stagedServiceAccountFile{path: path}
+		info, err := os.Lstat(path)
+		switch {
+		case err == nil:
+			if !info.Mode().IsRegular() {
+				return fmt.Errorf("service account destination is not a regular file: %s", path)
+			}
+			prior, readErr := os.ReadFile(path) //nolint:gosec // stored credential path
+			if readErr != nil {
+				return readErr
+			}
+			file.existed = true
+			file.backupPath, err = stageServiceAccountFile(path, "."+filepath.Base(path)+".backup-*", prior)
+			if err != nil {
+				return err
+			}
+		case os.IsNotExist(err):
+		default:
 			return err
 		}
-		file := stagedServiceAccountFile{path: path, tmpPath: tmp.Name()}
+
+		file.tmpPath, err = stageServiceAccountFile(path, "."+filepath.Base(path)+".tmp-*", data)
+		if err != nil {
+			_ = os.Remove(file.backupPath)
+			return err
+		}
 		files = append(files, file)
-		n, err := tmp.Write(data)
-		if err != nil {
-			_ = tmp.Close()
-			return err
-		}
-		if n != len(data) {
-			_ = tmp.Close()
-			return io.ErrShortWrite
-		}
-		if err := tmp.Chmod(0o600); err != nil {
-			_ = tmp.Close()
-			return err
-		}
-		if err := tmp.Close(); err != nil {
-			return err
-		}
 	}
 
 	rollback := func() error {
 		var rollbackErr error
 		for i := len(files) - 1; i >= 0; i-- {
 			file := &files[i]
-			if file.backupPath != "" {
-				if file.committed {
-					if err := renameServiceAccountFile(file.path, file.tmpPath); err != nil {
+			if !file.committed {
+				continue
+			}
+			if file.existed {
+				if err := renameServiceAccountFile(file.backupPath, file.path); err == nil {
+					file.backupPath = ""
+					continue
+				} else {
+					prior, readErr := os.ReadFile(file.backupPath)
+					if readErr != nil {
 						file.preserveBackup = true
-						rollbackErr = errors.Join(rollbackErr, fmt.Errorf("stage failed install %s for rollback: %w", file.path, err))
+						rollbackErr = errors.Join(rollbackErr, fmt.Errorf("restore %s after initial rename failure; prior credential preserved at %s: %w", file.path, file.backupPath, errors.Join(err, readErr)))
 						continue
 					}
-				}
-				if err := renameServiceAccountFile(file.backupPath, file.path); err != nil {
-					file.preserveBackup = true
-					rollbackErr = errors.Join(rollbackErr, fmt.Errorf("restore %s from %s: %w", file.path, file.backupPath, err))
-					if file.committed {
-						if restoreErr := renameServiceAccountFile(file.tmpPath, file.path); restoreErr != nil {
-							file.preserveTemp = true
-							rollbackErr = errors.Join(rollbackErr, fmt.Errorf("restore failed install %s: %w", file.path, restoreErr))
-						}
+					restorePath, stageErr := stageServiceAccountFile(file.path, "."+filepath.Base(file.path)+".restore-*", prior)
+					if stageErr != nil {
+						file.preserveBackup = true
+						rollbackErr = errors.Join(rollbackErr, fmt.Errorf("restore %s after initial rename failure; prior credential preserved at %s: %w", file.path, file.backupPath, errors.Join(err, stageErr)))
+						continue
+					}
+					restoreErr := renameServiceAccountFile(restorePath, file.path)
+					if restoreErr == nil {
+						continue
+					}
+					if directErr := fallbackRenameServiceAccountFile(restorePath, file.path); directErr == nil {
+						continue
+					} else {
+						_ = os.Remove(restorePath)
+						file.preserveBackup = true
+						rollbackErr = errors.Join(rollbackErr, fmt.Errorf("restore %s after atomic replacements failed; prior credential preserved at %s: %w", file.path, file.backupPath, errors.Join(err, restoreErr, directErr)))
 					}
 					continue
 				}
-				file.backupPath = ""
-				file.committed = false
-				continue
 			}
-			if file.committed && !file.existed {
-				if err := os.Remove(file.path); err != nil && !os.IsNotExist(err) {
-					rollbackErr = errors.Join(rollbackErr, fmt.Errorf("remove newly installed %s: %w", file.path, err))
-				}
+			if err := os.Remove(file.path); err != nil && !os.IsNotExist(err) {
+				rollbackErr = errors.Join(rollbackErr, fmt.Errorf("remove newly installed %s: %w", file.path, err))
 			}
 		}
 		return rollbackErr
@@ -149,37 +196,10 @@ func writeServiceAccountFiles(paths []string, data []byte) error {
 
 	for i := range files {
 		file := &files[i]
-		if _, err := os.Stat(file.path); err == nil {
-			file.existed = true
-			if chmodErr := os.Chmod(file.path, 0o600); chmodErr != nil {
-				return errors.Join(chmodErr, rollback())
-			}
-			backup, createErr := os.CreateTemp(filepath.Dir(file.path), "."+filepath.Base(file.path)+".backup-*")
-			if createErr != nil {
-				return errors.Join(createErr, rollback())
-			}
-			backupPath := backup.Name()
-			if closeErr := backup.Close(); closeErr != nil {
-				_ = os.Remove(backupPath)
-				return errors.Join(closeErr, rollback())
-			}
-			if removeErr := os.Remove(backupPath); removeErr != nil {
-				return errors.Join(removeErr, rollback())
-			}
-			if renameErr := renameServiceAccountFile(file.path, backupPath); renameErr != nil {
-				return errors.Join(renameErr, rollback())
-			}
-			file.backupPath = backupPath
-		} else if !os.IsNotExist(err) {
-			return errors.Join(err, rollback())
-		}
-	}
-
-	for i := range files {
-		file := &files[i]
 		if err := renameServiceAccountFile(file.tmpPath, file.path); err != nil {
 			return errors.Join(err, rollback())
 		}
+		file.tmpPath = ""
 		file.committed = true
 	}
 	return nil
