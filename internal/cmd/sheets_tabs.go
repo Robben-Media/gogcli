@@ -81,7 +81,7 @@ func (c *SheetsSheetAddCmd) Run(ctx context.Context, flags *RootFlags) error {
 			sheetID = fmt.Sprintf("%d", addedProps.SheetId)
 			title = addedProps.Title
 		}
-		writeSheetsStructuralPlain(ctx, "add", resp.SpreadsheetId, sheetID, title, "", "ok")
+		writeSheetsStructuralPlain(ctx, "add", resp.SpreadsheetId, sheetID, title, "")
 		return nil
 	}
 
@@ -137,7 +137,7 @@ func (c *SheetsSheetDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 		})
 	}
 	if outfmt.IsPlain(ctx) {
-		writeSheetsStructuralPlain(ctx, "delete", resp.SpreadsheetId, fmt.Sprintf("%d", c.SheetID), "", "", "ok")
+		writeSheetsStructuralPlain(ctx, "delete", resp.SpreadsheetId, fmt.Sprintf("%d", c.SheetID), "", "")
 		return nil
 	}
 
@@ -219,7 +219,7 @@ func (c *SheetsSheetUpdateCmd) Run(ctx context.Context, flags *RootFlags) error 
 		})
 	}
 	if outfmt.IsPlain(ctx) {
-		writeSheetsStructuralPlain(ctx, "update", resp.SpreadsheetId, fmt.Sprintf("%d", c.SheetID), strings.TrimSpace(c.Title), "", "ok")
+		writeSheetsStructuralPlain(ctx, "update", resp.SpreadsheetId, fmt.Sprintf("%d", c.SheetID), strings.TrimSpace(c.Title), "")
 		return nil
 	}
 

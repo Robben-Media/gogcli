@@ -484,7 +484,7 @@ func (c *SheetsCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 		})
 	}
 	if outfmt.IsPlain(ctx) {
-		writeSheetsStructuralPlain(ctx, "create", resp.SpreadsheetId, "", resp.Properties.Title, "", "ok")
+		writeSheetsStructuralPlain(ctx, "create", resp.SpreadsheetId, "", resp.Properties.Title, "")
 		return nil
 	}
 

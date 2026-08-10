@@ -104,7 +104,7 @@ func (c *SheetsFormatCmd) Run(ctx context.Context, flags *RootFlags) error {
 		if gridRange != nil {
 			sheetID = fmt.Sprintf("%d", gridRange.SheetId)
 		}
-		writeSheetsStructuralPlain(ctx, "format", spreadsheetID, sheetID, "", rangeSpec, "ok")
+		writeSheetsStructuralPlain(ctx, "format", spreadsheetID, sheetID, "", rangeSpec)
 		return nil
 	}
 

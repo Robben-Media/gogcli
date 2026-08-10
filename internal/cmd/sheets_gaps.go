@@ -275,7 +275,7 @@ func (c *SheetsCopyToCmd) Run(ctx context.Context, flags *RootFlags) error {
 		})
 	}
 	if outfmt.IsPlain(ctx) {
-		writeSheetsStructuralPlain(ctx, "copy-to", destID, fmt.Sprintf("%d", resp.SheetId), resp.Title, "", "ok")
+		writeSheetsStructuralPlain(ctx, "copy-to", destID, fmt.Sprintf("%d", resp.SheetId), resp.Title, "")
 		return nil
 	}
 
