@@ -88,6 +88,7 @@ type SearchConsoleQueryCmd struct {
 	EndDate    string `name:"end-date" required:"" help:"End date (YYYY-MM-DD)"`
 	Dimensions string `name:"dimensions" help:"Comma-separated dimensions: query,page,country,device,date" default:""`
 	RowLimit   int64  `name:"row-limit" help:"Max rows to return" default:"25"`
+	StartRow   int64  `name:"start-row" help:"Zero-based index of the first row to return" default:"0"`
 }
 
 func (c *SearchConsoleQueryCmd) Run(ctx context.Context, flags *RootFlags) error {
@@ -109,6 +110,9 @@ func (c *SearchConsoleQueryCmd) Run(ctx context.Context, flags *RootFlags) error
 	if endDate == "" {
 		return usage("--end-date required")
 	}
+	if c.StartRow < 0 {
+		return usage("--start-row must be >= 0")
+	}
 
 	svc, err := newSearchConsoleService(ctx, account)
 	if err != nil {
@@ -116,9 +120,11 @@ func (c *SearchConsoleQueryCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	req := &searchconsole.SearchAnalyticsQueryRequest{
-		StartDate: startDate,
-		EndDate:   endDate,
-		RowLimit:  c.RowLimit,
+		StartDate:       startDate,
+		EndDate:         endDate,
+		RowLimit:        c.RowLimit,
+		StartRow:        c.StartRow,
+		ForceSendFields: []string{"StartRow"},
 	}
 
 	if dims := strings.TrimSpace(c.Dimensions); dims != "" {
