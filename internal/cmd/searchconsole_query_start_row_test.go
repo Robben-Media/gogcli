@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -92,14 +93,15 @@ func TestExecute_SearchConsoleQuery_StartRow_OmittedAndExplicit(t *testing.T) {
 			}
 			newSearchConsoleService = func(context.Context, string) (*searchconsole.Service, error) { return svc, nil }
 
-			args := []string{
+			args := make([]string, 0, 13+len(tc.extraArgs))
+			args = append(args,
 				"--json", "--account", "a@b.com",
 				"search-console", "query",
 				"--site-url", "https://example.com/",
 				"--start-date", "2026-01-01",
 				"--end-date", "2026-01-31",
 				"--dimensions", "query",
-			}
+			)
 			args = append(args, tc.extraArgs...)
 
 			out := captureStdout(t, func() {
@@ -144,7 +146,7 @@ func TestExecute_SearchConsoleQuery_StartRow_NegativeFailsBeforeService(t *testi
 	newSearchConsoleService = func(context.Context, string) (*searchconsole.Service, error) {
 		serviceCalls++
 		t.Fatal("service must not be constructed for negative --start-row")
-		return nil, nil
+		return nil, errors.New("unexpected service construction")
 	}
 
 	err := Execute([]string{
