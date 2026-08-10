@@ -206,15 +206,29 @@ func TestGmailThreadGetAndAttachments_JSON(t *testing.T) {
 		t.Fatalf("unexpected download path: %s", path)
 	}
 
-	plainOut := captureStdout(t, func() {
+	humanOut := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
 			if err := Execute([]string{"--account", "a@b.com", "gmail", "thread", "get", "t1"}); err != nil {
+				t.Fatalf("Execute thread get human: %v", err)
+			}
+		})
+	})
+	if !strings.Contains(humanOut, "Thread contains") {
+		t.Fatalf("unexpected human output: %q", humanOut)
+	}
+
+	plainOut := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--plain", "--account", "a@b.com", "gmail", "thread", "get", "t1"}); err != nil {
 				t.Fatalf("Execute thread get plain: %v", err)
 			}
 		})
 	})
-	if !strings.Contains(plainOut, "Thread contains") {
+	if !strings.HasPrefix(plainOut, "RECORD_TYPE\tTHREAD_ID\tMESSAGE_ID\tNAME\tVALUE\tPATH\tBYTES\tCACHED\n") {
 		t.Fatalf("unexpected plain output: %q", plainOut)
+	}
+	if !strings.Contains(plainOut, "metadata\tt1\t\tmessage_count\t1\t\t\t") {
+		t.Fatalf("missing plain metadata row: %q", plainOut)
 	}
 
 	emptyErr := captureStderr(t, func() {
@@ -224,6 +238,17 @@ func TestGmailThreadGetAndAttachments_JSON(t *testing.T) {
 	})
 	if !strings.Contains(emptyErr, "Empty thread") {
 		t.Fatalf("unexpected empty thread stderr: %q", emptyErr)
+	}
+
+	emptyPlain := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--plain", "--account", "a@b.com", "gmail", "thread", "get", "empty"}); err != nil {
+				t.Fatalf("Execute empty thread plain: %v", err)
+			}
+		})
+	})
+	if emptyPlain != "RECORD_TYPE\tTHREAD_ID\tMESSAGE_ID\tNAME\tVALUE\tPATH\tBYTES\tCACHED\n" {
+		t.Fatalf("unexpected empty plain output: %q", emptyPlain)
 	}
 
 	noAttsOut := captureStdout(t, func() {
