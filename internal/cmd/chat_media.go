@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"google.golang.org/api/chat/v1"
@@ -201,6 +202,14 @@ func (c *ChatMediaDownloadCmd) Run(ctx context.Context, flags *RootFlags) error 
 			"path":     destPath,
 			"size":     n,
 		})
+	}
+
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		writeTableRow(ctx, w, []string{"RESOURCE", "PATH", "BYTES"})
+		writeTableRow(ctx, w, []string{resource, destPath, strconv.FormatInt(n, 10)})
+		return nil
 	}
 
 	u.Out().Printf("Downloaded %s to %s (%s)", resource, destPath, formatDriveSize(n))
