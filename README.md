@@ -951,6 +951,8 @@ gog sheets format <spreadsheetId> 'Sheet1!A1:B2' --format-json '{"textFormat":{"
 gog sheets create "My New Spreadsheet" --sheets "Sheet1,Sheet2"
 ```
 
+`gog sheets metadata <spreadsheetId> --plain` emits headerless TSV with columns `SPREADSHEET_ID`, `SPREADSHEET_TITLE`, `LOCALE`, `TIMEZONE`, `URL`, `SHEET_ID`, `SHEET_TITLE`, `ROWS`, and `COLUMNS`, in that order. It emits one row per sheet; a spreadsheet with no sheets emits one row with the four sheet fields empty.
+
 ### People
 
 ```bash
