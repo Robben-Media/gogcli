@@ -102,9 +102,13 @@ func downloadAttachmentToPath(
 		return "", false, 0, errors.New("missing outPath")
 	}
 
+	resolvedPath, err := resolveDownloadDestination(outPath)
+	if err != nil {
+		return "", false, 0, err
+	}
 	if expectedSize > 0 {
-		if st, err := os.Stat(outPath); err == nil && st.Size() == expectedSize {
-			return outPath, true, st.Size(), nil
+		if st, statErr := os.Stat(resolvedPath); statErr == nil && st.Size() == expectedSize {
+			return resolvedPath, true, st.Size(), nil
 		}
 	}
 
@@ -127,11 +131,11 @@ func downloadAttachmentToPath(
 	if mkdirErr := os.MkdirAll(filepath.Dir(outPath), 0o700); mkdirErr != nil {
 		return "", false, 0, mkdirErr
 	}
-	written, _, err := writeDownloadFile(outPath, 0o600, func(w io.Writer) (int64, error) {
+	written, committedPath, err := writeDownloadFile(outPath, 0o600, func(w io.Writer) (int64, error) {
 		return io.Copy(w, stdbytes.NewReader(data))
 	})
 	if err != nil {
 		return "", false, 0, err
 	}
-	return outPath, false, written, nil
+	return committedPath, false, written, nil
 }

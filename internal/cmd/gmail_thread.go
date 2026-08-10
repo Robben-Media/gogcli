@@ -195,11 +195,6 @@ func writeGmailThreadPlainTSV(
 	attachDir string,
 	svc *gmail.Service,
 ) error {
-	if download {
-		if err := validateGmailThreadPlainDownloadPaths(thread, attachDir); err != nil {
-			return err
-		}
-	}
 	writeTableRow(ctx, w, []string{"RECORD_TYPE", "THREAD_ID", "MESSAGE_ID", "NAME", "VALUE", "PATH", "BYTES", "CACHED"})
 	if thread == nil || len(thread.Messages) == 0 {
 		return nil
@@ -259,7 +254,7 @@ func writeGmailThreadPlainTSV(
 					msgID,
 					a.Filename,
 					"",
-					a.Path,
+					url.PathEscape(a.Path),
 					strconv.FormatInt(a.Bytes, 10),
 					strconv.FormatBool(a.Cached),
 				})
@@ -757,27 +752,6 @@ func attachmentDownloadPath(messageID string, a attachmentInfo, dir string) (str
 	}
 	filename := fmt.Sprintf("%s_%s_%s", messageID, shortID, safeFilename)
 	return filepath.Join(dir, filename), nil
-}
-
-func validateGmailThreadPlainDownloadPaths(thread *gmail.Thread, dir string) error {
-	if thread == nil {
-		return nil
-	}
-	for _, msg := range thread.Messages {
-		if msg == nil {
-			continue
-		}
-		for _, a := range collectAttachments(msg.Payload) {
-			path, err := attachmentDownloadPath(msg.Id, a, dir)
-			if err != nil {
-				return err
-			}
-			if sanitizePlainField(path) != path {
-				return fmt.Errorf("attachment download path contains a tab or newline: %q", path)
-			}
-		}
-	}
-	return nil
 }
 
 func downloadAttachment(ctx context.Context, svc *gmail.Service, messageID string, a attachmentInfo, dir string) (string, bool, int64, error) {

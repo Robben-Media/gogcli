@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -286,8 +287,8 @@ func TestGmailThreadGet_PlainTSV_RecordsAndSanitization(t *testing.T) {
 		t.Fatalf("download NAME = %q", dl[3])
 	}
 	expectedPath := filepath.Join(outDir, "m1_att1_note file.txt")
-	if dl[5] != expectedPath {
-		t.Fatalf("download PATH = %q, want exact path %q", dl[5], expectedPath)
+	if dl[5] != url.PathEscape(expectedPath) {
+		t.Fatalf("download PATH = %q, want encoded exact path %q", dl[5], url.PathEscape(expectedPath))
 	}
 	st, err := os.Stat(expectedPath)
 	if err != nil {
@@ -384,8 +385,9 @@ func TestGmailThreadGet_PlainTSV_DownloadUsesExactBytes(t *testing.T) {
 	t.Fatalf("missing download row: %q", out)
 }
 
-func TestGmailThreadGet_PlainTSV_RejectsUnsafeDownloadPath(t *testing.T) {
-	attachmentRequested := false
+func TestGmailThreadGet_PlainTSV_EncodesCommittedDownloadPath(t *testing.T) {
+	attachmentData := []byte("payload")
+	attachmentB64 := base64.RawURLEncoding.EncodeToString(attachmentData)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/users/me/threads/t-unsafe"):
@@ -397,14 +399,13 @@ func TestGmailThreadGet_PlainTSV_RejectsUnsafeDownloadPath(t *testing.T) {
 						"parts": []map[string]any{{
 							"filename": "unsafe\tname.txt",
 							"mimeType": "text/plain",
-							"body":     map[string]any{"attachmentId": "att-unsafe", "size": 7},
+							"body":     map[string]any{"attachmentId": "att-unsafe", "size": len(attachmentData)},
 						}},
 					},
 				}},
 			})
 		case strings.Contains(r.URL.Path, "/attachments/"):
-			attachmentRequested = true
-			http.Error(w, "must not download", http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": attachmentB64})
 		default:
 			http.NotFound(w, r)
 		}
@@ -412,44 +413,55 @@ func TestGmailThreadGet_PlainTSV_RejectsUnsafeDownloadPath(t *testing.T) {
 	defer srv.Close()
 	setupGmailThreadPlainService(t, srv)
 
-	listed := captureStdout(t, func() {
+	outDir := t.TempDir()
+	requestedPath := filepath.Join(outDir, "m-unsafe_att-unsa_unsafe\tname.txt")
+	committedPath := filepath.Join(outDir, "committed\nname.txt")
+	if err := os.Symlink(filepath.Base(committedPath), requestedPath); err != nil {
+		t.Fatalf("create destination symlink: %v", err)
+	}
+
+	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
 			if err := Execute([]string{
 				"--plain", "--account", "a@b.com", "gmail", "thread", "get", "t-unsafe",
+				"--download", "--out-dir", outDir,
 			}); err != nil {
-				t.Fatalf("list unsafe attachment metadata: %v", err)
+				t.Fatalf("download delimiter-bearing path: %v", err)
 			}
 		})
 	})
-	if !strings.Contains(listed, "attachment\tt-unsafe\tm-unsafe\tunsafe name.txt\ttext/plain\tatt-unsafe\t7\t") {
-		t.Fatalf("unsafe attachment field was not sanitized: %q", listed)
+	if !strings.Contains(out, "attachment\tt-unsafe\tm-unsafe\tunsafe name.txt\ttext/plain\tatt-unsafe\t7\t") {
+		t.Fatalf("unsafe attachment field was not sanitized: %q", out)
 	}
 
-	outDir := t.TempDir()
-	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			err := Execute([]string{
-				"--plain", "--account", "a@b.com", "gmail", "thread", "get", "t-unsafe",
-				"--download", "--out-dir", outDir,
-			})
-			if err == nil || !strings.Contains(err.Error(), "tab or newline") {
-				t.Fatalf("unsafe path error = %v", err)
-			}
-		})
-	})
-	if out != "" {
-		t.Fatalf("unsafe download wrote partial stdout: %q", out)
+	for _, line := range strings.Split(strings.TrimSuffix(out, "\n"), "\n")[1:] {
+		cols := strings.Split(line, "\t")
+		if cols[0] != gmailThreadRecordDownload {
+			continue
+		}
+		decodedPath, err := url.PathUnescape(cols[5])
+		if err != nil {
+			t.Fatalf("decode PATH %q: %v", cols[5], err)
+		}
+		if decodedPath != committedPath {
+			t.Fatalf("decoded PATH = %q, want committed symlink target %q", decodedPath, committedPath)
+		}
+		if strings.ContainsAny(cols[5], "\t\r\n") {
+			t.Fatalf("encoded PATH contains a TSV delimiter: %q", cols[5])
+		}
+		if cols[6] != strconv.Itoa(len(attachmentData)) || cols[7] != "false" {
+			t.Fatalf("download receipt bytes/cached = %q/%q", cols[6], cols[7])
+		}
+		data, readErr := os.ReadFile(committedPath)
+		if readErr != nil {
+			t.Fatalf("read committed target: %v", readErr)
+		}
+		if string(data) != string(attachmentData) {
+			t.Fatalf("committed target data = %q", data)
+		}
+		return
 	}
-	if attachmentRequested {
-		t.Fatal("unsafe path attempted attachment transfer")
-	}
-	entries, err := os.ReadDir(outDir)
-	if err != nil {
-		t.Fatalf("read output dir: %v", err)
-	}
-	if len(entries) != 0 {
-		t.Fatalf("unsafe path created files: %#v", entries)
-	}
+	t.Fatalf("missing download row: %q", out)
 }
 
 func TestGmailThreadGet_PlainTSV_FullBodyAndJSONUnchanged(t *testing.T) {

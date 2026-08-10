@@ -632,6 +632,26 @@ body and raw records; `VALUE` contains its value. Every row includes the
 message and thread IDs. Tabs, newlines, and carriage returns in free-form
 fields are replaced with spaces so each record occupies one physical TSV row.
 
+`gog gmail thread get <threadId> --plain` uses an eight-column TSV schema:
+
+```text
+RECORD_TYPE	THREAD_ID	MESSAGE_ID	NAME	VALUE	PATH	BYTES	CACHED
+```
+
+Record meanings:
+
+- `metadata`: `NAME` is `message_count` and `VALUE` is the count; `MESSAGE_ID` is empty.
+- `header`: `NAME` is `From`, `To`, `Subject`, or `Date`; `VALUE` is the header value.
+- `body`: `VALUE` is the selected body, using the same HTML cleanup and preview truncation as human output.
+- `attachment`: `NAME` is the filename, `VALUE` is the MIME type, `PATH` is the Gmail attachment ID, and `BYTES` is the declared attachment size.
+- `download`: `NAME` is the filename, `PATH` is the committed on-disk path, `BYTES` is the exact committed byte count, and `CACHED` is `true` or `false`.
+
+Every message-specific record includes both IDs. Free-form fields are kept to one
+physical row. Download `PATH` values use reversible URL path-segment percent
+encoding (decode with any URL percent-decoder), so tabs, newlines, and other path
+bytes remain lossless without creating extra TSV rows or columns. An empty thread
+emits only the header.
+
 Gmail watch (Pub/Sub push):
 - Create Pub/Sub topic + push subscription (OIDC preferred; shared token ok for dev).
 - Full flow + payload details: `docs/watch.md`.
