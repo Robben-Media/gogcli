@@ -33,8 +33,8 @@ var (
 	watchCreateTemp = func(dir, pattern string) (watchTempFile, error) {
 		return os.CreateTemp(dir, pattern)
 	}
-	watchRename = os.Rename
-	watchRemove = os.Remove
+	watchReplace = replaceFile
+	watchRemove  = os.Remove
 )
 
 func gmailWatchStatePath(account string) (string, error) {
@@ -99,14 +99,23 @@ func loadGmailWatchStore(account string) (*gmailWatchStore, error) {
 func (s *gmailWatchStore) Get() gmailWatchState {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.state
+	return cloneGmailWatchState(s.state)
+}
+
+func cloneGmailWatchState(state gmailWatchState) gmailWatchState {
+	state.Labels = append([]string(nil), state.Labels...)
+	if state.Hook != nil {
+		hook := *state.Hook
+		state.Hook = &hook
+	}
+	return state
 }
 
 func (s *gmailWatchStore) Update(fn func(*gmailWatchState) error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	next := s.state
+	next := cloneGmailWatchState(s.state)
 	if err := fn(&next); err != nil {
 		return err
 	}
@@ -159,7 +168,7 @@ func (s *gmailWatchStore) saveState(state gmailWatchState) error {
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("close watch state temp: %w", err)
 	}
-	if err := watchRename(tmpName, s.path); err != nil {
+	if err := watchReplace(tmpName, s.path); err != nil {
 		return fmt.Errorf("replace watch state: %w", err)
 	}
 	cleanup = false

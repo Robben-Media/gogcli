@@ -37,20 +37,21 @@ func (f *failingWatchTempFile) Close() error {
 func restoreWatchFS(t *testing.T) {
 	t.Helper()
 	origCreate := watchCreateTemp
-	origRename := watchRename
+	origReplace := watchReplace
 	origRemove := watchRemove
 	t.Cleanup(func() {
 		watchCreateTemp = origCreate
-		watchRename = origRename
+		watchReplace = origReplace
 		watchRemove = origRemove
 	})
 }
 
-func seedWatchStateFile(t *testing.T, path, body string) {
+func seedWatchStateFile(t *testing.T, path string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
+	body := `{"account":"old@example.com","historyId":"1"}` + "\n"
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("seed state: %v", err)
 	}
@@ -75,7 +76,7 @@ func listWatchTemps(t *testing.T, dir string) []string {
 func TestGmailWatchStore_Save_AtomicOwnerOnly(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "acct.json")
-	seedWatchStateFile(t, path, `{"account":"old@example.com","historyId":"1"}`+"\n")
+	seedWatchStateFile(t, path)
 
 	store := &gmailWatchStore{
 		path: path,
@@ -113,7 +114,7 @@ func TestGmailWatchStore_Save_WriteFailurePreservesPriorAndCleansTemp(t *testing
 	dir := t.TempDir()
 	path := filepath.Join(dir, "acct.json")
 	prior := `{"account":"old@example.com","historyId":"1"}` + "\n"
-	seedWatchStateFile(t, path, prior)
+	seedWatchStateFile(t, path)
 
 	watchCreateTemp = func(d, pattern string) (watchTempFile, error) {
 		f, err := os.CreateTemp(d, pattern)
@@ -152,7 +153,7 @@ func TestGmailWatchStore_Save_CloseFailurePreservesPriorAndCleansTemp(t *testing
 	dir := t.TempDir()
 	path := filepath.Join(dir, "acct.json")
 	prior := `{"account":"old@example.com","historyId":"1"}` + "\n"
-	seedWatchStateFile(t, path, prior)
+	seedWatchStateFile(t, path)
 
 	watchCreateTemp = func(d, pattern string) (watchTempFile, error) {
 		f, err := os.CreateTemp(d, pattern)
@@ -191,9 +192,9 @@ func TestGmailWatchStore_Save_ReplaceFailurePreservesPriorAndCleansTemp(t *testi
 	dir := t.TempDir()
 	path := filepath.Join(dir, "acct.json")
 	prior := `{"account":"old@example.com","historyId":"1"}` + "\n"
-	seedWatchStateFile(t, path, prior)
+	seedWatchStateFile(t, path)
 
-	watchRename = func(_, _ string) error { return errTestWatchReplace }
+	watchReplace = func(_, _ string) error { return errTestWatchReplace }
 
 	store := &gmailWatchStore{
 		path:  path,
@@ -224,9 +225,9 @@ func TestGmailWatchStore_Update_MemoryUnchangedOnPersistFailure(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "acct.json")
 	prior := `{"account":"old@example.com","historyId":"1"}` + "\n"
-	seedWatchStateFile(t, path, prior)
+	seedWatchStateFile(t, path)
 
-	watchRename = func(_, _ string) error { return errTestWatchReplace }
+	watchReplace = func(_, _ string) error { return errTestWatchReplace }
 
 	store := &gmailWatchStore{
 		path: path,
@@ -257,12 +258,43 @@ func TestGmailWatchStore_Update_MemoryUnchangedOnPersistFailure(t *testing.T) {
 	}
 }
 
+func TestGmailWatchStore_Update_ReferenceFieldsUnchangedOnPersistFailure(t *testing.T) {
+	restoreWatchFS(t)
+	path := filepath.Join(t.TempDir(), "acct.json")
+	seedWatchStateFile(t, path)
+	watchReplace = func(_, _ string) error { return errTestWatchReplace }
+
+	store := &gmailWatchStore{
+		path: path,
+		state: gmailWatchState{
+			Labels: []string{"INBOX"},
+			Hook:   &gmailWatchHook{URL: "https://old.example"},
+		},
+	}
+	err := store.Update(func(s *gmailWatchState) error {
+		s.Labels[0] = "TRASH"
+		s.Hook.URL = "https://new.example"
+		return nil
+	})
+	if err == nil || !errors.Is(err, errTestWatchReplace) {
+		t.Fatalf("Update error = %v, want %v", err, errTestWatchReplace)
+	}
+
+	got := store.Get()
+	if len(got.Labels) != 1 || got.Labels[0] != "INBOX" {
+		t.Fatalf("labels changed on failed persist: %v", got.Labels)
+	}
+	if got.Hook == nil || got.Hook.URL != "https://old.example" {
+		t.Fatalf("hook changed on failed persist: %+v", got.Hook)
+	}
+}
+
 func TestGmailWatchStore_StartHistoryID_ReturnsSaveError(t *testing.T) {
 	restoreWatchFS(t)
 	dir := t.TempDir()
 	path := filepath.Join(dir, "acct.json")
 
-	watchRename = func(_, _ string) error { return errTestWatchReplace }
+	watchReplace = func(_, _ string) error { return errTestWatchReplace }
 
 	store := &gmailWatchStore{path: path}
 	id, err := store.StartHistoryID("123")
