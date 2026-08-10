@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strconv"
 
 	"github.com/alecthomas/kong"
 	"google.golang.org/api/gmail/v1"
@@ -150,6 +151,11 @@ func (c *GmailImapUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags 
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"imap": updated})
 	}
 
+	if outfmt.IsPlain(ctx) {
+		writePlainImapSetting(ctx, updated)
+		return nil
+	}
+
 	u.Out().Println("IMAP settings updated successfully")
 	u.Out().Printf("enabled\t%t", updated.Enabled)
 	u.Out().Printf("auto_expunge\t%t", updated.AutoExpunge)
@@ -257,6 +263,11 @@ func (c *GmailPopUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"pop": updated})
 	}
 
+	if outfmt.IsPlain(ctx) {
+		writePlainPopSetting(ctx, updated)
+		return nil
+	}
+
 	u.Out().Println("POP settings updated successfully")
 	u.Out().Printf("access_window\t%s", updated.AccessWindow)
 	if updated.Disposition != "" {
@@ -327,7 +338,34 @@ func (c *GmailLanguageUpdateCmd) Run(ctx context.Context, kctx *kong.Context, fl
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"language": updated})
 	}
 
+	if outfmt.IsPlain(ctx) {
+		writePlainLanguageSetting(ctx, updated)
+		return nil
+	}
+
 	u.Out().Println("Language settings updated successfully")
 	u.Out().Printf("display_language\t%s", updated.DisplayLanguage)
 	return nil
+}
+
+func writePlainImapSetting(ctx context.Context, imap *gmail.ImapSettings) {
+	writePlainSettingRows(ctx, "imap", [][2]string{
+		{"enabled", strconv.FormatBool(imap.Enabled)},
+		{"auto_expunge", strconv.FormatBool(imap.AutoExpunge)},
+		{"expunge_behavior", imap.ExpungeBehavior},
+		{"max_folder_size", strconv.FormatInt(imap.MaxFolderSize, 10)},
+	})
+}
+
+func writePlainPopSetting(ctx context.Context, pop *gmail.PopSettings) {
+	writePlainSettingRows(ctx, "pop", [][2]string{
+		{"access_window", pop.AccessWindow},
+		{"disposition", pop.Disposition},
+	})
+}
+
+func writePlainLanguageSetting(ctx context.Context, lang *gmail.LanguageSettings) {
+	writePlainSettingRows(ctx, "language", [][2]string{
+		{"display_language", lang.DisplayLanguage},
+	})
 }

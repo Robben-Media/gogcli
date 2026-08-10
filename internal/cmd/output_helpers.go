@@ -69,6 +69,18 @@ func writePlainRoutingReceipt(ctx context.Context, resourceType, action, resourc
 	)
 }
 
+// writePlainSettingRows writes a multi-row SETTINGS receipt for Gmail account
+// setting mutations under --plain. Header is always SETTING/FIELD/VALUE; each
+// field is one data row. Values are sanitized for tab/newline safety.
+func writePlainSettingRows(ctx context.Context, setting string, fields [][2]string) {
+	w, flush := tableWriter(ctx)
+	defer flush()
+	writeTableRow(ctx, w, []string{"SETTING", "FIELD", "VALUE"})
+	for _, field := range fields {
+		writeTableRow(ctx, w, []string{setting, field[0], field[1]})
+	}
+}
+
 func printNextPageHint(u *ui.UI, nextPageToken string) {
 	printNextPageHintWithFlag(u, "--page", nextPageToken)
 }
