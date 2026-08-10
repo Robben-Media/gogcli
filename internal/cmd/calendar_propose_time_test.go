@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -49,6 +50,144 @@ func TestProposeTimeURLGeneration(t *testing.T) {
 				t.Errorf("URL mismatch:\ngot:  %s\nwant: %s", got, tt.wantURL)
 			}
 		})
+	}
+}
+
+func TestExecute_CalendarProposeTime_PlainKeepsGuidanceOffStdout(t *testing.T) {
+	origNew := newCalendarService
+	origOpen := openProposeTimeBrowser
+	t.Cleanup(func() {
+		newCalendarService = origNew
+		openProposeTimeBrowser = origOpen
+	})
+
+	openProposeTimeBrowser = func(string) error { return errors.New("browser unavailable") }
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || !strings.Contains(r.URL.Path, "/calendars/cal1/events/evt1") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id":      "evt1",
+			"summary": "Team Meeting",
+			"start":   map[string]string{"dateTime": "2026-01-16T19:30:00-08:00"},
+			"end":     map[string]string{"dateTime": "2026-01-16T20:30:00-08:00"},
+			"attendees": []map[string]any{
+				{"email": "a@b.com", "self": true},
+				{"email": "organizer@b.com", "organizer": true},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	svc, err := calendar.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newCalendarService = func(context.Context, string) (*calendar.Service, error) { return svc, nil }
+
+	out := captureStdout(t, func() {
+		errOut := captureStderr(t, func() {
+			if err := Execute([]string{"--plain", "--account", "a@b.com", "calendar", "propose-time", "cal1", "evt1", "--open"}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+		for _, message := range []string{
+			proposeTimeAPILimitation,
+			proposeTimeIssueTrackerURL,
+			proposeTimeUpvoteAction,
+			"Tip: To notify the organizer",
+			"Opening browser...",
+			"Failed to open browser: browser unavailable",
+			"Please open the propose_url manually.",
+		} {
+			if !strings.Contains(errOut, message) {
+				t.Errorf("stderr missing %q: %q", message, errOut)
+			}
+		}
+	})
+
+	want := "KEY\tVALUE\n" +
+		"event_id\tevt1\n" +
+		"calendar_id\tcal1\n" +
+		"summary\tTeam Meeting\n" +
+		"current_start\t2026-01-16T19:30:00-08:00\n" +
+		"current_end\t2026-01-16T20:30:00-08:00\n" +
+		"propose_url\thttps://calendar.google.com/calendar/u/0/r/proposetime/ZXZ0MSBjYWwx\n" +
+		"declined\tfalse\n"
+	if out != want {
+		t.Fatalf("plain stdout = %q, want %q", out, want)
+	}
+}
+
+func TestExecute_CalendarProposeTime_PlainIncludesDeclineAndComment(t *testing.T) {
+	origNew := newCalendarService
+	t.Cleanup(func() { newCalendarService = origNew })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/calendars/cal1/events/evt1") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":      "evt1",
+				"summary": "Team Meeting",
+				"start":   map[string]string{"date": "2026-01-16"},
+				"end":     map[string]string{"date": "2026-01-17"},
+				"attendees": []map[string]any{
+					{"email": "a@b.com", "self": true},
+					{"email": "organizer@b.com", "organizer": true},
+				},
+			})
+		case http.MethodPatch:
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "evt1"})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	svc, err := calendar.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newCalendarService = func(context.Context, string) (*calendar.Service, error) { return svc, nil }
+
+	out := captureStdout(t, func() {
+		errOut := captureStderr(t, func() {
+			if err := Execute([]string{"--plain", "--account", "a@b.com", "calendar", "propose-time", "cal1", "evt1", "--comment", "Can we do 5pm instead?"}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+		if strings.Contains(errOut, "Tip: To notify the organizer") {
+			t.Fatalf("declined stderr contains decline tip: %q", errOut)
+		}
+	})
+
+	want := "KEY\tVALUE\n" +
+		"event_id\tevt1\n" +
+		"calendar_id\tcal1\n" +
+		"summary\tTeam Meeting\n" +
+		"current_start\t2026-01-16\n" +
+		"current_end\t2026-01-17\n" +
+		"propose_url\thttps://calendar.google.com/calendar/u/0/r/proposetime/ZXZ0MSBjYWwx\n" +
+		"declined\ttrue\n" +
+		"comment\tCan we do 5pm instead?\n"
+	if out != want {
+		t.Fatalf("plain stdout = %q, want %q", out, want)
 	}
 }
 
@@ -129,6 +268,9 @@ func TestCalendarProposeTimeCmd_Text(t *testing.T) {
 	}
 	if !strings.Contains(out, "Action: "+proposeTimeUpvoteAction) {
 		t.Errorf("output missing upvote action: %q", out)
+	}
+	if !strings.Contains(out, "Opening browser...") {
+		t.Errorf("output missing browser progress: %q", out)
 	}
 
 	// Verify browser was opened
