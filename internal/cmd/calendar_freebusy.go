@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"google.golang.org/api/calendar/v3"
@@ -63,16 +63,23 @@ func (c *CalendarFreeBusyCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	w, flush := tableWriter(ctx)
 	defer flush()
-	fmt.Fprintln(w, "CALENDAR\tSTATUS\tSTART\tEND\tERROR_DOMAIN\tERROR_REASON")
-	for id, data := range resp.Calendars {
+	writeTableRow(ctx, w, []string{"CALENDAR", "STATUS", "START", "END", "ERROR_DOMAIN", "ERROR_REASON"})
+
+	ids := make([]string, 0, len(resp.Calendars))
+	for id := range resp.Calendars {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		data := resp.Calendars[id]
 		for _, b := range data.Busy {
-			fmt.Fprintf(w, "%s\tbusy\t%s\t%s\t\t\n", id, b.Start, b.End)
+			writeTableRow(ctx, w, []string{id, "busy", b.Start, b.End, "", ""})
 		}
 		for _, e := range data.Errors {
 			if e == nil {
 				continue
 			}
-			fmt.Fprintf(w, "%s\terror\t\t\t%s\t%s\n", id, e.Domain, e.Reason)
+			writeTableRow(ctx, w, []string{id, "error", "", "", e.Domain, e.Reason})
 		}
 	}
 	return nil

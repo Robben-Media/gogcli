@@ -106,32 +106,46 @@ func (c *CalendarConflictsCmd) Run(ctx context.Context, flags *RootFlags) error 
 		return nil
 	}
 
+	if outfmt.IsPlain(ctx) {
+		if incomplete {
+			writeTableRow(ctx, os.Stdout, []string{"STATUS", "CALENDAR", "ERROR_DOMAIN", "ERROR_REASON"})
+			for _, sourceErr := range sourceErrors {
+				writeTableRow(ctx, os.Stdout, []string{"incomplete", sourceErr.Calendar, sourceErr.Domain, sourceErr.Reason})
+			}
+			if len(conflicts) > 0 {
+				writeTableRow(ctx, os.Stdout, []string{"START", "END", "CALENDARS"})
+				for _, conflict := range conflicts {
+					writeTableRow(ctx, os.Stdout, []string{conflict.Start, conflict.End, strings.Join(conflict.Calendars, ", ")})
+				}
+			}
+			return &ExitError{Code: 1, Err: errors.New("incomplete free/busy data: one or more calendars failed")}
+		}
+
+		writeTableRow(ctx, os.Stdout, []string{"START", "END", "CALENDARS"})
+		for _, conflict := range conflicts {
+			writeTableRow(ctx, os.Stdout, []string{conflict.Start, conflict.End, strings.Join(conflict.Calendars, ", ")})
+		}
+		return nil
+	}
+
 	if incomplete {
 		fmt.Printf("INCOMPLETE: source calendar errors\n")
 		tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 		fmt.Fprintln(tw, "CALENDAR\tERROR_DOMAIN\tERROR_REASON")
-		for _, se := range sourceErrors {
-			fmt.Fprintf(tw, "%s\t%s\t%s\n", se.Calendar, se.Domain, se.Reason)
+		for _, sourceErr := range sourceErrors {
+			fmt.Fprintf(tw, "%s\t%s\t%s\n", sourceErr.Calendar, sourceErr.Domain, sourceErr.Reason)
 		}
 		_ = tw.Flush()
 		if len(conflicts) > 0 {
 			fmt.Printf("\nCONFLICTS FOUND: %d\n\n", len(conflicts))
 			tw = tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 			fmt.Fprintln(tw, "START\tEND\tCALENDARS")
-			for _, c := range conflicts {
-				fmt.Fprintf(tw, "%s\t%s\t%s\n", c.Start, c.End, strings.Join(c.Calendars, ", "))
+			for _, conflict := range conflicts {
+				fmt.Fprintf(tw, "%s\t%s\t%s\n", conflict.Start, conflict.End, strings.Join(conflict.Calendars, ", "))
 			}
 			_ = tw.Flush()
 		}
 		return &ExitError{Code: 1, Err: errors.New("incomplete free/busy data: one or more calendars failed")}
-	}
-
-	if outfmt.IsPlain(ctx) {
-		writeTableRow(ctx, os.Stdout, []string{"START", "END", "CALENDARS"})
-		for _, c := range conflicts {
-			writeTableRow(ctx, os.Stdout, []string{c.Start, c.End, strings.Join(c.Calendars, ", ")})
-		}
-		return nil
 	}
 
 	if len(conflicts) == 0 {

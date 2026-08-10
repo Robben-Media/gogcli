@@ -65,20 +65,18 @@ func TestCalendarFreeBusy_TextEmitsBusyAndErrorRows(t *testing.T) {
 	})
 
 	lines := nonEmptyLines(out)
-	if len(lines) < 3 {
-		t.Fatalf("expected header + at least 2 data rows, got %q", out)
+	wantLines := []string{
+		"CALENDAR\tSTATUS\tSTART\tEND\tERROR_DOMAIN\tERROR_REASON",
+		"bad@example.com\terror\t\t\tglobal\tnotFound",
+		"ok@example.com\tbusy\t2025-12-17T10:00:00Z\t2025-12-17T11:00:00Z\t\t",
 	}
-	if lines[0] != "CALENDAR\tSTATUS\tSTART\tEND\tERROR_DOMAIN\tERROR_REASON" {
-		t.Fatalf("unexpected header: %q", lines[0])
+	if len(lines) != len(wantLines) {
+		t.Fatalf("plain rows = %q, want %q", lines, wantLines)
 	}
-
-	wantBusy := "ok@example.com\tbusy\t2025-12-17T10:00:00Z\t2025-12-17T11:00:00Z\t\t"
-	wantError := "bad@example.com\terror\t\t\tglobal\tnotFound"
-	if !containsLine(lines, wantBusy) {
-		t.Fatalf("missing busy row %q in output %q", wantBusy, out)
-	}
-	if !containsLine(lines, wantError) {
-		t.Fatalf("missing error row %q in output %q", wantError, out)
+	for i := range wantLines {
+		if lines[i] != wantLines[i] {
+			t.Fatalf("plain row %d = %q, want %q", i, lines[i], wantLines[i])
+		}
 	}
 }
 
@@ -235,6 +233,31 @@ func TestCalendarConflicts_SourceErrors_JSONIncompleteAndNonzero(t *testing.T) {
 	if parsed.Errors[0].Domain != "global" || parsed.Errors[0].Reason != "notFound" {
 		t.Fatalf("unexpected error fields: %+v", parsed.Errors[0])
 	}
+
+	var plainErr error
+	plainOut := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			plainErr = Execute([]string{
+				"--plain",
+				"--account", "a@b.com",
+				"calendar", "conflicts",
+				"--from", "2024-12-13T09:00:00Z",
+				"--to", "2024-12-13T14:00:00Z",
+				"--calendars", "primary,bad@example.com",
+			})
+		})
+	})
+	if plainErr == nil || ExitCode(plainErr) == 0 {
+		t.Fatalf("plain execution error = %v, want nonzero incomplete result", plainErr)
+	}
+	wantPlain := "STATUS\tCALENDAR\tERROR_DOMAIN\tERROR_REASON\n" +
+		"incomplete\tbad@example.com\tglobal\tnotFound\n"
+	if plainOut != wantPlain {
+		t.Fatalf("plain output = %q, want %q", plainOut, wantPlain)
+	}
+	if strings.Contains(plainOut, "INCOMPLETE:") || strings.Contains(plainOut, "No conflicts found") {
+		t.Fatalf("plain output leaked human prose: %q", plainOut)
+	}
 }
 
 func TestCalendarConflicts_SourceErrors_SuppressCleanNoConflictMessage(t *testing.T) {
@@ -311,13 +334,4 @@ func nonEmptyLines(s string) []string {
 		out = append(out, line)
 	}
 	return out
-}
-
-func containsLine(lines []string, want string) bool {
-	for _, line := range lines {
-		if line == want {
-			return true
-		}
-	}
-	return false
 }
