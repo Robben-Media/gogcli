@@ -5,11 +5,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/steipete/gogcli/internal/tracking"
 )
+
+const testTrackingWorkerName = "gog-email-tracker-a-b-com"
 
 func setupTrackingEnv(t *testing.T) {
 	t.Helper()
@@ -18,6 +21,17 @@ func setupTrackingEnv(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
 	t.Setenv("GOG_KEYRING_BACKEND", "file")
 	t.Setenv("GOG_KEYRING_PASSWORD", "testpass")
+}
+
+func configureTracking(t *testing.T) {
+	t.Helper()
+	_ = captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--account", "a@b.com", "--no-input", "gmail", "track", "setup", "--worker-url", "https://example.com"}); err != nil {
+				t.Fatalf("setup Execute: %v", err)
+			}
+		})
+	})
 }
 
 func TestGmailTrackSetupAndStatus(t *testing.T) {
@@ -46,6 +60,192 @@ func TestGmailTrackSetupAndStatus(t *testing.T) {
 	})
 	if !strings.Contains(statusOut, "configured\ttrue") {
 		t.Fatalf("unexpected status output: %q", statusOut)
+	}
+}
+
+func TestGmailTrackSetup_JSON(t *testing.T) {
+	setupTrackingEnv(t)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--json", "--account", "a@b.com", "--no-input", "gmail", "track", "setup", "--worker-url", "https://example.com"}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	var got map[string]any
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("setup output is not valid JSON: %v\n%s", err, out)
+	}
+	configPath, err := tracking.ConfigPath()
+	if err != nil {
+		t.Fatalf("ConfigPath: %v", err)
+	}
+	want := map[string]any{
+		"configured":      true,
+		"account":         "a@b.com",
+		"configPath":      configPath,
+		"workerURL":       "https://example.com",
+		"workerName":      testTrackingWorkerName,
+		"databaseName":    testTrackingWorkerName,
+		"databaseID":      "",
+		"adminConfigured": true,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("setup JSON = %#v, want %#v", got, want)
+	}
+}
+
+func TestGmailTrackSetup_Plain(t *testing.T) {
+	setupTrackingEnv(t)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--plain", "--account", "a@b.com", "--no-input", "gmail", "track", "setup", "--worker-url", "https://example.com"}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+	configPath, err := tracking.ConfigPath()
+	if err != nil {
+		t.Fatalf("ConfigPath: %v", err)
+	}
+	want := "KEY\tVALUE\n" +
+		"configured\ttrue\n" +
+		"account\ta@b.com\n" +
+		"configPath\t" + configPath + "\n" +
+		"workerURL\thttps://example.com\n" +
+		"workerName\t" + testTrackingWorkerName + "\n" +
+		"databaseName\t" + testTrackingWorkerName + "\n" +
+		"databaseID\t\n" +
+		"adminConfigured\ttrue\n"
+	if out != want {
+		t.Fatalf("setup plain output = %q, want %q", out, want)
+	}
+}
+
+func TestGmailTrackStatus_JSON(t *testing.T) {
+	setupTrackingEnv(t)
+	configureTracking(t)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--json", "--account", "a@b.com", "gmail", "track", "status"}); err != nil {
+				t.Fatalf("status Execute: %v", err)
+			}
+		})
+	})
+	var got map[string]any
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("status output is not valid JSON: %v\n%s", err, out)
+	}
+	configPath, err := tracking.ConfigPath()
+	if err != nil {
+		t.Fatalf("ConfigPath: %v", err)
+	}
+	want := map[string]any{
+		"configured":      true,
+		"account":         "a@b.com",
+		"configPath":      configPath,
+		"workerURL":       "https://example.com",
+		"workerName":      testTrackingWorkerName,
+		"databaseName":    testTrackingWorkerName,
+		"databaseID":      "",
+		"adminConfigured": true,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("status JSON = %#v, want %#v", got, want)
+	}
+}
+
+func TestGmailTrackStatus_Plain(t *testing.T) {
+	setupTrackingEnv(t)
+	configureTracking(t)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--plain", "--account", "a@b.com", "gmail", "track", "status"}); err != nil {
+				t.Fatalf("status Execute: %v", err)
+			}
+		})
+	})
+	configPath, err := tracking.ConfigPath()
+	if err != nil {
+		t.Fatalf("ConfigPath: %v", err)
+	}
+	want := "KEY\tVALUE\n" +
+		"configured\ttrue\n" +
+		"account\ta@b.com\n" +
+		"configPath\t" + configPath + "\n" +
+		"workerURL\thttps://example.com\n" +
+		"workerName\t" + testTrackingWorkerName + "\n" +
+		"databaseName\t" + testTrackingWorkerName + "\n" +
+		"databaseID\t\n" +
+		"adminConfigured\ttrue\n"
+	if out != want {
+		t.Fatalf("status plain output = %q, want %q", out, want)
+	}
+}
+
+func TestGmailTrackStatus_JSONNotConfigured(t *testing.T) {
+	setupTrackingEnv(t)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--json", "--account", "a@b.com", "gmail", "track", "status"}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+	var got map[string]any
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("status output is not valid JSON: %v\n%s", err, out)
+	}
+	configPath, err := tracking.ConfigPath()
+	if err != nil {
+		t.Fatalf("ConfigPath: %v", err)
+	}
+	want := map[string]any{
+		"configured":      false,
+		"account":         "a@b.com",
+		"configPath":      configPath,
+		"workerURL":       "",
+		"workerName":      "",
+		"databaseName":    "",
+		"databaseID":      "",
+		"adminConfigured": false,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unconfigured status JSON = %#v, want %#v", got, want)
+	}
+}
+
+func TestGmailTrackStatus_PlainNotConfigured(t *testing.T) {
+	setupTrackingEnv(t)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--plain", "--account", "a@b.com", "gmail", "track", "status"}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+	configPath, err := tracking.ConfigPath()
+	if err != nil {
+		t.Fatalf("ConfigPath: %v", err)
+	}
+	want := "KEY\tVALUE\n" +
+		"configured\tfalse\n" +
+		"account\ta@b.com\n" +
+		"configPath\t" + configPath + "\n" +
+		"workerURL\t\n" +
+		"workerName\t\n" +
+		"databaseName\t\n" +
+		"databaseID\t\n" +
+		"adminConfigured\tfalse\n"
+	if out != want {
+		t.Fatalf("unconfigured status plain output = %q, want %q", out, want)
 	}
 }
 

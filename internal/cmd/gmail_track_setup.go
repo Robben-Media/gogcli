@@ -12,9 +12,33 @@ import (
 	"strings"
 
 	"github.com/steipete/gogcli/internal/input"
+	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/tracking"
 	"github.com/steipete/gogcli/internal/ui"
 )
+
+type gmailTrackOutput struct {
+	Configured      bool   `json:"configured"`
+	Account         string `json:"account"`
+	ConfigPath      string `json:"configPath"`
+	WorkerURL       string `json:"workerURL"`
+	WorkerName      string `json:"workerName"`
+	DatabaseName    string `json:"databaseName"`
+	DatabaseID      string `json:"databaseID"`
+	AdminConfigured bool   `json:"adminConfigured"`
+}
+
+func writeGmailTrackPlain(ctx context.Context, result gmailTrackOutput) {
+	writeTableRow(ctx, os.Stdout, []string{"KEY", "VALUE"})
+	writeTableRow(ctx, os.Stdout, []string{"configured", boolString(result.Configured)})
+	writeTableRow(ctx, os.Stdout, []string{"account", result.Account})
+	writeTableRow(ctx, os.Stdout, []string{"configPath", result.ConfigPath})
+	writeTableRow(ctx, os.Stdout, []string{"workerURL", result.WorkerURL})
+	writeTableRow(ctx, os.Stdout, []string{"workerName", result.WorkerName})
+	writeTableRow(ctx, os.Stdout, []string{"databaseName", result.DatabaseName})
+	writeTableRow(ctx, os.Stdout, []string{"databaseID", result.DatabaseID})
+	writeTableRow(ctx, os.Stdout, []string{"adminConfigured", boolString(result.AdminConfigured)})
+}
 
 type GmailTrackSetupCmd struct {
 	WorkerName   string `name:"worker-name" help:"Cloudflare Worker name (defaults to gog-email-tracker-<account>)"`
@@ -132,16 +156,35 @@ func (c *GmailTrackSetupCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	path, _ := tracking.ConfigPath()
-	u.Out().Printf("configured\ttrue")
-	u.Out().Printf("account\t%s", account)
-	if path != "" {
-		u.Out().Printf("config_path\t%s", path)
+	result := gmailTrackOutput{
+		Configured:      true,
+		Account:         account,
+		ConfigPath:      path,
+		WorkerURL:       cfg.WorkerURL,
+		WorkerName:      cfg.WorkerName,
+		DatabaseName:    cfg.DatabaseName,
+		DatabaseID:      cfg.DatabaseID,
+		AdminConfigured: true,
 	}
-	u.Out().Printf("worker_url\t%s", cfg.WorkerURL)
-	u.Out().Printf("worker_name\t%s", cfg.WorkerName)
-	u.Out().Printf("database_name\t%s", cfg.DatabaseName)
-	if cfg.DatabaseID != "" {
-		u.Out().Printf("database_id\t%s", cfg.DatabaseID)
+	switch {
+	case outfmt.IsJSON(ctx):
+		if err := outfmt.WriteJSON(os.Stdout, result); err != nil {
+			return err
+		}
+	case outfmt.IsPlain(ctx):
+		writeGmailTrackPlain(ctx, result)
+	default:
+		u.Out().Printf("configured\ttrue")
+		u.Out().Printf("account\t%s", account)
+		if path != "" {
+			u.Out().Printf("config_path\t%s", path)
+		}
+		u.Out().Printf("worker_url\t%s", cfg.WorkerURL)
+		u.Out().Printf("worker_name\t%s", cfg.WorkerName)
+		u.Out().Printf("database_name\t%s", cfg.DatabaseName)
+		if cfg.DatabaseID != "" {
+			u.Out().Printf("database_id\t%s", cfg.DatabaseID)
+		}
 	}
 
 	if !c.Deploy {
