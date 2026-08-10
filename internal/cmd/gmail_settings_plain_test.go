@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,11 +18,28 @@ import (
 // Public CLI seam: Gmail settings update commands under --plain emit a fixed
 // multi-row TSV receipt (SETTING/FIELD/VALUE) with no prose on stdout.
 
-func TestGmailImapUpdateCmd_PlainReceipt(t *testing.T) {
+func useGmailSettingsServer(t *testing.T, handler http.Handler) {
+	t.Helper()
 	origNew := newGmailService
-	t.Cleanup(func() { newGmailService = origNew })
+	srv := httptest.NewServer(handler)
+	t.Cleanup(func() {
+		newGmailService = origNew
+		srv.Close()
+	})
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	svc, err := gmail.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
+}
+
+func TestGmailImapUpdateCmd_PlainReceipt(t *testing.T) {
+	useGmailSettingsServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.URL.Path, "/settings/imap") {
 			http.NotFound(w, r)
 			return
@@ -48,25 +64,10 @@ func TestGmailImapUpdateCmd_PlainReceipt(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	defer srv.Close()
-
-	svc, err := gmail.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
 	flags := &RootFlags{Account: "a@b.com"}
 	out := captureStdout(t, func() {
-		u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-		if uiErr != nil {
-			t.Fatalf("ui.New: %v", uiErr)
-		}
-		ctx := ui.WithUI(context.Background(), u)
+		ctx := ui.WithUI(context.Background(), mustUI(t))
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{Plain: true})
 		if runErr := runKong(t, &GmailImapUpdateCmd{}, []string{
 			"--enable",
@@ -92,11 +93,8 @@ func TestGmailImapUpdateCmd_PlainReceipt(t *testing.T) {
 	}
 }
 
-func TestGmailImapUpdateCmd_PlainReceiptOmitsEmptyOptionalFields(t *testing.T) {
-	origNew := newGmailService
-	t.Cleanup(func() { newGmailService = origNew })
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestGmailImapUpdateCmd_PlainReceiptIncludesZeroValues(t *testing.T) {
+	useGmailSettingsServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.URL.Path, "/settings/imap") {
 			http.NotFound(w, r)
 			return
@@ -118,25 +116,10 @@ func TestGmailImapUpdateCmd_PlainReceiptOmitsEmptyOptionalFields(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	defer srv.Close()
-
-	svc, err := gmail.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
 	flags := &RootFlags{Account: "a@b.com"}
 	out := captureStdout(t, func() {
-		u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-		if uiErr != nil {
-			t.Fatalf("ui.New: %v", uiErr)
-		}
-		ctx := ui.WithUI(context.Background(), u)
+		ctx := ui.WithUI(context.Background(), mustUI(t))
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{Plain: true})
 		if runErr := runKong(t, &GmailImapUpdateCmd{}, []string{"--disable", "--no-auto-expunge"}, ctx, flags); runErr != nil {
 			t.Fatalf("execute: %v", runErr)
@@ -146,17 +129,16 @@ func TestGmailImapUpdateCmd_PlainReceiptOmitsEmptyOptionalFields(t *testing.T) {
 	want := "" +
 		"SETTING\tFIELD\tVALUE\n" +
 		"imap\tenabled\tfalse\n" +
-		"imap\tauto_expunge\tfalse\n"
+		"imap\tauto_expunge\tfalse\n" +
+		"imap\texpunge_behavior\t\n" +
+		"imap\tmax_folder_size\t0\n"
 	if out != want {
-		t.Fatalf("plain imap update optional fields = %q, want %q", out, want)
+		t.Fatalf("plain imap update zero values = %q, want %q", out, want)
 	}
 }
 
 func TestGmailPopUpdateCmd_PlainReceipt(t *testing.T) {
-	origNew := newGmailService
-	t.Cleanup(func() { newGmailService = origNew })
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	useGmailSettingsServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.URL.Path, "/settings/pop") {
 			http.NotFound(w, r)
 			return
@@ -177,25 +159,10 @@ func TestGmailPopUpdateCmd_PlainReceipt(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	defer srv.Close()
-
-	svc, err := gmail.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
 	flags := &RootFlags{Account: "a@b.com"}
 	out := captureStdout(t, func() {
-		u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-		if uiErr != nil {
-			t.Fatalf("ui.New: %v", uiErr)
-		}
-		ctx := ui.WithUI(context.Background(), u)
+		ctx := ui.WithUI(context.Background(), mustUI(t))
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{Plain: true})
 		if runErr := runKong(t, &GmailPopUpdateCmd{}, []string{
 			"--access-window", "allMail",
@@ -218,10 +185,7 @@ func TestGmailPopUpdateCmd_PlainReceipt(t *testing.T) {
 }
 
 func TestGmailLanguageUpdateCmd_PlainReceipt(t *testing.T) {
-	origNew := newGmailService
-	t.Cleanup(func() { newGmailService = origNew })
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	useGmailSettingsServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.URL.Path, "/settings/language") {
 			http.NotFound(w, r)
 			return
@@ -236,25 +200,10 @@ func TestGmailLanguageUpdateCmd_PlainReceipt(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	defer srv.Close()
-
-	svc, err := gmail.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
 	flags := &RootFlags{Account: "a@b.com"}
 	out := captureStdout(t, func() {
-		u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-		if uiErr != nil {
-			t.Fatalf("ui.New: %v", uiErr)
-		}
-		ctx := ui.WithUI(context.Background(), u)
+		ctx := ui.WithUI(context.Background(), mustUI(t))
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{Plain: true})
 		if runErr := runKong(t, &GmailLanguageUpdateCmd{}, []string{"--display-language", "ja"}, ctx, flags); runErr != nil {
 			t.Fatalf("execute: %v", runErr)
@@ -273,10 +222,7 @@ func TestGmailLanguageUpdateCmd_PlainReceipt(t *testing.T) {
 }
 
 func TestGmailAutoForwardUpdateCmd_PlainReceipt(t *testing.T) {
-	origNew := newGmailService
-	t.Cleanup(func() { newGmailService = origNew })
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	useGmailSettingsServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.URL.Path, "/settings/autoForwarding") {
 			http.NotFound(w, r)
 			return
@@ -299,25 +245,10 @@ func TestGmailAutoForwardUpdateCmd_PlainReceipt(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	defer srv.Close()
-
-	svc, err := gmail.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
 	flags := &RootFlags{Account: "a@b.com"}
 	out := captureStdout(t, func() {
-		u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-		if uiErr != nil {
-			t.Fatalf("ui.New: %v", uiErr)
-		}
-		ctx := ui.WithUI(context.Background(), u)
+		ctx := ui.WithUI(context.Background(), mustUI(t))
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{Plain: true})
 		if runErr := runKong(t, &GmailAutoForwardUpdateCmd{}, []string{
 			"--enable",
@@ -341,11 +272,8 @@ func TestGmailAutoForwardUpdateCmd_PlainReceipt(t *testing.T) {
 	}
 }
 
-func TestGmailAutoForwardUpdateCmd_PlainReceiptOmitsEmptyOptionalFields(t *testing.T) {
-	origNew := newGmailService
-	t.Cleanup(func() { newGmailService = origNew })
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestGmailAutoForwardUpdateCmd_PlainReceiptIncludesEmptyValues(t *testing.T) {
+	useGmailSettingsServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.URL.Path, "/settings/autoForwarding") {
 			http.NotFound(w, r)
 			return
@@ -364,25 +292,10 @@ func TestGmailAutoForwardUpdateCmd_PlainReceiptOmitsEmptyOptionalFields(t *testi
 			http.NotFound(w, r)
 		}
 	}))
-	defer srv.Close()
-
-	svc, err := gmail.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
 	flags := &RootFlags{Account: "a@b.com"}
 	out := captureStdout(t, func() {
-		u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-		if uiErr != nil {
-			t.Fatalf("ui.New: %v", uiErr)
-		}
-		ctx := ui.WithUI(context.Background(), u)
+		ctx := ui.WithUI(context.Background(), mustUI(t))
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{Plain: true})
 		if runErr := runKong(t, &GmailAutoForwardUpdateCmd{}, []string{"--disable"}, ctx, flags); runErr != nil {
 			t.Fatalf("execute: %v", runErr)
@@ -391,17 +304,16 @@ func TestGmailAutoForwardUpdateCmd_PlainReceiptOmitsEmptyOptionalFields(t *testi
 
 	want := "" +
 		"SETTING\tFIELD\tVALUE\n" +
-		"auto_forwarding\tenabled\tfalse\n"
+		"auto_forwarding\tenabled\tfalse\n" +
+		"auto_forwarding\temail_address\t\n" +
+		"auto_forwarding\tdisposition\t\n"
 	if out != want {
-		t.Fatalf("plain auto-forward optional fields = %q, want %q", out, want)
+		t.Fatalf("plain auto-forward empty values = %q, want %q", out, want)
 	}
 }
 
 func TestGmailVacationUpdateCmd_PlainReceiptSanitizesFreeForm(t *testing.T) {
-	origNew := newGmailService
-	t.Cleanup(func() { newGmailService = origNew })
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	useGmailSettingsServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.URL.Path, "/settings/vacation") {
 			http.NotFound(w, r)
 			return
@@ -427,25 +339,10 @@ func TestGmailVacationUpdateCmd_PlainReceiptSanitizesFreeForm(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	defer srv.Close()
-
-	svc, err := gmail.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
 	flags := &RootFlags{Account: "a@b.com"}
 	out := captureStdout(t, func() {
-		u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-		if uiErr != nil {
-			t.Fatalf("ui.New: %v", uiErr)
-		}
-		ctx := ui.WithUI(context.Background(), u)
+		ctx := ui.WithUI(context.Background(), mustUI(t))
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{Plain: true})
 		if runErr := runKong(t, &GmailVacationUpdateCmd{}, []string{
 			"--enable",
@@ -480,11 +377,8 @@ func TestGmailVacationUpdateCmd_PlainReceiptSanitizesFreeForm(t *testing.T) {
 	}
 }
 
-func TestGmailVacationUpdateCmd_PlainReceiptOmitsZeroTimes(t *testing.T) {
-	origNew := newGmailService
-	t.Cleanup(func() { newGmailService = origNew })
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestGmailVacationUpdateCmd_PlainReceiptIncludesZeroTimes(t *testing.T) {
+	useGmailSettingsServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.URL.Path, "/settings/vacation") {
 			http.NotFound(w, r)
 			return
@@ -508,51 +402,33 @@ func TestGmailVacationUpdateCmd_PlainReceiptOmitsZeroTimes(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	defer srv.Close()
-
-	svc, err := gmail.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
 	flags := &RootFlags{Account: "a@b.com"}
 	out := captureStdout(t, func() {
-		u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-		if uiErr != nil {
-			t.Fatalf("ui.New: %v", uiErr)
-		}
-		ctx := ui.WithUI(context.Background(), u)
+		ctx := ui.WithUI(context.Background(), mustUI(t))
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{Plain: true})
 		if runErr := runKong(t, &GmailVacationUpdateCmd{}, []string{"--disable"}, ctx, flags); runErr != nil {
 			t.Fatalf("execute: %v", runErr)
 		}
 	})
 
-	// Empty free-form fields are still emitted (server response fields);
-	// optional start/end times are omitted when zero.
 	want := "" +
 		"SETTING\tFIELD\tVALUE\n" +
 		"vacation\tenable_auto_reply\tfalse\n" +
 		"vacation\tresponse_subject\t\n" +
 		"vacation\tresponse_body_html\t\n" +
 		"vacation\tresponse_body_plain_text\t\n" +
+		"vacation\tstart_time\t0\n" +
+		"vacation\tend_time\t0\n" +
 		"vacation\trestrict_to_contacts\tfalse\n" +
 		"vacation\trestrict_to_domain\tfalse\n"
 	if out != want {
-		t.Fatalf("plain vacation optional times = %q, want %q", out, want)
+		t.Fatalf("plain vacation zero times = %q, want %q", out, want)
 	}
 }
 
 func TestGmailImapUpdateCmd_JSONUnchanged(t *testing.T) {
-	origNew := newGmailService
-	t.Cleanup(func() { newGmailService = origNew })
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	useGmailSettingsServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.URL.Path, "/settings/imap") {
 			http.NotFound(w, r)
 			return
@@ -567,25 +443,10 @@ func TestGmailImapUpdateCmd_JSONUnchanged(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	defer srv.Close()
-
-	svc, err := gmail.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
 	flags := &RootFlags{Account: "a@b.com"}
 	out := captureStdout(t, func() {
-		u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-		if uiErr != nil {
-			t.Fatalf("ui.New: %v", uiErr)
-		}
-		ctx := ui.WithUI(context.Background(), u)
+		ctx := ui.WithUI(context.Background(), mustUI(t))
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{JSON: true})
 		if runErr := runKong(t, &GmailImapUpdateCmd{}, []string{"--enable"}, ctx, flags); runErr != nil {
 			t.Fatalf("execute: %v", runErr)

@@ -349,27 +349,19 @@ func (c *GmailLanguageUpdateCmd) Run(ctx context.Context, kctx *kong.Context, fl
 }
 
 func writePlainImapSetting(ctx context.Context, imap *gmail.ImapSettings) {
-	fields := [][2]string{
+	writePlainSettingRows(ctx, "imap", [][2]string{
 		{"enabled", strconv.FormatBool(imap.Enabled)},
 		{"auto_expunge", strconv.FormatBool(imap.AutoExpunge)},
-	}
-	if imap.ExpungeBehavior != "" {
-		fields = append(fields, [2]string{"expunge_behavior", imap.ExpungeBehavior})
-	}
-	if imap.MaxFolderSize > 0 {
-		fields = append(fields, [2]string{"max_folder_size", strconv.FormatInt(imap.MaxFolderSize, 10)})
-	}
-	writePlainSettingRows(ctx, "imap", fields)
+		{"expunge_behavior", imap.ExpungeBehavior},
+		{"max_folder_size", strconv.FormatInt(imap.MaxFolderSize, 10)},
+	})
 }
 
 func writePlainPopSetting(ctx context.Context, pop *gmail.PopSettings) {
-	fields := [][2]string{
+	writePlainSettingRows(ctx, "pop", [][2]string{
 		{"access_window", pop.AccessWindow},
-	}
-	if pop.Disposition != "" {
-		fields = append(fields, [2]string{"disposition", pop.Disposition})
-	}
-	writePlainSettingRows(ctx, "pop", fields)
+		{"disposition", pop.Disposition},
+	})
 }
 
 func writePlainLanguageSetting(ctx context.Context, lang *gmail.LanguageSettings) {

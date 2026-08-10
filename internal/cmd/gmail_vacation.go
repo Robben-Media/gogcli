@@ -197,21 +197,14 @@ func stripHTML(html string) string {
 }
 
 func writePlainVacationSetting(ctx context.Context, vacation *gmail.VacationSettings) {
-	fields := [][2]string{
+	writePlainSettingRows(ctx, "vacation", [][2]string{
 		{"enable_auto_reply", strconv.FormatBool(vacation.EnableAutoReply)},
 		{"response_subject", vacation.ResponseSubject},
 		{"response_body_html", vacation.ResponseBodyHtml},
 		{"response_body_plain_text", vacation.ResponseBodyPlainText},
-	}
-	if vacation.StartTime != 0 {
-		fields = append(fields, [2]string{"start_time", strconv.FormatInt(vacation.StartTime, 10)})
-	}
-	if vacation.EndTime != 0 {
-		fields = append(fields, [2]string{"end_time", strconv.FormatInt(vacation.EndTime, 10)})
-	}
-	fields = append(fields,
-		[2]string{"restrict_to_contacts", strconv.FormatBool(vacation.RestrictToContacts)},
-		[2]string{"restrict_to_domain", strconv.FormatBool(vacation.RestrictToDomain)},
-	)
-	writePlainSettingRows(ctx, "vacation", fields)
+		{"start_time", strconv.FormatInt(vacation.StartTime, 10)},
+		{"end_time", strconv.FormatInt(vacation.EndTime, 10)},
+		{"restrict_to_contacts", strconv.FormatBool(vacation.RestrictToContacts)},
+		{"restrict_to_domain", strconv.FormatBool(vacation.RestrictToDomain)},
+	})
 }

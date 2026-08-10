@@ -137,14 +137,9 @@ func (c *GmailAutoForwardUpdateCmd) Run(ctx context.Context, kctx *kong.Context,
 }
 
 func writePlainAutoForwardSetting(ctx context.Context, autoForward *gmail.AutoForwarding) {
-	fields := [][2]string{
+	writePlainSettingRows(ctx, "auto_forwarding", [][2]string{
 		{"enabled", strconv.FormatBool(autoForward.Enabled)},
-	}
-	if autoForward.EmailAddress != "" {
-		fields = append(fields, [2]string{"email_address", autoForward.EmailAddress})
-	}
-	if autoForward.Disposition != "" {
-		fields = append(fields, [2]string{"disposition", autoForward.Disposition})
-	}
-	writePlainSettingRows(ctx, "auto_forwarding", fields)
+		{"email_address", autoForward.EmailAddress},
+		{"disposition", autoForward.Disposition},
+	})
 }
