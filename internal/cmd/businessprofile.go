@@ -35,15 +35,13 @@ func writeBusinessProfileMutationReceipt(ctx context.Context, action, resource, 
 	}
 
 	if outfmt.IsPlain(ctx) {
-		w, flush := tableWriter(ctx)
-		defer flush()
+		headers := []string{"ACTION", "RESOURCE", "SUCCESS"}
+		fields := []string{action, resource, "true"}
 		if destination != "" {
-			fmt.Fprintln(w, "ACTION\tRESOURCE\tSUCCESS\tDESTINATION")
-			writeTableRow(ctx, w, []string{action, resource, "true", destination})
-		} else {
-			fmt.Fprintln(w, "ACTION\tRESOURCE\tSUCCESS")
-			writeTableRow(ctx, w, []string{action, resource, "true"})
+			headers = append(headers, "DESTINATION")
+			fields = append(fields, destination)
 		}
+		writePlainReceipt(ctx, headers, fields)
 		return true, nil
 	}
 
