@@ -103,6 +103,13 @@ func (c *GmailLabelsCreateCmd) Run(ctx context.Context, flags *RootFlags) error 
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"label": label})
 	}
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		writeTableRow(ctx, w, []string{"ID", "NAME"})
+		writeTableRow(ctx, w, []string{label.Id, label.Name})
+		return nil
+	}
 	u.Out().Printf("Created label: %s (id: %s)", label.Name, label.Id)
 	return nil
 }
