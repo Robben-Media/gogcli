@@ -20,23 +20,23 @@ var (
 	replaceDownloadFile = replaceFile
 )
 
-func writeDownloadFile(destPath string, newFileMode os.FileMode, write func(io.Writer) (int64, error)) (int64, error) {
+func writeDownloadFile(destPath string, newFileMode os.FileMode, write func(io.Writer) (int64, error)) (int64, string, error) {
 	resolvedPath, err := resolveDownloadDestination(destPath)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 
 	finalMode := modeForNewDownload(newFileMode)
 	if info, statErr := os.Stat(resolvedPath); statErr == nil {
 		finalMode = info.Mode().Perm()
 	} else if !os.IsNotExist(statErr) {
-		return 0, statErr
+		return 0, "", statErr
 	}
 
 	dir := filepath.Dir(resolvedPath)
 	temp, err := createDownloadTempFile(dir, "."+filepath.Base(resolvedPath)+".tmp-*")
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	tempPath := temp.Name()
 	closed := false
@@ -52,20 +52,20 @@ func writeDownloadFile(destPath string, newFileMode os.FileMode, write func(io.W
 
 	n, err := write(temp)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	if err := temp.Close(); err != nil {
-		return 0, fmt.Errorf("closing temporary file: %w", err)
+		return 0, "", fmt.Errorf("closing temporary file: %w", err)
 	}
 	closed = true
 	if err := os.Chmod(tempPath, finalMode); err != nil {
-		return 0, fmt.Errorf("setting destination permissions: %w", err)
+		return 0, "", fmt.Errorf("setting destination permissions: %w", err)
 	}
 	if err := replaceDownloadFile(tempPath, resolvedPath); err != nil {
-		return 0, fmt.Errorf("replacing destination: %w", err)
+		return 0, "", fmt.Errorf("replacing destination: %w", err)
 	}
 	committed = true
-	return n, nil
+	return n, resolvedPath, nil
 }
 
 func applyDownloadModeMask(mode, mask os.FileMode) os.FileMode {
