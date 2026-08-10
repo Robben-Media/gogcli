@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"google.golang.org/api/gmail/v1"
@@ -115,6 +117,9 @@ func (c *GmailDraftsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 		if outfmt.IsJSON(ctx) {
 			return outfmt.WriteJSON(os.Stdout, map[string]any{"draft": draft})
 		}
+		if outfmt.IsPlain(ctx) {
+			return writeGmailDraftGetPlain(ctx, os.Stdout, draft, nil, nil)
+		}
 		u.Err().Println("Empty draft")
 		return nil
 	}
@@ -123,17 +128,25 @@ func (c *GmailDraftsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if outfmt.IsJSON(ctx) {
 		out := map[string]any{"draft": draft}
 		if c.Download {
-			attachDir, err := config.EnsureGmailAttachmentsDir()
-			if err != nil {
-				return err
-			}
-			downloads, err := downloadAttachmentOutputs(ctx, svc, msg.Id, collectAttachments(msg.Payload), attachDir)
-			if err != nil {
-				return err
+			downloads, downloadErr := downloadDraftAttachments(ctx, svc, msg.Id, collectAttachments(msg.Payload))
+			if downloadErr != nil {
+				return downloadErr
 			}
 			out["downloaded"] = attachmentDownloadDraftOutputs(downloads)
 		}
 		return outfmt.WriteJSON(os.Stdout, out)
+	}
+
+	attachments := collectAttachments(msg.Payload)
+	if outfmt.IsPlain(ctx) {
+		var downloads []attachmentDownloadOutput
+		if c.Download && msg.Id != "" && len(attachments) > 0 {
+			downloads, err = downloadDraftAttachments(ctx, svc, msg.Id, attachments)
+			if err != nil {
+				return err
+			}
+		}
+		return writeGmailDraftGetPlain(ctx, os.Stdout, draft, attachments, downloads)
 	}
 
 	u.Out().Printf("Draft-ID: %s", draft.Id)
@@ -150,17 +163,12 @@ func (c *GmailDraftsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 		u.Out().Println("")
 	}
 
-	attachments := collectAttachments(msg.Payload)
 	printAttachmentSection(u.Out(), attachments)
 
 	if c.Download && msg.Id != "" && len(attachments) > 0 {
-		attachDir, err := config.EnsureGmailAttachmentsDir()
-		if err != nil {
-			return err
-		}
-		downloads, err := downloadAttachmentOutputs(ctx, svc, msg.Id, attachments, attachDir)
-		if err != nil {
-			return err
+		downloads, downloadErr := downloadDraftAttachments(ctx, svc, msg.Id, attachments)
+		if downloadErr != nil {
+			return downloadErr
 		}
 		for _, a := range downloads {
 			if a.Cached {
@@ -169,6 +177,72 @@ func (c *GmailDraftsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 				u.Out().Successf("Saved: %s", a.Path)
 			}
 		}
+	}
+
+	return nil
+}
+
+func downloadDraftAttachments(
+	ctx context.Context,
+	svc *gmail.Service,
+	messageID string,
+	attachments []attachmentInfo,
+) ([]attachmentDownloadOutput, error) {
+	attachDir, err := config.EnsureGmailAttachmentsDir()
+	if err != nil {
+		return nil, err
+	}
+	return downloadAttachmentOutputs(ctx, svc, messageID, attachments, attachDir)
+}
+
+func writeGmailDraftGetPlain(
+	ctx context.Context,
+	w io.Writer,
+	draft *gmail.Draft,
+	attachments []attachmentInfo,
+	downloads []attachmentDownloadOutput,
+) error {
+	writeTableRow(ctx, w, []string{"RECORD_TYPE", "DRAFT_ID", "MESSAGE_ID", "NAME", "VALUE", "PATH", "BYTES", "CACHED"})
+	if draft == nil || draft.Message == nil {
+		return nil
+	}
+
+	draftID := draft.Id
+	msg := draft.Message
+	messageID := msg.Id
+
+	writeDraftPlainRecord := func(recordType, name, value, path, bytes, cached string) {
+		writeTableRow(ctx, w, []string{recordType, draftID, messageID, name, value, path, bytes, cached})
+	}
+
+	for _, name := range []string{"To", "Cc", "Bcc", "Subject"} {
+		writeDraftPlainRecord("metadata", name, headerValue(msg.Payload, name), "", "", "")
+	}
+
+	if body := bestBodyText(msg.Payload); body != "" {
+		writeDraftPlainRecord("body", "", body, "", "", "")
+	}
+
+	for _, a := range attachments {
+		writeDraftPlainRecord(
+			"attachment",
+			a.Filename,
+			a.MimeType,
+			"",
+			strconv.FormatInt(a.Size, 10),
+			"",
+		)
+	}
+
+	for _, a := range downloads {
+		writeDraftPlainRecord(
+			"download",
+			a.Filename,
+			"",
+			a.Path,
+			strconv.FormatInt(a.Bytes, 10),
+			boolString(a.Cached),
+		)
 	}
 
 	return nil
