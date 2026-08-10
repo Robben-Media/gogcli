@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strconv"
 
 	"github.com/alecthomas/kong"
 	"google.golang.org/api/gmail/v1"
@@ -119,6 +120,11 @@ func (c *GmailAutoForwardUpdateCmd) Run(ctx context.Context, kctx *kong.Context,
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"autoForwarding": updated})
 	}
 
+	if outfmt.IsPlain(ctx) {
+		writePlainAutoForwardSetting(ctx, updated)
+		return nil
+	}
+
 	u.Out().Println("Auto-forwarding settings updated successfully")
 	u.Out().Printf("enabled\t%t", updated.Enabled)
 	if updated.EmailAddress != "" {
@@ -128,4 +134,17 @@ func (c *GmailAutoForwardUpdateCmd) Run(ctx context.Context, kctx *kong.Context,
 		u.Out().Printf("disposition\t%s", updated.Disposition)
 	}
 	return nil
+}
+
+func writePlainAutoForwardSetting(ctx context.Context, autoForward *gmail.AutoForwarding) {
+	fields := [][2]string{
+		{"enabled", strconv.FormatBool(autoForward.Enabled)},
+	}
+	if autoForward.EmailAddress != "" {
+		fields = append(fields, [2]string{"email_address", autoForward.EmailAddress})
+	}
+	if autoForward.Disposition != "" {
+		fields = append(fields, [2]string{"disposition", autoForward.Disposition})
+	}
+	writePlainSettingRows(ctx, "auto_forwarding", fields)
 }

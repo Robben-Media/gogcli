@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/alecthomas/kong"
@@ -147,6 +148,11 @@ func (c *GmailVacationUpdateCmd) Run(ctx context.Context, kctx *kong.Context, fl
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"vacation": updated})
 	}
 
+	if outfmt.IsPlain(ctx) {
+		writePlainVacationSetting(ctx, updated)
+		return nil
+	}
+
 	u.Out().Println("Vacation responder updated successfully")
 	u.Out().Printf("enable_auto_reply\t%t", updated.EnableAutoReply)
 	u.Out().Printf("response_subject\t%s", updated.ResponseSubject)
@@ -188,4 +194,24 @@ func stripHTML(html string) string {
 		}
 	}
 	return string(out)
+}
+
+func writePlainVacationSetting(ctx context.Context, vacation *gmail.VacationSettings) {
+	fields := [][2]string{
+		{"enable_auto_reply", strconv.FormatBool(vacation.EnableAutoReply)},
+		{"response_subject", vacation.ResponseSubject},
+		{"response_body_html", vacation.ResponseBodyHtml},
+		{"response_body_plain_text", vacation.ResponseBodyPlainText},
+	}
+	if vacation.StartTime != 0 {
+		fields = append(fields, [2]string{"start_time", strconv.FormatInt(vacation.StartTime, 10)})
+	}
+	if vacation.EndTime != 0 {
+		fields = append(fields, [2]string{"end_time", strconv.FormatInt(vacation.EndTime, 10)})
+	}
+	fields = append(fields,
+		[2]string{"restrict_to_contacts", strconv.FormatBool(vacation.RestrictToContacts)},
+		[2]string{"restrict_to_domain", strconv.FormatBool(vacation.RestrictToDomain)},
+	)
+	writePlainSettingRows(ctx, "vacation", fields)
 }
