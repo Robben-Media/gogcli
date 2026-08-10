@@ -30,6 +30,10 @@ const (
 
 var rootHelpDescription = helpDescription
 
+// maybeNotifyUpdate is the background update-check seam used by Execute.
+// Tests override it to assert which command paths invoke the notifier.
+var maybeNotifyUpdate = selfupdate.MaybeNotify
+
 type RootFlags struct {
 	Color          string `help:"Color output: auto|always|never" default:"${color}"`
 	Account        string `help:"Account email for API commands (gmail/calendar/chat/classroom/drive/docs/slides/contacts/tasks/people/sheets)"`
@@ -159,11 +163,15 @@ func Execute(args []string) (err error) {
 	kctx.Bind(&cli.RootFlags)
 
 	// Throttled non-fatal update notice for humans and agents (stderr only).
-	if notice := selfupdate.MaybeNotify(ctx, &selfupdate.Client{
-		Repo:  strings.TrimSpace(os.Getenv("GOG_UPDATE_REPO")),
-		Token: envOr("GITHUB_TOKEN", envOr("GH_TOKEN", "")),
-	}, version, 0); notice != "" {
-		_, _ = fmt.Fprintln(os.Stderr, notice)
+	// Shell completion must stay fast/deterministic: never touch update cache
+	// or the release service for completion-script generation or __complete.
+	if !isCompletionCommand(kctx.Command()) {
+		if notice := maybeNotifyUpdate(ctx, &selfupdate.Client{
+			Repo:  strings.TrimSpace(os.Getenv("GOG_UPDATE_REPO")),
+			Token: envOr("GITHUB_TOKEN", envOr("GH_TOKEN", "")),
+		}, version, 0); notice != "" {
+			_, _ = fmt.Fprintln(os.Stderr, notice)
+		}
 	}
 
 	err = kctx.Run()
@@ -195,6 +203,21 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// isCompletionCommand reports whether the parsed kong command is shell-completion
+// related and must bypass background update checks.
+func isCompletionCommand(command string) bool {
+	parts := strings.Fields(command)
+	if len(parts) == 0 {
+		return false
+	}
+	switch parts[0] {
+	case "completion", "__complete":
+		return true
+	default:
+		return false
+	}
 }
 
 func boolString(v bool) string {
