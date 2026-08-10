@@ -92,6 +92,7 @@ func (c *GmailWatchStartCmd) Run(ctx context.Context, kctx *kong.Context, flags 
 	}); err != nil {
 		return err
 	}
+	removeMatchingLegacyGmailWatchState(account, store.path)
 
 	return writeWatchState(ctx, state)
 }
@@ -182,6 +183,7 @@ func (c *GmailWatchStopCmd) Run(ctx context.Context, flags *RootFlags) error {
 	store, err := newGmailWatchStore(account)
 	if err == nil && store.path != "" {
 		_ = os.Remove(store.path)
+		removeMatchingLegacyGmailWatchState(account, store.path)
 	}
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"stopped": true})
