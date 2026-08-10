@@ -54,12 +54,9 @@ func TestExecute_SearchConsoleQuery_StartRow_OmittedAndExplicit(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			origNew := newSearchConsoleService
-			t.Cleanup(func() { newSearchConsoleService = origNew })
-
 			var gotStartRow int64
 			var sawBody, sawStartRow bool
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			stubSearchConsoleService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if strings.Contains(r.URL.Path, "searchAnalytics/query") && r.Method == http.MethodPost {
 					var body map[string]json.RawMessage
 					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -88,17 +85,6 @@ func TestExecute_SearchConsoleQuery_StartRow_OmittedAndExplicit(t *testing.T) {
 				}
 				http.NotFound(w, r)
 			}))
-			t.Cleanup(srv.Close)
-
-			svc, err := searchconsole.NewService(context.Background(),
-				option.WithoutAuthentication(),
-				option.WithHTTPClient(srv.Client()),
-				option.WithEndpoint(srv.URL+"/"),
-			)
-			if err != nil {
-				t.Fatalf("NewService: %v", err)
-			}
-			newSearchConsoleService = func(context.Context, string) (*searchconsole.Service, error) { return svc, nil }
 
 			args := make([]string, 0, 13+len(tc.extraArgs))
 			args = append(args,
@@ -188,11 +174,8 @@ func TestExecute_SearchConsoleQuery_StartRow_NegativeFailsBeforeService(t *testi
 }
 
 func TestExecute_SearchConsoleQuery_StartRow_PlainShapeUnchanged(t *testing.T) {
-	origNew := newSearchConsoleService
-	t.Cleanup(func() { newSearchConsoleService = origNew })
-
 	var got searchconsole.SearchAnalyticsQueryRequest
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	stubSearchConsoleService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "searchAnalytics/query") && r.Method == http.MethodPost {
 			if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 				t.Errorf("decode body: %v", err)
@@ -213,17 +196,6 @@ func TestExecute_SearchConsoleQuery_StartRow_PlainShapeUnchanged(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	}))
-	t.Cleanup(srv.Close)
-
-	svc, err := searchconsole.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newSearchConsoleService = func(context.Context, string) (*searchconsole.Service, error) { return svc, nil }
 
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
@@ -253,4 +225,23 @@ func TestExecute_SearchConsoleQuery_StartRow_PlainShapeUnchanged(t *testing.T) {
 	if !strings.HasPrefix(lines[1], "keyword a, keyword b\t") {
 		t.Fatalf("unexpected data row: %q", lines[1])
 	}
+}
+
+func stubSearchConsoleService(t *testing.T, handler http.Handler) {
+	t.Helper()
+	origNew := newSearchConsoleService
+	t.Cleanup(func() { newSearchConsoleService = origNew })
+
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+
+	svc, err := searchconsole.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newSearchConsoleService = func(context.Context, string) (*searchconsole.Service, error) { return svc, nil }
 }
