@@ -238,14 +238,47 @@ func (f *writeErrorTempFile) Close() error { return f.file.Close() }
 func (f *writeErrorTempFile) Name() string { return f.file.Name() }
 
 type closeErrorTempFile struct {
-	file *os.File
+	file       *os.File
+	closeCalls int
 }
 
 func (f *closeErrorTempFile) Write(p []byte) (int, error) { return f.file.Write(p) }
 func (f *closeErrorTempFile) Name() string                { return f.file.Name() }
 func (f *closeErrorTempFile) Close() error {
-	_ = f.file.Close()
-	return errors.New("close failed")
+	f.closeCalls++
+	if f.closeCalls == 1 {
+		return errors.New("close failed")
+	}
+	return f.file.Close()
+}
+
+func TestWriteDownloadFile_RetriesCloseBeforeCleanup(t *testing.T) {
+	originalCreate := createDownloadTempFile
+	t.Cleanup(func() { createDownloadTempFile = originalCreate })
+
+	var temp *closeErrorTempFile
+	createDownloadTempFile = func(dir, pattern string) (downloadTempFile, error) {
+		file, err := os.CreateTemp(dir, pattern)
+		if err != nil {
+			return nil, err
+		}
+		temp = &closeErrorTempFile{file: file}
+		return temp, nil
+	}
+
+	dest := filepath.Join(t.TempDir(), "file.bin")
+	if _, err := writeDownloadFile(dest, func(w io.Writer) (int64, error) {
+		n, writeErr := io.WriteString(w, "replacement")
+		return int64(n), writeErr
+	}); err == nil {
+		t.Fatal("expected close failure")
+	}
+	if temp == nil {
+		t.Fatal("temporary file was not created")
+	}
+	if temp.closeCalls != 2 {
+		t.Fatalf("close calls = %d, want 2", temp.closeCalls)
+	}
 }
 
 func TestDownloadDriveFile_CommitFailuresPreserveDestination(t *testing.T) {
@@ -334,6 +367,46 @@ func TestDownloadDriveFile_CommitFailuresPreserveDestination(t *testing.T) {
 				t.Fatalf("temporary artifact left behind: %#v", entries)
 			}
 		})
+	}
+}
+
+func TestWriteDownloadFile_FollowsSymlinkAndPreservesTargetMode(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target.bin")
+	if err := os.WriteFile(target, []byte("original"), 0o640); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	link := filepath.Join(dir, "link.bin")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatalf("create symlink: %v", err)
+	}
+
+	if _, err := writeDownloadFile(link, func(w io.Writer) (int64, error) {
+		n, writeErr := io.WriteString(w, "replacement")
+		return int64(n), writeErr
+	}); err != nil {
+		t.Fatalf("writeDownloadFile: %v", err)
+	}
+	info, err := os.Lstat(link)
+	if err != nil {
+		t.Fatalf("lstat symlink: %v", err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("destination symlink was replaced: mode=%v", info.Mode())
+	}
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	if string(data) != "replacement" {
+		t.Fatalf("target data = %q, want replacement", data)
+	}
+	targetInfo, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("stat target: %v", err)
+	}
+	if gotMode := targetInfo.Mode().Perm(); gotMode != 0o640 {
+		t.Fatalf("target mode = %04o, want 0640", gotMode)
 	}
 }
 

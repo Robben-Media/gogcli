@@ -82,7 +82,8 @@ func TestAuthServiceAccountSet_PlainKeepsAdviceOffStdout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ServiceAccountPath: %v", err)
 	}
-	wantStdout := "email\t" + email + "\n" +
+	wantStdout := "KEY\tVALUE\n" +
+		"email\t" + email + "\n" +
 		"path\t" + storedPath + "\n" +
 		"client_email\tsvc@example.com\n" +
 		"client_id\t12345\n"
