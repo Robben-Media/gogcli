@@ -31,6 +31,8 @@ type attachmentDownloadOutput struct {
 	Path   string `json:"path,omitempty"`
 	Bytes  int64  `json:"-"`
 	Cached bool   `json:"cached,omitempty"`
+	// Bytes is the exact on-disk size after download/cache hit; omitted from JSON.
+	Bytes int64 `json:"-"`
 }
 
 type attachmentDownloadSummary struct {
@@ -170,6 +172,7 @@ func downloadAttachmentOutputs(ctx context.Context, svc *gmail.Service, messageI
 			Path:             outPath,
 			Bytes:            bytes,
 			Cached:           cached,
+			Bytes:            bytes,
 		})
 	}
 	return out, nil
