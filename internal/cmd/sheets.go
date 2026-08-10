@@ -408,6 +408,10 @@ func (c *SheetsMetadataCmd) Run(ctx context.Context, flags *RootFlags) error {
 		})
 	}
 
+	if outfmt.IsPlain(ctx) {
+		return writeSheetsMetadataPlain(ctx, resp)
+	}
+
 	u.Out().Printf("ID\t%s", resp.SpreadsheetId)
 	u.Out().Printf("Title\t%s", resp.Properties.Title)
 	u.Out().Printf("Locale\t%s", resp.Properties.Locale)
@@ -428,6 +432,60 @@ func (c *SheetsMetadataCmd) Run(ctx context.Context, flags *RootFlags) error {
 		)
 	}
 	_ = tw.Flush()
+	return nil
+}
+
+func writeSheetsMetadataPlain(ctx context.Context, resp *sheets.Spreadsheet) error {
+	title := ""
+	locale := ""
+	timeZone := ""
+	if resp.Properties != nil {
+		title = resp.Properties.Title
+		locale = resp.Properties.Locale
+		timeZone = resp.Properties.TimeZone
+	}
+
+	if len(resp.Sheets) == 0 {
+		writeTableRow(ctx, os.Stdout, []string{
+			resp.SpreadsheetId,
+			title,
+			locale,
+			timeZone,
+			resp.SpreadsheetUrl,
+			"",
+			"",
+			"",
+			"",
+		})
+		return nil
+	}
+
+	for _, sheet := range resp.Sheets {
+		sheetID := ""
+		sheetTitle := ""
+		rows := ""
+		cols := ""
+		if sheet != nil && sheet.Properties != nil {
+			props := sheet.Properties
+			sheetID = fmt.Sprintf("%d", props.SheetId)
+			sheetTitle = props.Title
+			if props.GridProperties != nil {
+				rows = fmt.Sprintf("%d", props.GridProperties.RowCount)
+				cols = fmt.Sprintf("%d", props.GridProperties.ColumnCount)
+			}
+		}
+		writeTableRow(ctx, os.Stdout, []string{
+			resp.SpreadsheetId,
+			title,
+			locale,
+			timeZone,
+			resp.SpreadsheetUrl,
+			sheetID,
+			sheetTitle,
+			rows,
+			cols,
+		})
+	}
 	return nil
 }
 
