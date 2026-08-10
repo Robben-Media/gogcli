@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +12,31 @@ import (
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 )
+
+func TestExecute_SheetsClear_NoInputRefusesBeforeServiceConstruction(t *testing.T) {
+	origNew := newSheetsService
+	t.Cleanup(func() { newSheetsService = origNew })
+
+	serviceCalls := 0
+	newSheetsService = func(context.Context, string) (*sheets.Service, error) {
+		serviceCalls++
+		return nil, errors.New("sheets service should not be created")
+	}
+
+	err := Execute([]string{"--no-input", "--account", "a@b.com", "sheets", "clear", "id1", "Sheet1!A1:B1"})
+	if err == nil {
+		t.Fatal("expected non-interactive clear to require --force")
+	}
+	if !strings.Contains(err.Error(), "without --force") {
+		t.Fatalf("expected --force guidance, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "clear range Sheet1!A1:B1 from spreadsheet id1") {
+		t.Fatalf("expected confirmation to identify spreadsheet and range, got %v", err)
+	}
+	if serviceCalls != 0 {
+		t.Fatalf("expected refusal before Sheets service construction, got %d call(s)", serviceCalls)
+	}
+}
 
 func TestExecute_SheetsMoreCommands(t *testing.T) {
 	origNew := newSheetsService
@@ -120,7 +146,7 @@ func TestExecute_SheetsMoreCommands(t *testing.T) {
 			}
 		})
 		_ = captureStdout(t, func() {
-			if err := Execute([]string{"--json", "sheets", "clear", "id1", "Sheet1!A1:B1"}); err != nil {
+			if err := Execute([]string{"--json", "--force", "sheets", "clear", "id1", "Sheet1!A1:B1"}); err != nil {
 				t.Fatalf("clear: %v", err)
 			}
 		})
