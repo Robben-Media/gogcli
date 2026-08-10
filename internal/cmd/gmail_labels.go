@@ -260,6 +260,10 @@ func (c *GmailLabelsDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 		id = v
 	}
 
+	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("delete gmail label %q (%s)", raw, id)); confirmErr != nil {
+		return confirmErr
+	}
+
 	if err := svc.Users.Labels.Delete("me", id).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("delete label: %w", err)
 	}
