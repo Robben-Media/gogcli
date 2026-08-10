@@ -159,12 +159,8 @@ func (c *BusinessProfileLocationAdminsDeleteCmd) Run(ctx context.Context, flags 
 		return delErr
 	}
 
-	if _, err := writeBusinessProfileMutationReceipt(ctx, "delete", name, ""); err != nil {
-		return err
-	}
-
 	u.Err().Println("Deleted")
-	return nil
+	return writeBusinessProfileMutationReceipt(ctx, "delete", name, "")
 }
 
 // BusinessProfileLocationAdminsPatchCmd patches a location admin's role.
@@ -272,10 +268,6 @@ func (c *BusinessProfileLocationTransferCmd) Run(ctx context.Context, flags *Roo
 		return transferErr
 	}
 
-	if _, err := writeBusinessProfileMutationReceipt(ctx, "transfer", name, dest); err != nil {
-		return err
-	}
-
 	u.Err().Println("Location transferred")
-	return nil
+	return writeBusinessProfileMutationReceipt(ctx, "transfer", name, dest)
 }

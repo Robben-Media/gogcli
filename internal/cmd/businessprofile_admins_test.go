@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -422,6 +423,57 @@ func TestExecute_BusinessProfileAccountAdminsDelete_Human(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "Deleted") {
 		t.Fatalf("expected human stderr Deleted, got %q", stderr)
+	}
+}
+
+func TestExecute_BusinessProfileAccountAdminsDelete_JSONWriteErrorPreservesDiagnostic(t *testing.T) {
+	origAccounts := newBusinessProfileAccountsService
+	t.Cleanup(func() { newBusinessProfileAccountsService = origAccounts })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || !strings.Contains(r.URL.Path, "/admins/") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{})
+	}))
+	defer srv.Close()
+
+	svc, err := mybusinessaccountmanagement.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newBusinessProfileAccountsService = func(context.Context, string) (*mybusinessaccountmanagement.Service, error) {
+		return svc, nil
+	}
+
+	oldStdout := os.Stdout
+	readEnd, closedStdout, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	_ = readEnd.Close()
+	_ = closedStdout.Close()
+	os.Stdout = closedStdout
+	t.Cleanup(func() { os.Stdout = oldStdout })
+
+	var executeErr error
+	stderr := captureStderr(t, func() {
+		executeErr = Execute([]string{
+			"--json", "--account", "a@b.com", "--force",
+			"business-profile", "account-admins", "delete", "accounts/123/admins/456",
+		})
+	})
+	if executeErr == nil {
+		t.Fatal("expected stdout write error")
+	}
+	if !strings.Contains(stderr, "Deleted") {
+		t.Fatalf("expected success diagnostic before write error, got %q", stderr)
 	}
 }
 

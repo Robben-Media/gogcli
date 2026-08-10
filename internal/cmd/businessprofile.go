@@ -20,8 +20,8 @@ var (
 
 // writeBusinessProfileMutationReceipt emits a machine-readable success receipt for
 // empty-body Business Profile mutations. JSON: action/resource/success (+destination).
-// Plain: one TSV data row under stable headers. Returns true when a receipt was written.
-func writeBusinessProfileMutationReceipt(ctx context.Context, action, resource, destination string) (bool, error) {
+// Plain: one TSV data row under stable headers.
+func writeBusinessProfileMutationReceipt(ctx context.Context, action, resource, destination string) error {
 	if outfmt.IsJSON(ctx) {
 		payload := map[string]any{
 			"action":   action,
@@ -31,7 +31,7 @@ func writeBusinessProfileMutationReceipt(ctx context.Context, action, resource, 
 		if destination != "" {
 			payload["destination"] = destination
 		}
-		return true, outfmt.WriteJSON(os.Stdout, payload)
+		return outfmt.WriteJSON(os.Stdout, payload)
 	}
 
 	if outfmt.IsPlain(ctx) {
@@ -42,10 +42,9 @@ func writeBusinessProfileMutationReceipt(ctx context.Context, action, resource, 
 			fields = append(fields, destination)
 		}
 		writePlainReceipt(ctx, headers, fields)
-		return true, nil
 	}
 
-	return false, nil
+	return nil
 }
 
 type BusinessProfileCmd struct {
