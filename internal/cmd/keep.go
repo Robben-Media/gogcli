@@ -260,13 +260,9 @@ func (c *KeepAttachmentCmd) Run(ctx context.Context, flags *RootFlags, keep *Kee
 		}
 	}
 
-	f, err := os.Create(outPath) //nolint:gosec // user-provided output path
-	if err != nil {
-		return fmt.Errorf("create output file: %w", err)
-	}
-	defer f.Close()
-
-	written, err := io.Copy(f, resp.Body)
+	written, err := writeDownloadFile(outPath, 0o644, func(w io.Writer) (int64, error) {
+		return io.Copy(w, resp.Body)
+	})
 	if err != nil {
 		return fmt.Errorf("write attachment: %w", err)
 	}

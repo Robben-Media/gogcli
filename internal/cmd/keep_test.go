@@ -467,7 +467,7 @@ func TestKeepAttachment_Download(t *testing.T) {
 			}
 		})
 	})
-	if !strings.Contains(out, "path\tout.bin") {
+	if !strings.Contains(out, "path\tout.bin") || !strings.Contains(out, "bytes\t7") {
 		t.Fatalf("unexpected output: %q", out)
 	}
 	b, err := os.ReadFile(filepath.Join(tmp, "out.bin"))
@@ -476,6 +476,62 @@ func TestKeepAttachment_Download(t *testing.T) {
 	}
 	if string(b) != "payload" {
 		t.Fatalf("unexpected payload: %q", string(b))
+	}
+}
+
+func TestKeepAttachment_InterruptedPreservesDestinationWithoutReceipt(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg-config"))
+
+	account := "a@b.com"
+	_ = writeKeepSA(t, account)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "100")
+		_, _ = io.WriteString(w, "partial")
+	}))
+	t.Cleanup(srv.Close)
+
+	orig := newKeepServiceWithSA
+	t.Cleanup(func() { newKeepServiceWithSA = orig })
+	newKeepServiceWithSA = func(ctx context.Context, _, _ string) (*keepapi.Service, error) {
+		return keepapi.NewService(ctx,
+			option.WithEndpoint(srv.URL+"/"),
+			option.WithHTTPClient(srv.Client()),
+			option.WithoutAuthentication(),
+		)
+	}
+
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "out.bin")
+	if err := os.WriteFile(dest, []byte("original"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	var execErr error
+	out := captureStdout(t, func() {
+		execErr = Execute([]string{"keep", "attachment", "notes/abc/attachments/att1", "--plain", "--account", account, "--mime-type", "text/plain", "--out", dest})
+	})
+	if execErr == nil {
+		t.Fatal("expected interrupted download error")
+	}
+	if out != "" {
+		t.Fatalf("unexpected success receipt: %q", out)
+	}
+	data, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(data) != "original" {
+		t.Fatalf("destination changed: %q", data)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "out.bin" {
+		t.Fatalf("temporary artifact left behind: %#v", entries)
 	}
 }
 
