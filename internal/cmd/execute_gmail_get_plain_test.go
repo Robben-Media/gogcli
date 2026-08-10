@@ -40,7 +40,7 @@ func TestExecute_GmailGet_Plain_Full_FramedTSV(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		if got := r.URL.Query().Get("format"); got != "full" {
+		if got := r.URL.Query().Get("format"); got != gmailFormatFull {
 			t.Errorf("format=%q", got)
 			http.Error(w, "bad format", http.StatusBadRequest)
 			return
@@ -87,7 +87,7 @@ func TestExecute_GmailGet_Plain_Full_FramedTSV(t *testing.T) {
 				"--plain",
 				"--account", "a@b.com",
 				"gmail", "get", "m1",
-				"--format", "full",
+				"--format", gmailFormatFull,
 			}); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
