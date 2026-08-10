@@ -257,14 +257,22 @@ func tagManagerParamPath(prefix, segment string) string {
 	if segment == "" {
 		return prefix
 	}
+	segment = strings.ReplaceAll(segment, `\`, `\\`)
+	segment = strings.ReplaceAll(segment, ".", `\.`)
+	segment = strings.ReplaceAll(segment, "[", `\[`)
+	segment = strings.ReplaceAll(segment, "]", `\]`)
 	if prefix == "" {
 		return segment
 	}
 	return prefix + "." + segment
 }
 
+func tagManagerParamListPath(prefix string, index int) string {
+	return prefix + "[" + strconv.Itoa(index) + "]"
+}
+
 // writeTagManagerParameterLeaves flattens nested GTM parameters into leaf rows.
-// List indexes and map keys form deterministic path-like keys (e.g. list.0.mapKey).
+// List indexes and escaped map keys form unambiguous paths (e.g. list[0].mapKey).
 // ignoreKey is set for list children because GTM ignores keys on list values.
 func writeTagManagerParameterLeaves(ctx context.Context, w io.Writer, tagID, prefix string, p *tagmanager.Parameter, ignoreKey bool) {
 	if p == nil {
@@ -283,7 +291,7 @@ func writeTagManagerParameterLeaves(ctx context.Context, w io.Writer, tagID, pre
 			return
 		}
 		for i, child := range p.List {
-			childPrefix := tagManagerParamPath(path, strconv.Itoa(i))
+			childPrefix := tagManagerParamListPath(path, i)
 			writeTagManagerParameterLeaves(ctx, w, tagID, childPrefix, child, true)
 		}
 	case len(p.Map) > 0 || paramType == "map":

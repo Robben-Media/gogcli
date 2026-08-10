@@ -94,10 +94,13 @@ func newTestTagManagerServer(t *testing.T) *httptest.Server {
 
 func setupTagManagerTest(t *testing.T) {
 	t.Helper()
+	setupTagManagerTestServer(t, newTestTagManagerServer(t))
+}
+
+func setupTagManagerTestServer(t *testing.T, srv *httptest.Server) {
+	t.Helper()
 	origNew := newTagManagerService
 	t.Cleanup(func() { newTagManagerService = origNew })
-
-	srv := newTestTagManagerServer(t)
 	t.Cleanup(srv.Close)
 
 	svc, err := tagmanager.NewService(context.Background(),
@@ -340,9 +343,6 @@ func TestExecute_TagManagerTag_JSON(t *testing.T) {
 func TestExecute_TagManagerTag_PlainTSV(t *testing.T) {
 	// Seam: public CLI plain output for `gtm tag --plain`.
 	// Schema: RECORD_TYPE\tTAG_ID\tKEY\tTYPE\tVALUE
-	origNew := newTagManagerService
-	t.Cleanup(func() { newTagManagerService = origNew })
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if !(strings.Contains(r.URL.Path, "/tags/") && r.Method == http.MethodGet) {
@@ -357,6 +357,7 @@ func TestExecute_TagManagerTag_PlainTSV(t *testing.T) {
 			"blockingTriggerId": []string{"tr9"},
 			"parameter": []map[string]any{
 				{"key": "trackingId", "type": "template", "value": "G-XXXXX"},
+				{"key": "eventSettingsTable.0.parameter", "type": "template", "value": "literal-key"},
 				{
 					"key":  "eventSettingsTable",
 					"type": "list",
@@ -387,17 +388,7 @@ func TestExecute_TagManagerTag_PlainTSV(t *testing.T) {
 			},
 		})
 	}))
-	t.Cleanup(srv.Close)
-
-	svc, err := tagmanager.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newTagManagerService = func(context.Context, string) (*tagmanager.Service, error) { return svc, nil }
+	setupTagManagerTestServer(t, srv)
 
 	want := strings.Join([]string{
 		"RECORD_TYPE\tTAG_ID\tKEY\tTYPE\tVALUE",
@@ -407,10 +398,11 @@ func TestExecute_TagManagerTag_PlainTSV(t *testing.T) {
 		"FIRING_TRIGGER\tt1\t\t\ttr2",
 		"BLOCKING_TRIGGER\tt1\t\t\ttr9",
 		"PARAMETER\tt1\ttrackingId\ttemplate\tG-XXXXX",
-		"PARAMETER\tt1\teventSettingsTable.0.parameter\ttemplate\tpage_path",
-		"PARAMETER\tt1\teventSettingsTable.0.parameterValue\ttemplate\t/home main",
-		"PARAMETER\tt1\teventSettingsTable.1.parameter\ttemplate\tpage_title",
-		"PARAMETER\tt1\teventSettingsTable.1.parameterValue\ttemplate\tHome",
+		"PARAMETER\tt1\teventSettingsTable\\.0\\.parameter\ttemplate\tliteral-key",
+		"PARAMETER\tt1\teventSettingsTable[0].parameter\ttemplate\tpage_path",
+		"PARAMETER\tt1\teventSettingsTable[0].parameterValue\ttemplate\t/home main",
+		"PARAMETER\tt1\teventSettingsTable[1].parameter\ttemplate\tpage_title",
+		"PARAMETER\tt1\teventSettingsTable[1].parameterValue\ttemplate\tHome",
 		"PARAMETER\tt1\tfieldsToSet.user_id\ttemplate\t{{User ID}}",
 		"",
 	}, "\n")
