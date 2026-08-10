@@ -297,8 +297,9 @@ func TestExecute_BusinessProfileAccountAdminsDelete_JSON(t *testing.T) {
 		return svc, nil
 	}
 
+	var stderr string
 	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
+		stderr = captureStderr(t, func() {
 			if err := Execute([]string{
 				"--json", "--account", "a@b.com", "--force",
 				"business-profile", "account-admins", "delete", "accounts/123/admins/456",
@@ -307,6 +308,9 @@ func TestExecute_BusinessProfileAccountAdminsDelete_JSON(t *testing.T) {
 			}
 		})
 	})
+	if !strings.Contains(stderr, "Deleted") {
+		t.Fatalf("expected success diagnostic, got %q", stderr)
+	}
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -355,8 +359,9 @@ func TestExecute_BusinessProfileAccountAdminsDelete_Plain(t *testing.T) {
 		return svc, nil
 	}
 
+	var stderr string
 	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
+		stderr = captureStderr(t, func() {
 			if err := Execute([]string{
 				"--plain", "--account", "a@b.com", "--force",
 				"business-profile", "account-admins", "delete", "accounts/123/admins/456",
@@ -365,6 +370,9 @@ func TestExecute_BusinessProfileAccountAdminsDelete_Plain(t *testing.T) {
 			}
 		})
 	})
+	if !strings.Contains(stderr, "Deleted") {
+		t.Fatalf("expected success diagnostic, got %q", stderr)
+	}
 
 	want := "ACTION\tRESOURCE\tSUCCESS\ndelete\taccounts/123/admins/456\ttrue\n"
 	if out != want {

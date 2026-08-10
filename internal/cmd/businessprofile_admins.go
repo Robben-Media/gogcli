@@ -159,10 +159,8 @@ func (c *BusinessProfileAccountAdminsDeleteCmd) Run(ctx context.Context, flags *
 		return delErr
 	}
 
-	if wrote, err := writeBusinessProfileMutationReceipt(ctx, "delete", name, ""); err != nil {
+	if _, err := writeBusinessProfileMutationReceipt(ctx, "delete", name, ""); err != nil {
 		return err
-	} else if wrote {
-		return nil
 	}
 
 	u.Err().Println("Deleted")

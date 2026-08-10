@@ -226,8 +226,9 @@ func TestExecute_BusinessProfileLocationAdminsDelete_JSON(t *testing.T) {
 		return svc, nil
 	}
 
+	var stderr string
 	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
+		stderr = captureStderr(t, func() {
 			if err := Execute([]string{
 				"--json", "--account", "a@b.com",
 				"business-profile", "location-admins", "delete",
@@ -237,6 +238,9 @@ func TestExecute_BusinessProfileLocationAdminsDelete_JSON(t *testing.T) {
 			}
 		})
 	})
+	if !strings.Contains(stderr, "Deleted") {
+		t.Fatalf("expected success diagnostic, got %q", stderr)
+	}
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -420,8 +424,9 @@ func TestExecute_BusinessProfileLocationTransfer_JSON(t *testing.T) {
 		return svc, nil
 	}
 
+	var stderr string
 	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
+		stderr = captureStderr(t, func() {
 			if err := Execute([]string{
 				"--json", "--account", "a@b.com",
 				"business-profile", "locations-transfer",
@@ -432,6 +437,9 @@ func TestExecute_BusinessProfileLocationTransfer_JSON(t *testing.T) {
 			}
 		})
 	})
+	if !strings.Contains(stderr, "Location transferred") {
+		t.Fatalf("expected success diagnostic, got %q", stderr)
+	}
 
 	mu.Lock()
 	defer mu.Unlock()

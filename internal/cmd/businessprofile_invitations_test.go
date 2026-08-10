@@ -245,8 +245,9 @@ func TestExecute_BusinessProfileInvitationsAccept_JSON(t *testing.T) {
 		return svc, nil
 	}
 
+	var stderr string
 	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
+		stderr = captureStderr(t, func() {
 			if err := Execute([]string{
 				"--json", "--account", "a@b.com",
 				"business-profile", "account-invitations", "accept",
@@ -256,6 +257,9 @@ func TestExecute_BusinessProfileInvitationsAccept_JSON(t *testing.T) {
 			}
 		})
 	})
+	if !strings.Contains(stderr, "accepted") {
+		t.Fatalf("expected success diagnostic, got %q", stderr)
+	}
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -360,8 +364,9 @@ func TestExecute_BusinessProfileInvitationsDecline_JSON(t *testing.T) {
 		return svc, nil
 	}
 
+	var stderr string
 	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
+		stderr = captureStderr(t, func() {
 			if err := Execute([]string{
 				"--json", "--account", "a@b.com",
 				"business-profile", "account-invitations", "decline",
@@ -371,6 +376,9 @@ func TestExecute_BusinessProfileInvitationsDecline_JSON(t *testing.T) {
 			}
 		})
 	})
+	if !strings.Contains(stderr, "declined") {
+		t.Fatalf("expected success diagnostic, got %q", stderr)
+	}
 
 	mu.Lock()
 	defer mu.Unlock()
