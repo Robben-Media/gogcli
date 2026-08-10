@@ -171,6 +171,251 @@ func TestGmailDraftsGetCmd_Text(t *testing.T) {
 	}
 }
 
+func TestExecute_GmailDraftsGet_Plain(t *testing.T) {
+	payloadText := base64.RawURLEncoding.EncodeToString([]byte("Hello\nworld\tline"))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/gmail/v1/users/me/drafts/d1") && r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id": "d1",
+				"message": map[string]any{
+					"id": "m1",
+					"payload": map[string]any{
+						"mimeType": "multipart/mixed",
+						"headers": []map[string]any{
+							{"name": "To", "value": "a@example.com"},
+							{"name": "Cc", "value": "b@example.com"},
+							{"name": "Bcc", "value": "c@example.com"},
+							{"name": "Subject", "value": "Draft\tSubject\nNext"},
+						},
+						"parts": []map[string]any{
+							{"mimeType": "text/plain", "body": map[string]any{"data": payloadText}},
+							{
+								"filename": "file\tname.txt",
+								"mimeType": "text/plain",
+								"body":     map[string]any{"attachmentId": "att1", "size": 10},
+							},
+						},
+					},
+				},
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+	stubGmailService(t, srv)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain", "--account", "a@b.com",
+				"gmail", "drafts", "get", "d1",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	wantHeader := "RECORD_TYPE\tDRAFT_ID\tMESSAGE_ID\tNAME\tVALUE\tPATH\tBYTES\tCACHED\n"
+	if !strings.HasPrefix(out, wantHeader) {
+		t.Fatalf("missing plain header:\nwant prefix %q\ngot %q", wantHeader, out)
+	}
+	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected records after header, got %q", out)
+	}
+	for i, line := range lines {
+		cols := strings.Split(line, "\t")
+		if len(cols) != 8 {
+			t.Fatalf("line %d has %d columns (want 8): %q", i, len(cols), line)
+		}
+		if strings.ContainsAny(cols[3], "\r\n") || strings.ContainsAny(cols[4], "\r\n") {
+			t.Fatalf("free-form field not sanitized on line %d: %q", i, line)
+		}
+		if i == 0 {
+			continue
+		}
+		if cols[1] != "d1" || cols[2] != "m1" {
+			t.Fatalf("line %d missing repeated IDs: %q", i, line)
+		}
+	}
+
+	joined := out
+	for _, want := range []string{
+		"metadata\td1\tm1\tTo\ta@example.com\t\t\t",
+		"metadata\td1\tm1\tCc\tb@example.com\t\t\t",
+		"metadata\td1\tm1\tBcc\tc@example.com\t\t\t",
+		"metadata\td1\tm1\tSubject\tDraft Subject Next\t\t\t",
+		"body\td1\tm1\t\tHello world line\t\t\t",
+		"attachment\td1\tm1\tfile name.txt\ttext/plain\t\t10\t",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing record %q in output:\n%s", want, joined)
+		}
+	}
+	if strings.Contains(out, "Draft-ID:") || strings.Contains(out, "Attachments:") || strings.Contains(out, "Empty draft") {
+		t.Fatalf("plain mode leaked prose: %q", out)
+	}
+}
+
+func TestExecute_GmailDraftsGet_Plain_EmptyDraft(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/gmail/v1/users/me/drafts/d1") && r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "d1"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+	stubGmailService(t, srv)
+
+	stdout := captureStdout(t, func() {
+		stderr := captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain", "--account", "a@b.com",
+				"gmail", "drafts", "get", "d1",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+		if strings.Contains(stderr, "Empty draft") {
+			t.Fatalf("plain empty draft should not print narrative stderr: %q", stderr)
+		}
+	})
+
+	want := "RECORD_TYPE\tDRAFT_ID\tMESSAGE_ID\tNAME\tVALUE\tPATH\tBYTES\tCACHED\n"
+	if stdout != want {
+		t.Fatalf("plain empty draft mismatch:\nwant %q\ngot  %q", want, stdout)
+	}
+}
+
+func TestExecute_GmailDraftsGet_Plain_Download(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
+
+	attData := []byte("hello-bytes")
+	attEncoded := base64.RawURLEncoding.EncodeToString(attData)
+	payloadText := base64.RawURLEncoding.EncodeToString([]byte("Body"))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/gmail/v1/users/me/drafts/d1") && r.Method == http.MethodGet:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id": "d1",
+				"message": map[string]any{
+					"id": "m-draft-1",
+					"payload": map[string]any{
+						"mimeType": "multipart/mixed",
+						"headers": []map[string]any{
+							{"name": "To", "value": "x@y.com"},
+							{"name": "Subject", "value": "S"},
+						},
+						"parts": []map[string]any{
+							{"mimeType": "text/plain", "body": map[string]any{"data": payloadText}},
+							{
+								"filename": "a.txt",
+								"mimeType": "text/plain",
+								"body":     map[string]any{"attachmentId": "a-draft-1", "size": len(attData)},
+							},
+						},
+					},
+				},
+			})
+			return
+		case strings.Contains(r.URL.Path, "/gmail/v1/users/me/messages/m-draft-1/attachments/a-draft-1"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": attEncoded})
+			return
+		default:
+			http.NotFound(w, r)
+			return
+		}
+	}))
+	defer srv.Close()
+	stubGmailService(t, srv)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain", "--account", "a@b.com",
+				"gmail", "drafts", "get", "d1", "--download",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	wantHeader := "RECORD_TYPE\tDRAFT_ID\tMESSAGE_ID\tNAME\tVALUE\tPATH\tBYTES\tCACHED\n"
+	if !strings.HasPrefix(out, wantHeader) {
+		t.Fatalf("missing plain header:\nwant prefix %q\ngot %q", wantHeader, out)
+	}
+	if !strings.Contains(out, "attachment\td1\tm-draft-1\ta.txt\ttext/plain\t\t11\t") {
+		t.Fatalf("missing attachment record: %q", out)
+	}
+
+	var downloadLine string
+	for _, line := range strings.Split(strings.TrimSuffix(out, "\n"), "\n") {
+		if strings.HasPrefix(line, "download\t") {
+			downloadLine = line
+			break
+		}
+	}
+	if downloadLine == "" {
+		t.Fatalf("missing download record: %q", out)
+	}
+	cols := strings.Split(downloadLine, "\t")
+	if len(cols) != 8 {
+		t.Fatalf("download columns=%d line=%q", len(cols), downloadLine)
+	}
+	if cols[0] != "download" || cols[1] != "d1" || cols[2] != "m-draft-1" {
+		t.Fatalf("download identity mismatch: %q", downloadLine)
+	}
+	if cols[3] != "a.txt" {
+		t.Fatalf("download name mismatch: %q", downloadLine)
+	}
+	if cols[5] == "" {
+		t.Fatalf("download path empty: %q", downloadLine)
+	}
+	if cols[6] != "11" {
+		t.Fatalf("download bytes mismatch: %q", downloadLine)
+	}
+	if cols[7] != "false" && cols[7] != "true" {
+		t.Fatalf("download cached not bool: %q", downloadLine)
+	}
+	if strings.Contains(out, "Saved:") || strings.Contains(out, "Cached:") {
+		t.Fatalf("plain download leaked prose: %q", out)
+	}
+
+	// Second run should hit cache and report exact path/bytes/cached=true.
+	out2 := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain", "--account", "a@b.com",
+				"gmail", "drafts", "get", "d1", "--download",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+	var cachedLine string
+	for _, line := range strings.Split(strings.TrimSuffix(out2, "\n"), "\n") {
+		if strings.HasPrefix(line, "download\t") {
+			cachedLine = line
+			break
+		}
+	}
+	if cachedLine == "" {
+		t.Fatalf("missing cached download record: %q", out2)
+	}
+	cachedCols := strings.Split(cachedLine, "\t")
+	if len(cachedCols) != 8 || cachedCols[5] != cols[5] || cachedCols[6] != "11" || cachedCols[7] != "true" {
+		t.Fatalf("cached download mismatch:\nfirst %q\nsecond %q", downloadLine, cachedLine)
+	}
+}
+
 func TestGmailDraftsDeleteCmd_JSON(t *testing.T) {
 	origNew := newGmailService
 	t.Cleanup(func() { newGmailService = origNew })

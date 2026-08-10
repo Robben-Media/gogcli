@@ -322,11 +322,11 @@ func TestDownloadAttachment_Cached(t *testing.T) {
 		AttachmentID: attachmentID,
 		Size:         3,
 	}
-	gotPath, cached, err := downloadAttachment(context.Background(), nil, messageID, info, dir)
+	gotPath, cached, bytes, err := downloadAttachment(context.Background(), nil, messageID, info, dir)
 	if err != nil {
 		t.Fatalf("downloadAttachment: %v", err)
 	}
-	if !cached || gotPath != outPath {
-		t.Fatalf("expected cached path %q, got %q cached=%v", outPath, gotPath, cached)
+	if !cached || gotPath != outPath || bytes != 3 {
+		t.Fatalf("expected cached path %q bytes=3, got %q cached=%v bytes=%d", outPath, gotPath, cached, bytes)
 	}
 }

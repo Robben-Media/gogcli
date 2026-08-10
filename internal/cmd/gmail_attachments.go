@@ -29,6 +29,7 @@ type attachmentDownloadOutput struct {
 	MessageID string `json:"messageId"`
 	attachmentOutput
 	Path   string `json:"path,omitempty"`
+	Bytes  int64  `json:"-"`
 	Cached bool   `json:"cached,omitempty"`
 }
 
@@ -159,7 +160,7 @@ func downloadAttachmentOutputs(ctx context.Context, svc *gmail.Service, messageI
 	}
 	out := make([]attachmentDownloadOutput, 0, len(attachments))
 	for _, a := range attachments {
-		outPath, cached, err := downloadAttachment(ctx, svc, messageID, a, dir)
+		outPath, cached, bytes, err := downloadAttachment(ctx, svc, messageID, a, dir)
 		if err != nil {
 			return nil, err
 		}
@@ -167,6 +168,7 @@ func downloadAttachmentOutputs(ctx context.Context, svc *gmail.Service, messageI
 			MessageID:        messageID,
 			attachmentOutput: attachmentOutputFromInfo(a),
 			Path:             outPath,
+			Bytes:            bytes,
 			Cached:           cached,
 		})
 	}

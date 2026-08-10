@@ -647,9 +647,9 @@ func decodeBase64URL(s string) (string, error) {
 	return string(b), nil
 }
 
-func downloadAttachment(ctx context.Context, svc *gmail.Service, messageID string, a attachmentInfo, dir string) (string, bool, error) {
+func downloadAttachment(ctx context.Context, svc *gmail.Service, messageID string, a attachmentInfo, dir string) (string, bool, int64, error) {
 	if strings.TrimSpace(messageID) == "" || strings.TrimSpace(a.AttachmentID) == "" {
-		return "", false, errors.New("missing messageID/attachmentID")
+		return "", false, 0, errors.New("missing messageID/attachmentID")
 	}
 	if strings.TrimSpace(dir) == "" {
 		dir = "."
@@ -665,9 +665,9 @@ func downloadAttachment(ctx context.Context, svc *gmail.Service, messageID strin
 	}
 	filename := fmt.Sprintf("%s_%s_%s", messageID, shortID, safeFilename)
 	outPath := filepath.Join(dir, filename)
-	path, cached, _, err := downloadAttachmentToPath(ctx, svc, messageID, a.AttachmentID, outPath, a.Size)
+	path, cached, bytes, err := downloadAttachmentToPath(ctx, svc, messageID, a.AttachmentID, outPath, a.Size)
 	if err != nil {
-		return "", false, err
+		return "", false, 0, err
 	}
-	return path, cached, nil
+	return path, cached, bytes, nil
 }
