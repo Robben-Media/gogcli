@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 
 	"google.golang.org/api/gmail/v1"
 
@@ -53,6 +54,10 @@ func (c *GmailBatchDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 			"deleted": c.MessageIDs,
 			"count":   len(c.MessageIDs),
 		})
+	}
+
+	if outfmt.IsPlain(ctx) {
+		return writeGmailBatchPlainReceipt(ctx, "delete", len(c.MessageIDs), nil, nil)
 	}
 
 	u.Out().Printf("Deleted %d messages", len(c.MessageIDs))
@@ -109,6 +114,23 @@ func (c *GmailBatchModifyCmd) Run(ctx context.Context, flags *RootFlags) error {
 		})
 	}
 
+	if outfmt.IsPlain(ctx) {
+		return writeGmailBatchPlainReceipt(ctx, "modify", len(c.MessageIDs), addIDs, removeIDs)
+	}
+
 	u.Out().Printf("Modified %d messages", len(c.MessageIDs))
+	return nil
+}
+
+func writeGmailBatchPlainReceipt(ctx context.Context, action string, count int, addedLabels, removedLabels []string) error {
+	w, flush := tableWriter(ctx)
+	defer flush()
+	writeTableRow(ctx, w, []string{"ACTION", "COUNT", "ADDED_LABELS", "REMOVED_LABELS"})
+	writeTableRow(ctx, w, []string{
+		action,
+		strconv.Itoa(count),
+		joinCSV(addedLabels),
+		joinCSV(removedLabels),
+	})
 	return nil
 }
