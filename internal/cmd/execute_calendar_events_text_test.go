@@ -59,7 +59,9 @@ func TestExecute_CalendarEvents_Text_WithPaging(t *testing.T) {
 	}
 }
 
-func TestExecute_CalendarEvents_Text_AllReportsPartialFailure(t *testing.T) {
+func setupCalendarPartialFailureService(t *testing.T) {
+	t.Helper()
+
 	origNew := newCalendarService
 	t.Cleanup(func() { newCalendarService = origNew })
 
@@ -68,29 +70,24 @@ func TestExecute_CalendarEvents_Text_AllReportsPartialFailure(t *testing.T) {
 		case strings.Contains(r.URL.Path, "/users/me/calendarList"):
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"items": []map[string]any{
-					{"id": "c1"},
-					{"id": "c2"},
-				},
+				"items": []map[string]any{{"id": "c1"}, {"id": "c2"}},
 			})
-			return
 		case strings.Contains(r.URL.Path, "/calendars/c1/events"):
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"items": []map[string]any{
-					{"id": "e1", "summary": "S1\tteam\nsync", "start": map[string]any{"dateTime": "2025-12-17T10:00:00Z"}, "end": map[string]any{"dateTime": "2025-12-17T11:00:00Z"}},
-				},
+				"items": []map[string]any{{
+					"id": "e1", "summary": "S1\tteam\nsync",
+					"start": map[string]any{"dateTime": "2025-12-17T10:00:00Z"},
+					"end":   map[string]any{"dateTime": "2025-12-17T11:00:00Z"},
+				}},
 			})
-			return
 		case strings.Contains(r.URL.Path, "/calendars/c2/events"):
 			http.Error(w, "access denied", http.StatusForbidden)
-			return
 		default:
 			http.NotFound(w, r)
-			return
 		}
 	})))
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	svc, err := calendar.NewService(context.Background(),
 		option.WithoutAuthentication(),
@@ -101,6 +98,10 @@ func TestExecute_CalendarEvents_Text_AllReportsPartialFailure(t *testing.T) {
 		t.Fatalf("NewService: %v", err)
 	}
 	newCalendarService = func(context.Context, string) (*calendar.Service, error) { return svc, nil }
+}
+
+func TestExecute_CalendarEvents_Text_AllReportsPartialFailure(t *testing.T) {
+	setupCalendarPartialFailureService(t)
 
 	var execErr error
 	var errOut string
@@ -151,42 +152,7 @@ func TestExecute_CalendarEvents_Text_AllReportsPartialFailure(t *testing.T) {
 }
 
 func TestExecute_CalendarEvents_JSON_CalendarsReportsPartialFailure(t *testing.T) {
-	origNew := newCalendarService
-	t.Cleanup(func() { newCalendarService = origNew })
-
-	srv := httptest.NewServer(withPrimaryCalendar(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case strings.Contains(r.URL.Path, "/users/me/calendarList"):
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"items": []map[string]any{{"id": "c1"}, {"id": "c2"}},
-			})
-		case strings.Contains(r.URL.Path, "/calendars/c1/events"):
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"items": []map[string]any{{
-					"id": "e1", "summary": "S1",
-					"start": map[string]any{"dateTime": "2025-12-17T10:00:00Z"},
-					"end":   map[string]any{"dateTime": "2025-12-17T11:00:00Z"},
-				}},
-			})
-		case strings.Contains(r.URL.Path, "/calendars/c2/events"):
-			http.Error(w, "access denied", http.StatusForbidden)
-		default:
-			http.NotFound(w, r)
-		}
-	})))
-	defer srv.Close()
-
-	svc, err := calendar.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newCalendarService = func(context.Context, string) (*calendar.Service, error) { return svc, nil }
+	setupCalendarPartialFailureService(t)
 
 	var execErr error
 	var errOut string
