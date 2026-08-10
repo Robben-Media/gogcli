@@ -164,7 +164,7 @@ func TestSheetsValueMutations_PlainReceipts(t *testing.T) {
 		{
 			name: "clear",
 			args: []string{
-				"--plain", "--account", "a@b.com",
+				"--plain", "--account", "a@b.com", "--force",
 				"sheets", "clear", "ss-clear", "Sheet1!A1:B2",
 			},
 			want: sheetsValueMutationPlainHeader + "clear\tss-clear\tSheet1!A1:B2\t\t\t\t\tok\n",
