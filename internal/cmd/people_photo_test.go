@@ -315,7 +315,7 @@ func TestContactsPhotoUpdate_PlainTSV(t *testing.T) {
 			return
 		}
 		resp := &people.UpdateContactPhotoResponse{
-			Person: &people.Person{ResourceName: "people/123"},
+			Person: &people.Person{ResourceName: "people/returned"},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
@@ -347,7 +347,7 @@ func TestContactsPhotoUpdate_PlainTSV(t *testing.T) {
 		}
 	})
 
-	want := "RESOURCE\tSTATUS\npeople/123\tOK\n"
+	want := "RESOURCE\tSTATUS\npeople/returned\tOK\n"
 	if out != want {
 		t.Fatalf("plain photo update output = %q, want %q", out, want)
 	}

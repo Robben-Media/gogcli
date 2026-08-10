@@ -130,10 +130,14 @@ func (c *ContactsPhotoUpdateCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsPlain(ctx) {
+		responseResourceName := resourceName
+		if resp.Person != nil && resp.Person.ResourceName != "" {
+			responseResourceName = resp.Person.ResourceName
+		}
 		w, flush := tableWriter(ctx)
 		defer flush()
 		writeTableRow(ctx, w, []string{"RESOURCE", "STATUS"})
-		writeTableRow(ctx, w, []string{resourceName, "OK"})
+		writeTableRow(ctx, w, []string{responseResourceName, "OK"})
 		return nil
 	}
 
