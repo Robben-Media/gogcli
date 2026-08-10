@@ -69,6 +69,7 @@ func TestGmailWatchStartCmd_JSON(t *testing.T) {
 	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
 	flags := &RootFlags{Account: "a@b.com"}
+	const sentinelToken = "sentinel-hook-token-issue-88-secret"
 	out := captureStdout(t, func() {
 		u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
 		if uiErr != nil {
@@ -82,7 +83,7 @@ func TestGmailWatchStartCmd_JSON(t *testing.T) {
 			"--label", "INBOX",
 			"--label", "Custom",
 			"--hook-url", "http://127.0.0.1:1/hooks",
-			"--hook-token", "tok",
+			"--hook-token", sentinelToken,
 			"--include-body",
 			"--max-bytes", "5",
 		}, ctx, flags); execErr != nil {
@@ -96,9 +97,21 @@ func TestGmailWatchStartCmd_JSON(t *testing.T) {
 	if len(watchReq.LabelIds) != 2 || watchReq.LabelIds[0] != "INBOX" || watchReq.LabelIds[1] != "Label_1" {
 		t.Fatalf("unexpected labels: %#v", watchReq.LabelIds)
 	}
+	if strings.Contains(out, sentinelToken) {
+		t.Fatalf("start json output leaked hook token: %q", out)
+	}
 
 	var parsed struct {
-		Watch gmailWatchState `json:"watch"`
+		Watch struct {
+			HistoryID string `json:"historyId"`
+			Hook      *struct {
+				URL         string `json:"url"`
+				Token       string `json:"token"`
+				IncludeBody bool   `json:"includeBody"`
+				MaxBytes    int    `json:"maxBytes"`
+			} `json:"hook"`
+			HookTokenConfigured bool `json:"hookTokenConfigured"`
+		} `json:"watch"`
 	}
 	if parseErr := json.Unmarshal([]byte(out), &parsed); parseErr != nil {
 		t.Fatalf("json parse: %v", parseErr)
@@ -112,13 +125,23 @@ func TestGmailWatchStartCmd_JSON(t *testing.T) {
 	if parsed.Watch.Hook.MaxBytes != 5 {
 		t.Fatalf("unexpected max bytes: %#v", parsed.Watch.Hook)
 	}
+	if parsed.Watch.Hook.Token != "" {
+		t.Fatalf("json hook must omit token value, got: %#v", parsed.Watch.Hook)
+	}
+	if !parsed.Watch.HookTokenConfigured {
+		t.Fatalf("expected hookTokenConfigured true")
+	}
 
 	store, err := loadGmailWatchStore("a@b.com")
 	if err != nil {
 		t.Fatalf("load store: %v", err)
 	}
-	if store.Get().HistoryID != "123" {
-		t.Fatalf("store missing history: %#v", store.Get())
+	stored := store.Get()
+	if stored.HistoryID != "123" {
+		t.Fatalf("store missing history: %#v", stored)
+	}
+	if stored.Hook == nil || stored.Hook.Token != sentinelToken {
+		t.Fatalf("store must retain real hook token, got: %#v", stored.Hook)
 	}
 }
 

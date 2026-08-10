@@ -14,6 +14,7 @@ import (
 )
 
 func TestWriteWatchState_TextAndJSON(t *testing.T) {
+	const sentinelToken = "sentinel-hook-token-issue-88-secret"
 	state := gmailWatchState{
 		Account:              "a@b.com",
 		Topic:                "projects/p/topics/t",
@@ -27,7 +28,7 @@ func TestWriteWatchState_TextAndJSON(t *testing.T) {
 			URL:         "http://example.com/hook",
 			IncludeBody: true,
 			MaxBytes:    12,
-			Token:       "tok",
+			Token:       sentinelToken,
 		},
 		LastDeliveryStatus:     "ok",
 		LastDeliveryAtMs:       5,
@@ -50,6 +51,29 @@ func TestWriteWatchState_TextAndJSON(t *testing.T) {
 	if !strings.Contains(textOut, "hook_url\thttp://example.com/hook") {
 		t.Fatalf("expected hook output")
 	}
+	if !strings.Contains(textOut, "hook_token_configured\ttrue") {
+		t.Fatalf("expected configured flag in text output, got: %q", textOut)
+	}
+	if strings.Contains(textOut, sentinelToken) || strings.Contains(textOut, "hook_token\t") {
+		t.Fatalf("text status leaked hook token: %q", textOut)
+	}
+
+	// Absent token reports configured=false without inventing a secret field.
+	noTokenState := state
+	noTokenState.Hook = &gmailWatchHook{URL: "http://example.com/hook"}
+	textAbsent := captureStdout(t, func() {
+		u, uiErr := ui.New(ui.Options{Stdout: os.Stdout, Stderr: io.Discard, Color: "never"})
+		if uiErr != nil {
+			t.Fatalf("ui.New: %v", uiErr)
+		}
+		ctx := ui.WithUI(context.Background(), u)
+		if err := writeWatchState(ctx, noTokenState); err != nil {
+			t.Fatalf("writeWatchState absent token: %v", err)
+		}
+	})
+	if !strings.Contains(textAbsent, "hook_token_configured\tfalse") {
+		t.Fatalf("expected configured=false for empty token, got: %q", textAbsent)
+	}
 
 	jsonOut := captureStdout(t, func() {
 		u, uiErr := ui.New(ui.Options{Stdout: os.Stdout, Stderr: io.Discard, Color: "never"})
@@ -62,14 +86,71 @@ func TestWriteWatchState_TextAndJSON(t *testing.T) {
 			t.Fatalf("writeWatchState json: %v", err)
 		}
 	})
+	if strings.Contains(jsonOut, sentinelToken) {
+		t.Fatalf("json status leaked hook token: %q", jsonOut)
+	}
 	var parsed struct {
-		Watch gmailWatchState `json:"watch"`
+		Watch struct {
+			Hook *struct {
+				URL         string `json:"url"`
+				Token       string `json:"token"`
+				IncludeBody bool   `json:"includeBody"`
+				MaxBytes    int    `json:"maxBytes"`
+			} `json:"hook"`
+			HookTokenConfigured bool `json:"hookTokenConfigured"`
+		} `json:"watch"`
 	}
 	if err := json.Unmarshal([]byte(jsonOut), &parsed); err != nil {
 		t.Fatalf("json parse: %v", err)
 	}
 	if parsed.Watch.Hook == nil || parsed.Watch.Hook.URL == "" {
 		t.Fatalf("expected hook in json")
+	}
+	if parsed.Watch.Hook.Token != "" {
+		t.Fatalf("json hook must omit token value, got: %#v", parsed.Watch.Hook)
+	}
+	if !parsed.Watch.HookTokenConfigured {
+		t.Fatalf("expected hookTokenConfigured true")
+	}
+
+	jsonAbsent := captureStdout(t, func() {
+		u, uiErr := ui.New(ui.Options{Stdout: os.Stdout, Stderr: io.Discard, Color: "never"})
+		if uiErr != nil {
+			t.Fatalf("ui.New: %v", uiErr)
+		}
+		ctx := ui.WithUI(context.Background(), u)
+		ctx = outfmt.WithMode(ctx, outfmt.Mode{JSON: true})
+		if err := writeWatchState(ctx, noTokenState); err != nil {
+			t.Fatalf("writeWatchState json absent: %v", err)
+		}
+	})
+	var parsedAbsent struct {
+		Watch struct {
+			HookTokenConfigured bool `json:"hookTokenConfigured"`
+		} `json:"watch"`
+	}
+	if err := json.Unmarshal([]byte(jsonAbsent), &parsedAbsent); err != nil {
+		t.Fatalf("json absent parse: %v", err)
+	}
+	if parsedAbsent.Watch.HookTokenConfigured {
+		t.Fatalf("expected hookTokenConfigured false when token absent")
+	}
+
+	// No hook at all still reports configured=false in every mode.
+	noHook := state
+	noHook.Hook = nil
+	textNoHook := captureStdout(t, func() {
+		u, uiErr := ui.New(ui.Options{Stdout: os.Stdout, Stderr: io.Discard, Color: "never"})
+		if uiErr != nil {
+			t.Fatalf("ui.New: %v", uiErr)
+		}
+		ctx := ui.WithUI(context.Background(), u)
+		if err := writeWatchState(ctx, noHook); err != nil {
+			t.Fatalf("writeWatchState no hook: %v", err)
+		}
+	})
+	if !strings.Contains(textNoHook, "hook_token_configured\tfalse") {
+		t.Fatalf("expected configured=false when hook missing, got: %q", textNoHook)
 	}
 }
 
