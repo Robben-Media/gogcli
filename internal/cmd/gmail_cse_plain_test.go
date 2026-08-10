@@ -74,15 +74,15 @@ func TestGmailCseIdentitiesPatchCmd_PlainReceipt(t *testing.T) {
 	t.Cleanup(func() { newGmailService = origNew })
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == "GET":
+		switch r.Method {
+		case http.MethodGet:
 			resp := &gmail.CseIdentity{
 				EmailAddress:     "user@example.com",
 				PrimaryKeyPairId: "kp-old",
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(resp)
-		case r.Method == "PATCH" || r.Method == "POST" || r.Method == "PUT":
+		case http.MethodPatch, http.MethodPost, http.MethodPut:
 			resp := &gmail.CseIdentity{
 				EmailAddress:     "user@example.com",
 				PrimaryKeyPairId: "kp-new",
