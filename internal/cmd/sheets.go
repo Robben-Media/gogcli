@@ -436,18 +436,6 @@ func (c *SheetsMetadataCmd) Run(ctx context.Context, flags *RootFlags) error {
 }
 
 func writeSheetsMetadataPlain(ctx context.Context, resp *sheets.Spreadsheet) error {
-	writeTableRow(ctx, os.Stdout, []string{
-		"SPREADSHEET_ID",
-		"SPREADSHEET_TITLE",
-		"LOCALE",
-		"TIMEZONE",
-		"URL",
-		"SHEET_ID",
-		"SHEET_TITLE",
-		"ROWS",
-		"COLUMNS",
-	})
-
 	title := ""
 	locale := ""
 	timeZone := ""

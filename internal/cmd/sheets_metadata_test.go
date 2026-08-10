@@ -17,10 +17,6 @@ import (
 	"github.com/steipete/gogcli/internal/ui"
 )
 
-const (
-	sheetsMetadataPlainHeader = "SPREADSHEET_ID\tSPREADSHEET_TITLE\tLOCALE\tTIMEZONE\tURL\tSHEET_ID\tSHEET_TITLE\tROWS\tCOLUMNS"
-)
-
 func TestSheetsMetadataCmd_TextAndJSON(t *testing.T) {
 	origNew := newSheetsService
 	t.Cleanup(func() { newSheetsService = origNew })
@@ -152,7 +148,6 @@ func TestExecute_SheetsMetadata_PlainTSV(t *testing.T) {
 		})
 	})
 	wantPlain := strings.Join([]string{
-		sheetsMetadataPlainHeader,
 		"id1\tBudget Q1 2026\ten_US\tAmerica/Chicago\thttps://docs.google.com/spreadsheets/d/id1\t1\tIncome Main\t10\t5",
 		"id1\tBudget Q1 2026\ten_US\tAmerica/Chicago\thttps://docs.google.com/spreadsheets/d/id1\t2\tExpenses Ops\t20\t8",
 		"",
@@ -160,8 +155,8 @@ func TestExecute_SheetsMetadata_PlainTSV(t *testing.T) {
 	if plain != wantPlain {
 		t.Fatalf("plain output =\n%q\nwant\n%q", plain, wantPlain)
 	}
-	if strings.Contains(plain, "Sheets:") || strings.Contains(plain, "ID\tid1") {
-		t.Fatalf("plain output mixed human headings: %q", plain)
+	if strings.Contains(plain, "Sheets:") || strings.Contains(plain, "ID\tid1") || strings.HasPrefix(plain, "SPREADSHEET_ID\t") {
+		t.Fatalf("plain output included headings or key/value prelude: %q", plain)
 	}
 
 	jsonOut := captureStdout(t, func() {
@@ -201,9 +196,6 @@ func TestExecute_SheetsMetadata_PlainTSV(t *testing.T) {
 	})
 	if !strings.Contains(human, "ID\tid1") || !strings.Contains(human, "Sheets:") {
 		t.Fatalf("human output lost metadata layout: %q", human)
-	}
-	if strings.Contains(human, sheetsMetadataPlainHeader) {
-		t.Fatalf("human output used plain header: %q", human)
 	}
 }
 
@@ -248,7 +240,6 @@ func TestExecute_SheetsMetadata_PlainTSV_NoSheets(t *testing.T) {
 		})
 	})
 	wantPlain := strings.Join([]string{
-		sheetsMetadataPlainHeader,
 		"empty1\tEmpty\ten_GB\tUTC\thttps://docs.google.com/spreadsheets/d/empty1\t\t\t\t",
 		"",
 	}, "\n")
