@@ -55,8 +55,24 @@ func TestBestUnsubscribeLink(t *testing.T) {
 }
 
 func TestSanitizeTab(t *testing.T) {
-	if got := sanitizeTab("a\tb"); got != "a b" {
-		t.Fatalf("unexpected: %q", got)
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "unchanged", input: "ordinary text", want: "ordinary text"},
+		{name: "delimiters at start", input: "\t\n\r\r\nstart", want: "    start"},
+		{name: "delimiters in middle", input: "tab\tline\ncarriage\rwindows\r\nend", want: "tab line carriage windows end"},
+		{name: "delimiters at end", input: "end\t\n\r\r\n", want: "end    "},
+		{name: "mixed positions", input: "\r\nstart\tmiddle\nend\r", want: " start middle end "},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sanitizeTab(tt.input); got != tt.want {
+				t.Fatalf("sanitizeTab(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
 	}
 }
 
