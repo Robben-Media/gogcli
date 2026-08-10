@@ -171,6 +171,64 @@ func TestGmailDraftsGetCmd_Text(t *testing.T) {
 	}
 }
 
+func TestGmailDraftsGetCmd_TextPrintsDetailsBeforeDownloadError(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
+
+	payloadText := base64.RawURLEncoding.EncodeToString([]byte("Hello"))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/gmail/v1/users/me/drafts/d1") && r.Method == http.MethodGet:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id": "d1",
+				"message": map[string]any{
+					"id": "m1",
+					"payload": map[string]any{
+						"mimeType": "multipart/mixed",
+						"headers":  []map[string]any{{"name": "Subject", "value": "Draft"}},
+						"parts": []map[string]any{
+							{"mimeType": "text/plain", "body": map[string]any{"data": payloadText}},
+							{
+								"filename": "file.txt",
+								"mimeType": "text/plain",
+								"body":     map[string]any{"attachmentId": "att1", "size": 10},
+							},
+						},
+					},
+				},
+			})
+		case strings.Contains(r.URL.Path, "/gmail/v1/users/me/messages/m1/attachments/att1"):
+			http.Error(w, "download failed", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	stubGmailService(t, srv)
+
+	var runErr error
+	out := captureStdout(t, func() {
+		u, err := ui.New(ui.Options{Stdout: os.Stdout, Stderr: io.Discard, Color: "never"})
+		if err != nil {
+			t.Fatalf("ui.New: %v", err)
+		}
+		ctx := ui.WithUI(context.Background(), u)
+		ctx = outfmt.WithMode(ctx, outfmt.Mode{})
+		runErr = runKong(t, &GmailDraftsGetCmd{}, []string{"d1", "--download"}, ctx, &RootFlags{Account: "a@b.com"})
+	})
+
+	if runErr == nil {
+		t.Fatal("expected attachment download error")
+	}
+	for _, want := range []string{"Draft-ID: d1", "Subject: Draft", "Hello", "Attachments:", "file.txt"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("text output lost %q before download error: %q", want, out)
+		}
+	}
+}
+
 func TestExecute_GmailDraftsGet_Plain(t *testing.T) {
 	payloadText := base64.RawURLEncoding.EncodeToString([]byte("Hello\nworld\tline"))
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

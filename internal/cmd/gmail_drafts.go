@@ -142,19 +142,18 @@ func (c *GmailDraftsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	attachments := collectAttachments(msg.Payload)
-	var downloads []attachmentDownloadOutput
-	if c.Download && msg.Id != "" && len(attachments) > 0 {
-		attachDir, err := config.EnsureGmailAttachmentsDir()
-		if err != nil {
-			return err
-		}
-		downloads, err = downloadAttachmentOutputs(ctx, svc, msg.Id, attachments, attachDir)
-		if err != nil {
-			return err
-		}
-	}
-
 	if outfmt.IsPlain(ctx) {
+		var downloads []attachmentDownloadOutput
+		if c.Download && msg.Id != "" && len(attachments) > 0 {
+			attachDir, err := config.EnsureGmailAttachmentsDir()
+			if err != nil {
+				return err
+			}
+			downloads, err = downloadAttachmentOutputs(ctx, svc, msg.Id, attachments, attachDir)
+			if err != nil {
+				return err
+			}
+		}
 		return writeGmailDraftGetPlain(ctx, os.Stdout, draft, attachments, downloads)
 	}
 
@@ -174,11 +173,21 @@ func (c *GmailDraftsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	printAttachmentSection(u.Out(), attachments)
 
-	for _, a := range downloads {
-		if a.Cached {
-			u.Out().Printf("Cached: %s", a.Path)
-		} else {
-			u.Out().Successf("Saved: %s", a.Path)
+	if c.Download && msg.Id != "" && len(attachments) > 0 {
+		attachDir, err := config.EnsureGmailAttachmentsDir()
+		if err != nil {
+			return err
+		}
+		downloads, err := downloadAttachmentOutputs(ctx, svc, msg.Id, attachments, attachDir)
+		if err != nil {
+			return err
+		}
+		for _, a := range downloads {
+			if a.Cached {
+				u.Out().Printf("Cached: %s", a.Path)
+			} else {
+				u.Out().Successf("Saved: %s", a.Path)
+			}
 		}
 	}
 
