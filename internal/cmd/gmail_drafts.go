@@ -128,13 +128,9 @@ func (c *GmailDraftsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if outfmt.IsJSON(ctx) {
 		out := map[string]any{"draft": draft}
 		if c.Download {
-			attachDir, err := config.EnsureGmailAttachmentsDir()
-			if err != nil {
-				return err
-			}
-			downloads, err := downloadAttachmentOutputs(ctx, svc, msg.Id, collectAttachments(msg.Payload), attachDir)
-			if err != nil {
-				return err
+			downloads, downloadErr := downloadDraftAttachments(ctx, svc, msg.Id, collectAttachments(msg.Payload))
+			if downloadErr != nil {
+				return downloadErr
 			}
 			out["downloaded"] = attachmentDownloadDraftOutputs(downloads)
 		}
@@ -145,11 +141,7 @@ func (c *GmailDraftsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if outfmt.IsPlain(ctx) {
 		var downloads []attachmentDownloadOutput
 		if c.Download && msg.Id != "" && len(attachments) > 0 {
-			attachDir, err := config.EnsureGmailAttachmentsDir()
-			if err != nil {
-				return err
-			}
-			downloads, err = downloadAttachmentOutputs(ctx, svc, msg.Id, attachments, attachDir)
+			downloads, err = downloadDraftAttachments(ctx, svc, msg.Id, attachments)
 			if err != nil {
 				return err
 			}
@@ -174,13 +166,9 @@ func (c *GmailDraftsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	printAttachmentSection(u.Out(), attachments)
 
 	if c.Download && msg.Id != "" && len(attachments) > 0 {
-		attachDir, err := config.EnsureGmailAttachmentsDir()
-		if err != nil {
-			return err
-		}
-		downloads, err := downloadAttachmentOutputs(ctx, svc, msg.Id, attachments, attachDir)
-		if err != nil {
-			return err
+		downloads, downloadErr := downloadDraftAttachments(ctx, svc, msg.Id, attachments)
+		if downloadErr != nil {
+			return downloadErr
 		}
 		for _, a := range downloads {
 			if a.Cached {
@@ -192,6 +180,19 @@ func (c *GmailDraftsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	return nil
+}
+
+func downloadDraftAttachments(
+	ctx context.Context,
+	svc *gmail.Service,
+	messageID string,
+	attachments []attachmentInfo,
+) ([]attachmentDownloadOutput, error) {
+	attachDir, err := config.EnsureGmailAttachmentsDir()
+	if err != nil {
+		return nil, err
+	}
+	return downloadAttachmentOutputs(ctx, svc, messageID, attachments, attachDir)
 }
 
 func writeGmailDraftGetPlain(
