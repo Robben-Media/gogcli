@@ -296,6 +296,11 @@ func (c *GmailFiltersCreateCmd) Run(ctx context.Context, flags *RootFlags) error
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"filter": created})
 	}
 
+	if outfmt.IsPlain(ctx) {
+		writePlainRoutingReceipt(ctx, "filter", "create", created.Id, "success")
+		return nil
+	}
+
 	u.Out().Println("Filter created successfully")
 	u.Out().Printf("id\t%s", created.Id)
 	if created.Criteria != nil {
@@ -350,6 +355,11 @@ func (c *GmailFiltersDeleteCmd) Run(ctx context.Context, flags *RootFlags) error
 			"success":  true,
 			"filterId": filterID,
 		})
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainRoutingReceipt(ctx, "filter", "delete", filterID, "success")
+		return nil
 	}
 
 	u.Out().Printf("Filter %s deleted successfully", filterID)
