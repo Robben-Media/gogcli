@@ -16,6 +16,17 @@ var errMissingAccount = errors.New("missing account")
 
 const trackingConfigVersion = 1
 
+// Filesystem hooks allow tests to inject write/sync/close/rename failures.
+var (
+	createTrackingConfigTemp = os.CreateTemp
+	writeTrackingConfigFile  = func(f *os.File, data []byte) (int, error) { return f.Write(data) }
+	syncTrackingConfigFile   = func(f *os.File) error { return f.Sync() }
+	closeTrackingConfigFile  = func(f *os.File) error { return f.Close() }
+	renameTrackingConfigFile = os.Rename
+	removeTrackingConfigFile = os.Remove
+	chmodTrackingConfigFile  = os.Chmod
+)
+
 // Config holds tracking configuration for a single account.
 type Config struct {
 	Enabled          bool   `json:"enabled"`
@@ -163,9 +174,60 @@ func SaveConfig(account string, cfg *Config) error {
 	if err != nil {
 		return fmt.Errorf("marshal tracking config: %w", err)
 	}
+	data = append(data, '\n')
 
-	if writeErr := os.WriteFile(path, data, 0o600); writeErr != nil {
+	if writeErr := writeConfigAtomic(path, data); writeErr != nil {
+		return writeErr
+	}
+
+	return nil
+}
+
+func writeConfigAtomic(path string, data []byte) error {
+	dir := filepath.Dir(path)
+
+	tmp, err := createTrackingConfigTemp(dir, "tracking-*.tmp")
+	if err != nil {
+		return fmt.Errorf("create temp tracking config: %w", err)
+	}
+	tmpName := tmp.Name()
+
+	// Ensure owner-only permissions even if umask is loose.
+	if chmodErr := chmodTrackingConfigFile(tmpName, 0o600); chmodErr != nil {
+		_ = closeTrackingConfigFile(tmp)
+		_ = removeTrackingConfigFile(tmpName)
+		return fmt.Errorf("chmod temp tracking config: %w", chmodErr)
+	}
+
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = removeTrackingConfigFile(tmpName)
+		}
+	}()
+
+	if _, writeErr := writeTrackingConfigFile(tmp, data); writeErr != nil {
+		_ = closeTrackingConfigFile(tmp)
 		return fmt.Errorf("write tracking config: %w", writeErr)
+	}
+
+	if syncErr := syncTrackingConfigFile(tmp); syncErr != nil {
+		_ = closeTrackingConfigFile(tmp)
+		return fmt.Errorf("sync tracking config: %w", syncErr)
+	}
+
+	if closeErr := closeTrackingConfigFile(tmp); closeErr != nil {
+		return fmt.Errorf("close tracking config: %w", closeErr)
+	}
+
+	if renameErr := renameTrackingConfigFile(tmpName, path); renameErr != nil {
+		return fmt.Errorf("commit tracking config: %w", renameErr)
+	}
+	cleanup = false
+
+	// Re-assert final permissions in case an existing destination was more permissive.
+	if chmodErr := chmodTrackingConfigFile(path, 0o600); chmodErr != nil {
+		return fmt.Errorf("chmod tracking config: %w", chmodErr)
 	}
 
 	return nil
