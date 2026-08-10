@@ -132,6 +132,22 @@ func TestExecute_CalendarEvents_Text_AllReportsPartialFailure(t *testing.T) {
 	if !strings.Contains(errOut, "calendar c2:") || !strings.Contains(errOut, "access denied") {
 		t.Fatalf("missing actionable diagnostic: %q", errOut)
 	}
+
+	weekdayOut := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			execErr = Execute([]string{"--plain", "--account", "a@b.com", "calendar", "events", "--all", "--weekday", "--from", "2025-12-17T00:00:00Z", "--to", "2025-12-18T00:00:00Z"})
+		})
+	})
+	if execErr == nil {
+		t.Fatal("expected weekday partial failure to return nonzero")
+	}
+	weekdayLines := strings.Split(strings.TrimSpace(weekdayOut), "\n")
+	if len(weekdayLines) != 3 || weekdayLines[0] != "TYPE\tCALENDAR\tID\tSTART\tSTART_DOW\tEND\tEND_DOW\tSUMMARY\tERROR" {
+		t.Fatalf("unexpected weekday records=%q", weekdayOut)
+	}
+	if strings.Count(weekdayLines[1], "\t") != 8 || strings.Count(weekdayLines[2], "\t") != 8 || !strings.HasPrefix(weekdayLines[2], "calendar_error\tc2\t") {
+		t.Fatalf("weekday rows are not stable TSV: %q", weekdayOut)
+	}
 }
 
 func TestExecute_CalendarEvents_JSON_CalendarsReportsPartialFailure(t *testing.T) {

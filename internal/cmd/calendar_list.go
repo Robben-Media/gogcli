@@ -89,16 +89,9 @@ type calendarEventError struct {
 }
 
 func listAllCalendarsEvents(ctx context.Context, svc *calendar.Service, from, to string, maxResults int64, page, query, privatePropFilter, sharedPropFilter, fields string, showWeekday bool) error {
-	u := ui.FromContext(ctx)
-
 	calendars, err := listCalendarList(ctx, svc)
 	if err != nil {
 		return err
-	}
-
-	if len(calendars) == 0 {
-		u.Err().Println("No calendars")
-		return nil
 	}
 
 	ids := make([]string, 0, len(calendars))
@@ -107,10 +100,6 @@ func listAllCalendarsEvents(ctx context.Context, svc *calendar.Service, from, to
 			continue
 		}
 		ids = append(ids, cal.Id)
-	}
-	if len(ids) == 0 {
-		u.Err().Println("No calendars")
-		return nil
 	}
 	return listCalendarIDsEvents(ctx, svc, ids, from, to, maxResults, page, query, privatePropFilter, sharedPropFilter, fields, showWeekday)
 }
@@ -194,23 +183,26 @@ func listCalendarIDsEvents(ctx context.Context, svc *calendar.Service, calendarI
 
 	w, flush := tableWriter(ctx)
 	defer flush()
-	if showWeekday {
-		writeTableRow(ctx, w, []string{"TYPE", "CALENDAR", "ID", "START", "START_DOW", "END", "END_DOW", "SUMMARY", "ERROR"})
-		for _, e := range all {
-			writeTableRow(ctx, w, []string{"event", e.CalendarID, e.Id, eventStart(e.Event), e.StartDayOfWeek, eventEnd(e.Event), e.EndDayOfWeek, e.Summary, ""})
-		}
-		for _, failure := range failures {
-			writeTableRow(ctx, w, []string{"calendar_error", failure.CalendarID, "", "", "", "", "", "", sanitizeTab(failure.Error)})
-		}
-		return resultErr
-	}
 
-	writeTableRow(ctx, w, []string{"TYPE", "CALENDAR", "ID", "START", "END", "SUMMARY", "ERROR"})
+	header := []string{"TYPE", "CALENDAR", "ID", "START", "END", "SUMMARY", "ERROR"}
+	if showWeekday {
+		header = []string{"TYPE", "CALENDAR", "ID", "START", "START_DOW", "END", "END_DOW", "SUMMARY", "ERROR"}
+	}
+	writeTableRow(ctx, w, header)
+
 	for _, e := range all {
-		writeTableRow(ctx, w, []string{"event", e.CalendarID, e.Id, eventStart(e.Event), eventEnd(e.Event), e.Summary, ""})
+		row := []string{"event", e.CalendarID, e.Id, eventStart(e.Event), eventEnd(e.Event), e.Summary, ""}
+		if showWeekday {
+			row = []string{"event", e.CalendarID, e.Id, eventStart(e.Event), e.StartDayOfWeek, eventEnd(e.Event), e.EndDayOfWeek, e.Summary, ""}
+		}
+		writeTableRow(ctx, w, row)
 	}
 	for _, failure := range failures {
-		writeTableRow(ctx, w, []string{"calendar_error", failure.CalendarID, "", "", "", "", sanitizeTab(failure.Error)})
+		row := make([]string, len(header))
+		row[0] = "calendar_error"
+		row[1] = failure.CalendarID
+		row[len(row)-1] = sanitizeTab(failure.Error)
+		writeTableRow(ctx, w, row)
 	}
 	return resultErr
 }
