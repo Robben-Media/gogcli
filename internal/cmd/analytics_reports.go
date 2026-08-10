@@ -205,6 +205,15 @@ func (c *AnalyticsBatchReportsCmd) Run(ctx context.Context, flags *RootFlags) er
 			"reports": resp.Reports,
 		})
 	}
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		writeTableRow(ctx, w, []string{"REPORT_INDEX", "ROW_INDEX", "FIELD_KIND", "FIELD_NAME", "FIELD_VALUE"})
+		for reportIndex, report := range resp.Reports {
+			writeAnalyticsBatchPlainRows(ctx, w, reportIndex+1, report.DimensionHeaders, report.MetricHeaders, report.Rows)
+		}
+		return nil
+	}
 
 	u := ui.FromContext(ctx)
 	if len(resp.Reports) == 0 {
@@ -243,6 +252,36 @@ func (c *AnalyticsBatchReportsCmd) Run(ctx context.Context, flags *RootFlags) er
 	}
 
 	return nil
+}
+
+func writeAnalyticsBatchPlainRows(
+	ctx context.Context,
+	w io.Writer,
+	reportIndex int,
+	dimensionHeaders []*analyticsdata.DimensionHeader,
+	metricHeaders []*analyticsdata.MetricHeader,
+	rows []*analyticsdata.Row,
+) {
+	for rowIndex, row := range rows {
+		for fieldIndex, value := range row.DimensionValues {
+			fieldName := ""
+			if fieldIndex < len(dimensionHeaders) {
+				fieldName = dimensionHeaders[fieldIndex].Name
+			}
+			writeTableRow(ctx, w, []string{
+				fmt.Sprint(reportIndex), fmt.Sprint(rowIndex + 1), "DIMENSION", fieldName, value.Value,
+			})
+		}
+		for fieldIndex, value := range row.MetricValues {
+			fieldName := ""
+			if fieldIndex < len(metricHeaders) {
+				fieldName = metricHeaders[fieldIndex].Name
+			}
+			writeTableRow(ctx, w, []string{
+				fmt.Sprint(reportIndex), fmt.Sprint(rowIndex + 1), "METRIC", fieldName, value.Value,
+			})
+		}
+	}
 }
 
 // --- batch-pivot-reports ---
@@ -297,6 +336,15 @@ func (c *AnalyticsBatchPivotReportsCmd) Run(ctx context.Context, flags *RootFlag
 		return outfmt.WriteJSON(os.Stdout, map[string]any{
 			"pivotReports": resp.PivotReports,
 		})
+	}
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		writeTableRow(ctx, w, []string{"REPORT_INDEX", "ROW_INDEX", "FIELD_KIND", "FIELD_NAME", "FIELD_VALUE"})
+		for reportIndex, report := range resp.PivotReports {
+			writeAnalyticsBatchPlainRows(ctx, w, reportIndex+1, report.DimensionHeaders, report.MetricHeaders, report.Rows)
+		}
+		return nil
 	}
 
 	u := ui.FromContext(ctx)
