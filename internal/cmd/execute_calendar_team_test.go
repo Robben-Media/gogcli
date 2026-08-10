@@ -542,7 +542,7 @@ func TestExecute_CalendarTeam_Plain_PartialFailure(t *testing.T) {
 		t.Fatalf("plain execution error = %v, want nonzero incomplete result", execErr)
 	}
 
-	lines := nonEmptyLines(out)
+	lines := nonEmptyTeamLines(out)
 	if len(lines) < 2 {
 		t.Fatalf("expected event and error records, got %q", out)
 	}
@@ -832,7 +832,7 @@ func TestExecute_CalendarTeam_Plain_SuccessfulKeepsFourColumnSchema(t *testing.T
 		t.Fatalf("successful plain schedule must succeed: %v", execErr)
 	}
 
-	lines := nonEmptyLines(out)
+	lines := nonEmptyTeamLines(out)
 	want := []string{
 		"WHO\tSTART\tEND\tSUMMARY",
 		"alice@example.com\t09:00\t09:30\tStandup planning notes",
@@ -926,7 +926,7 @@ func TestExecute_CalendarTeam_Plain_AllFailed(t *testing.T) {
 		t.Fatalf("all-failed plain execution error = %v, want nonzero", execErr)
 	}
 
-	lines := nonEmptyLines(out)
+	lines := nonEmptyTeamLines(out)
 	if len(lines) != 3 {
 		t.Fatalf("expected header + 2 error rows, got %q", out)
 	}
@@ -948,4 +948,14 @@ func TestExecute_CalendarTeam_Plain_AllFailed(t *testing.T) {
 			t.Fatalf("error record is not parseable TSV: %q", line)
 		}
 	}
+}
+
+func nonEmptyTeamLines(s string) []string {
+	var lines []string
+	for _, line := range strings.Split(strings.TrimSpace(s), "\n") {
+		if line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines
 }

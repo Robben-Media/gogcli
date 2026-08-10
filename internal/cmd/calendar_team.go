@@ -38,6 +38,11 @@ type teamEvent struct {
 	sortKey        time.Time
 }
 
+type teamEventError struct {
+	CalendarID string `json:"calendarId"`
+	Error      string `json:"error"`
+}
+
 func (c *CalendarTeamCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u := ui.FromContext(ctx)
 	account, err := requireAccount(flags)
@@ -166,7 +171,7 @@ func (c *CalendarTeamCmd) runEvents(ctx context.Context, svc *calendar.Service, 
 	var (
 		mu       sync.Mutex
 		events   []teamEvent
-		failures []calendarEventError
+		failures []teamEventError
 		wg       sync.WaitGroup
 		sem      = make(chan struct{}, 10) // max 10 concurrent requests
 	)
@@ -190,7 +195,7 @@ func (c *CalendarTeamCmd) runEvents(ctx context.Context, svc *calendar.Service, 
 
 			resp, err := call.Do()
 			if err != nil {
-				failure := calendarEventError{CalendarID: email, Error: err.Error()}
+				failure := teamEventError{CalendarID: email, Error: err.Error()}
 				mu.Lock()
 				failures = append(failures, failure)
 				mu.Unlock()
@@ -307,21 +312,21 @@ func (c *CalendarTeamCmd) runEvents(ctx context.Context, svc *calendar.Service, 
 		for _, ev := range events {
 			writeTableRow(ctx, w, []string{
 				"event",
-				sanitizeTab(ev.Who),
-				sanitizeTab(ev.Start),
-				sanitizeTab(ev.End),
-				sanitizeTab(truncate(ev.Summary, 40)),
+				sanitizePlainField(ev.Who),
+				sanitizePlainField(ev.Start),
+				sanitizePlainField(ev.End),
+				sanitizePlainField(truncate(ev.Summary, 40)),
 				"",
 			})
 		}
 		for _, failure := range failures {
 			writeTableRow(ctx, w, []string{
 				"calendar_error",
-				sanitizeTab(failure.CalendarID),
+				sanitizePlainField(failure.CalendarID),
 				"",
 				"",
 				"",
-				sanitizeTab(failure.Error),
+				sanitizePlainField(failure.Error),
 			})
 		}
 		return resultErr
@@ -330,10 +335,10 @@ func (c *CalendarTeamCmd) runEvents(ctx context.Context, svc *calendar.Service, 
 	fmt.Fprintln(w, "WHO\tSTART\tEND\tSUMMARY")
 	for _, ev := range events {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
-			sanitizeTab(ev.Who),
-			sanitizeTab(ev.Start),
-			sanitizeTab(ev.End),
-			sanitizeTab(truncate(ev.Summary, 40)),
+			sanitizePlainField(ev.Who),
+			sanitizePlainField(ev.Start),
+			sanitizePlainField(ev.End),
+			sanitizePlainField(truncate(ev.Summary, 40)),
 		)
 	}
 	return nil
