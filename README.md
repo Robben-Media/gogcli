@@ -733,6 +733,14 @@ gog calendar team <group-email> --week            # Show team's events for the w
 gog calendar team <group-email> --freebusy        # Show only busy/free blocks (faster)
 gog calendar team <group-email> --query "standup" # Filter by event title
 
+# In event mode, --json includes complete and errors fields. If any member
+# calendar fails, successful events are still rendered with complete=false and
+# one {calendarId,error} entry per failure, then the command exits nonzero.
+# In --plain mode, incomplete results use this six-column TSV schema:
+# TYPE  WHO  START  END  SUMMARY  ERROR
+# Records are typed as event or calendar_error. Complete results keep the
+# existing WHO/START/END/SUMMARY schema; --freebusy behavior is unchanged.
+
 # Create and update
 gog calendar create <calendarId> \
   --summary "Meeting" \
