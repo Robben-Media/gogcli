@@ -320,7 +320,7 @@ func TestWriteDownloadFile_RetriesCloseBeforeCleanup(t *testing.T) {
 	}
 
 	dest := filepath.Join(t.TempDir(), "file.bin")
-	if _, err := writeDownloadFile(dest, 0o644, func(w io.Writer) (int64, error) {
+	if _, _, err := writeDownloadFile(dest, 0o644, func(w io.Writer) (int64, error) {
 		n, writeErr := io.WriteString(w, "replacement")
 		return int64(n), writeErr
 	}); err == nil {
@@ -434,7 +434,7 @@ func TestWriteDownloadFile_FollowsSymlinkAndPreservesTargetMode(t *testing.T) {
 		t.Fatalf("create symlink: %v", err)
 	}
 
-	if _, err := writeDownloadFile(link, 0o644, func(w io.Writer) (int64, error) {
+	if _, _, err := writeDownloadFile(link, 0o644, func(w io.Writer) (int64, error) {
 		n, writeErr := io.WriteString(w, "replacement")
 		return int64(n), writeErr
 	}); err != nil {
@@ -475,7 +475,7 @@ func TestWriteDownloadFile_FollowsDanglingSymlinkChain(t *testing.T) {
 		t.Fatalf("create destination symlink: %v", err)
 	}
 
-	if _, err := writeDownloadFile(link, 0o644, func(w io.Writer) (int64, error) {
+	if _, _, err := writeDownloadFile(link, 0o644, func(w io.Writer) (int64, error) {
 		n, writeErr := io.WriteString(w, "replacement")
 		return int64(n), writeErr
 	}); err != nil {
@@ -508,7 +508,7 @@ func TestWriteDownloadFile_PreservesZeroMode(t *testing.T) {
 		t.Fatalf("chmod destination: %v", err)
 	}
 
-	if _, err := writeDownloadFile(dest, 0o644, func(w io.Writer) (int64, error) {
+	if _, _, err := writeDownloadFile(dest, 0o644, func(w io.Writer) (int64, error) {
 		n, writeErr := io.WriteString(w, "replacement")
 		return int64(n), writeErr
 	}); err != nil {

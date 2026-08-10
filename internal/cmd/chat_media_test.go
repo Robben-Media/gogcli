@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -273,6 +274,111 @@ func TestExecute_ChatMediaDownload_InterruptedPreservesDestinationWithoutReceipt
 	}
 	if len(entries) != 1 || entries[0].Name() != "downloaded.txt" {
 		t.Fatalf("temporary artifact left behind: %#v", entries)
+	}
+}
+
+func TestExecute_ChatMediaDownload_PlainTSV(t *testing.T) {
+	origNew := newChatService
+	t.Cleanup(func() { newChatService = origNew })
+
+	testContent := "plain download bytes"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !(r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/media/")) {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte(testContent))
+	}))
+	t.Cleanup(srv.Close)
+
+	svc, err := chat.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newChatService = func(context.Context, string) (*chat.Service, error) { return svc, nil }
+
+	dir := t.TempDir()
+	committedPath := filepath.Join(dir, "plain-download.txt")
+	requestedPath := filepath.Join(dir, "requested-download.txt")
+	if symlinkErr := os.Symlink(filepath.Base(committedPath), requestedPath); symlinkErr != nil {
+		t.Fatalf("Symlink: %v", symlinkErr)
+	}
+	unusedDir := filepath.Join(dir, "unused")
+	if mkdirErr := os.Mkdir(unusedDir, 0o700); mkdirErr != nil {
+		t.Fatalf("Mkdir: %v", mkdirErr)
+	}
+	outputPath := unusedDir + string(filepath.Separator) + ".." + string(filepath.Separator) + filepath.Base(requestedPath)
+	if _, statErr := os.Lstat(outputPath); statErr != nil {
+		t.Fatalf("Lstat noncanonical symlink path: %v", statErr)
+	}
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			// Resource without media/ prefix should be normalized in the receipt.
+			if execErr := Execute([]string{"--plain", "--account", "a@b.com", "chat", "media", "download", "abc123", "--output", outputPath}); execErr != nil {
+				t.Fatalf("Execute: %v", execErr)
+			}
+		})
+	})
+
+	want := "RESOURCE\tPATH\tBYTES\nmedia/abc123\t" + committedPath + "\t" + strconv.Itoa(len(testContent)) + "\n"
+	if out != want {
+		t.Fatalf("plain download output = %q, want %q", out, want)
+	}
+
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("reading downloaded file: %v", err)
+	}
+	if string(content) != testContent {
+		t.Fatalf("downloaded content = %q, want %q", string(content), testContent)
+	}
+}
+
+func TestExecute_ChatMediaDownload_HumanReceiptUnchanged(t *testing.T) {
+	origNew := newChatService
+	t.Cleanup(func() { newChatService = origNew })
+
+	testContent := "human receipt content"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !(r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/media/")) {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte(testContent))
+	}))
+	t.Cleanup(srv.Close)
+
+	svc, err := chat.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newChatService = func(context.Context, string) (*chat.Service, error) { return svc, nil }
+
+	outputPath := filepath.Join(t.TempDir(), "human-download.txt")
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if execErr := Execute([]string{"--account", "a@b.com", "chat", "media", "download", "media/abc123", "--output", outputPath}); execErr != nil {
+				t.Fatalf("Execute: %v", execErr)
+			}
+		})
+	})
+
+	want := "Downloaded media/abc123 to " + outputPath + " (" + formatDriveSize(int64(len(testContent))) + ")\n"
+	if out != want {
+		t.Fatalf("human download output = %q, want %q", out, want)
 	}
 }
 

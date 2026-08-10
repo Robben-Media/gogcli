@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"google.golang.org/api/chat/v1"
@@ -188,7 +189,7 @@ func (c *ChatMediaDownloadCmd) Run(ctx context.Context, flags *RootFlags) error 
 		return fmt.Errorf("expanding output path: %w", err)
 	}
 
-	n, err := writeDownloadFile(destPath, 0o644, func(w io.Writer) (int64, error) {
+	n, committedPath, err := writeDownloadFile(destPath, 0o644, func(w io.Writer) (int64, error) {
 		return io.Copy(w, resp.Body)
 	})
 	if err != nil {
@@ -201,6 +202,15 @@ func (c *ChatMediaDownloadCmd) Run(ctx context.Context, flags *RootFlags) error 
 			"path":     destPath,
 			"size":     n,
 		})
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainReceipt(
+			ctx,
+			[]string{"RESOURCE", "PATH", "BYTES"},
+			[]string{resource, committedPath, strconv.FormatInt(n, 10)},
+		)
+		return nil
 	}
 
 	u.Out().Printf("Downloaded %s to %s (%s)", resource, destPath, formatDriveSize(n))

@@ -260,7 +260,7 @@ func (c *KeepAttachmentCmd) Run(ctx context.Context, flags *RootFlags, keep *Kee
 		}
 	}
 
-	written, err := writeDownloadFile(outPath, 0o644, func(w io.Writer) (int64, error) {
+	written, _, err := writeDownloadFile(outPath, 0o644, func(w io.Writer) (int64, error) {
 		return io.Copy(w, resp.Body)
 	})
 	if err != nil {
