@@ -398,4 +398,3 @@ func TestContactsPhotoUpdate_HumanStillPrintsProse(t *testing.T) {
 		t.Fatalf("human photo update unexpectedly used plain schema: %q", out)
 	}
 }
-
