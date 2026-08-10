@@ -59,7 +59,7 @@ func TestExecute_CalendarEvents_Text_WithPaging(t *testing.T) {
 	}
 }
 
-func setupCalendarPartialFailureService(t *testing.T) {
+func setupCalendarFailureService(t *testing.T, failAll bool) {
 	t.Helper()
 
 	origNew := newCalendarService
@@ -73,6 +73,10 @@ func setupCalendarPartialFailureService(t *testing.T) {
 				"items": []map[string]any{{"id": "c1"}, {"id": "c2"}},
 			})
 		case strings.Contains(r.URL.Path, "/calendars/c1/events"):
+			if failAll {
+				http.Error(w, "backend unavailable", http.StatusServiceUnavailable)
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"items": []map[string]any{{
@@ -101,7 +105,7 @@ func setupCalendarPartialFailureService(t *testing.T) {
 }
 
 func TestExecute_CalendarEvents_Text_AllReportsPartialFailure(t *testing.T) {
-	setupCalendarPartialFailureService(t)
+	setupCalendarFailureService(t, false)
 
 	var execErr error
 	var errOut string
@@ -152,7 +156,7 @@ func TestExecute_CalendarEvents_Text_AllReportsPartialFailure(t *testing.T) {
 }
 
 func TestExecute_CalendarEvents_JSON_CalendarsReportsPartialFailure(t *testing.T) {
-	setupCalendarPartialFailureService(t)
+	setupCalendarFailureService(t, false)
 
 	var execErr error
 	var errOut string
@@ -187,5 +191,44 @@ func TestExecute_CalendarEvents_JSON_CalendarsReportsPartialFailure(t *testing.T
 	}
 	if !strings.Contains(errOut, "calendar c2:") || !strings.Contains(errOut, "access denied") {
 		t.Fatalf("missing actionable diagnostic: %q", errOut)
+	}
+}
+
+func TestExecute_CalendarEvents_JSON_AllFailed(t *testing.T) {
+	setupCalendarFailureService(t, true)
+
+	var execErr error
+	var errOut string
+	out := captureStdout(t, func() {
+		errOut = captureStderr(t, func() {
+			execErr = Execute([]string{"--json", "--account", "a@b.com", "calendar", "events", "--all", "--from", "2025-12-17T00:00:00Z", "--to", "2025-12-18T00:00:00Z"})
+		})
+	})
+	if execErr == nil {
+		t.Fatal("expected all-failed result to return nonzero")
+	}
+
+	var parsed struct {
+		Events []map[string]any `json:"events"`
+		Errors []struct {
+			CalendarID string `json:"calendarId"`
+			Error      string `json:"error"`
+		} `json:"errors"`
+		Complete bool `json:"complete"`
+	}
+	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
+		t.Fatalf("stdout is not valid JSON: %v\nout=%q", err, out)
+	}
+	if parsed.Complete || len(parsed.Events) != 0 || len(parsed.Errors) != 2 {
+		t.Fatalf("unexpected all-failed result: %#v", parsed)
+	}
+	if parsed.Errors[0].CalendarID != "c1" || !strings.Contains(parsed.Errors[0].Error, "backend unavailable") {
+		t.Fatalf("first failed calendar not reported: %#v", parsed.Errors)
+	}
+	if parsed.Errors[1].CalendarID != "c2" || !strings.Contains(parsed.Errors[1].Error, "access denied") {
+		t.Fatalf("second failed calendar not reported: %#v", parsed.Errors)
+	}
+	if !strings.Contains(errOut, "calendar c1:") || !strings.Contains(errOut, "calendar c2:") || strings.Contains(errOut, "No events") {
+		t.Fatalf("unexpected all-failed diagnostics: %q", errOut)
 	}
 }
