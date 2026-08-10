@@ -466,9 +466,6 @@ func TestContactsBatchGet(t *testing.T) {
 }
 
 func TestContactsBatchCreate_PlainTSV(t *testing.T) {
-	origNew := newPeopleContactsService
-	t.Cleanup(func() { newPeopleContactsService = origNew })
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/people:batchCreateContacts" {
 			http.NotFound(w, r)
@@ -497,17 +494,7 @@ func TestContactsBatchCreate_PlainTSV(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
-	t.Cleanup(srv.Close)
-
-	svc, err := people.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newPeopleContactsService = func(context.Context, string) (*people.Service, error) { return svc, nil }
+	usePeopleContactsTestServer(t, srv)
 
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
@@ -532,24 +519,11 @@ func TestContactsBatchCreate_PlainTSV(t *testing.T) {
 }
 
 func TestContactsBatchCreate_PlainEmptyEmitsHeaderOnly(t *testing.T) {
-	origNew := newPeopleContactsService
-	t.Cleanup(func() { newPeopleContactsService = origNew })
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(&people.BatchCreateContactsResponse{CreatedPeople: []*people.PersonResponse{}})
 	}))
-	t.Cleanup(srv.Close)
-
-	svc, err := people.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newPeopleContactsService = func(context.Context, string) (*people.Service, error) { return svc, nil }
+	usePeopleContactsTestServer(t, srv)
 
 	out := captureStdout(t, func() {
 		stderr := captureStderr(t, func() {
@@ -573,9 +547,6 @@ func TestContactsBatchCreate_PlainEmptyEmitsHeaderOnly(t *testing.T) {
 }
 
 func TestContactsBatchCreate_HumanStillPrintsCount(t *testing.T) {
-	origNew := newPeopleContactsService
-	t.Cleanup(func() { newPeopleContactsService = origNew })
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := &people.BatchCreateContactsResponse{
 			CreatedPeople: []*people.PersonResponse{
@@ -585,17 +556,7 @@ func TestContactsBatchCreate_HumanStillPrintsCount(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
-	t.Cleanup(srv.Close)
-
-	svc, err := people.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newPeopleContactsService = func(context.Context, string) (*people.Service, error) { return svc, nil }
+	usePeopleContactsTestServer(t, srv)
 
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
@@ -617,9 +578,6 @@ func TestContactsBatchCreate_HumanStillPrintsCount(t *testing.T) {
 }
 
 func TestContactsBatchUpdate_PlainTSV(t *testing.T) {
-	origNew := newPeopleContactsService
-	t.Cleanup(func() { newPeopleContactsService = origNew })
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/people:batchUpdateContacts" {
 			http.NotFound(w, r)
@@ -644,17 +602,7 @@ func TestContactsBatchUpdate_PlainTSV(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
-	t.Cleanup(srv.Close)
-
-	svc, err := people.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newPeopleContactsService = func(context.Context, string) (*people.Service, error) { return svc, nil }
+	usePeopleContactsTestServer(t, srv)
 
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
@@ -679,24 +627,11 @@ func TestContactsBatchUpdate_PlainTSV(t *testing.T) {
 }
 
 func TestContactsBatchUpdate_PlainEmptyEmitsHeaderOnly(t *testing.T) {
-	origNew := newPeopleContactsService
-	t.Cleanup(func() { newPeopleContactsService = origNew })
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(&people.BatchUpdateContactsResponse{UpdateResult: map[string]people.PersonResponse{}})
 	}))
-	t.Cleanup(srv.Close)
-
-	svc, err := people.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newPeopleContactsService = func(context.Context, string) (*people.Service, error) { return svc, nil }
+	usePeopleContactsTestServer(t, srv)
 
 	out := captureStdout(t, func() {
 		stderr := captureStderr(t, func() {
@@ -720,9 +655,6 @@ func TestContactsBatchUpdate_PlainEmptyEmitsHeaderOnly(t *testing.T) {
 }
 
 func TestContactsBatchUpdate_HumanStillPrintsCount(t *testing.T) {
-	origNew := newPeopleContactsService
-	t.Cleanup(func() { newPeopleContactsService = origNew })
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := &people.BatchUpdateContactsResponse{
 			UpdateResult: map[string]people.PersonResponse{
@@ -732,17 +664,7 @@ func TestContactsBatchUpdate_HumanStillPrintsCount(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
-	t.Cleanup(srv.Close)
-
-	svc, err := people.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newPeopleContactsService = func(context.Context, string) (*people.Service, error) { return svc, nil }
+	usePeopleContactsTestServer(t, srv)
 
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
@@ -758,4 +680,24 @@ func TestContactsBatchUpdate_HumanStillPrintsCount(t *testing.T) {
 	if out != "Updated 1 contact(s)\n" {
 		t.Fatalf("human update output = %q, want count prose", out)
 	}
+}
+
+func usePeopleContactsTestServer(t *testing.T, srv *httptest.Server) {
+	t.Helper()
+
+	origNew := newPeopleContactsService
+	t.Cleanup(func() {
+		newPeopleContactsService = origNew
+		srv.Close()
+	})
+
+	svc, err := people.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newPeopleContactsService = func(context.Context, string) (*people.Service, error) { return svc, nil }
 }

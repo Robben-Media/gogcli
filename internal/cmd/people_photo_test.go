@@ -303,9 +303,6 @@ func createTempImageFile(t *testing.T, data []byte) string {
 }
 
 func TestContactsPhotoUpdate_PlainTSV(t *testing.T) {
-	origNew := newPeopleContactsService
-	t.Cleanup(func() { newPeopleContactsService = origNew })
-
 	testImageData := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01")
 	tmpFile := createTempImageFile(t, testImageData)
 
@@ -320,17 +317,7 @@ func TestContactsPhotoUpdate_PlainTSV(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
-	t.Cleanup(srv.Close)
-
-	svc, err := people.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newPeopleContactsService = func(context.Context, string) (*people.Service, error) { return svc, nil }
+	usePeopleContactsTestServer(t, srv)
 
 	out := captureStdout(t, func() {
 		stderr := captureStderr(t, func() {
@@ -354,9 +341,6 @@ func TestContactsPhotoUpdate_PlainTSV(t *testing.T) {
 }
 
 func TestContactsPhotoUpdate_HumanStillPrintsProse(t *testing.T) {
-	origNew := newPeopleContactsService
-	t.Cleanup(func() { newPeopleContactsService = origNew })
-
 	testImageData := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01")
 	tmpFile := createTempImageFile(t, testImageData)
 
@@ -367,17 +351,7 @@ func TestContactsPhotoUpdate_HumanStillPrintsProse(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
-	t.Cleanup(srv.Close)
-
-	svc, err := people.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newPeopleContactsService = func(context.Context, string) (*people.Service, error) { return svc, nil }
+	usePeopleContactsTestServer(t, srv)
 
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
