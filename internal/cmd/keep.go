@@ -203,6 +203,9 @@ func (c *KeepGetCmd) Run(ctx context.Context, flags *RootFlags, keep *KeepCmd) e
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(os.Stdout, map[string]any{"note": note})
 	}
+	if outfmt.IsPlain(ctx) {
+		return writeKeepGetPlain(ctx, note)
+	}
 
 	u.Out().Printf("name\t%s", note.Name)
 	u.Out().Printf("title\t%s", note.Title)
@@ -221,6 +224,61 @@ func (c *KeepGetCmd) Run(ctx context.Context, flags *RootFlags, keep *KeepCmd) e
 		}
 	}
 	return nil
+}
+
+// writeKeepGetPlain emits stable TSV for a note detail:
+// RECORD_TYPE NOTE_NAME TITLE CREATED UPDATED TRASHED ATTACHMENT_NAME MIME_TYPE VALUE
+// with a metadata row always, plus optional body/attachment rows that repeat note identity.
+func writeKeepGetPlain(ctx context.Context, note *keepapi.Note) error {
+	w, flush := tableWriter(ctx)
+	defer flush()
+
+	writeTableRow(ctx, w, []string{
+		"RECORD_TYPE",
+		"NOTE_NAME",
+		"TITLE",
+		"CREATED",
+		"UPDATED",
+		"TRASHED",
+		"ATTACHMENT_NAME",
+		"MIME_TYPE",
+		"VALUE",
+	})
+	if note == nil {
+		return nil
+	}
+
+	writeKeepGetPlainRow(ctx, w, "metadata", note, "", "", "")
+	if note.Body != nil && note.Body.Text != nil && note.Body.Text.Text != "" {
+		writeKeepGetPlainRow(ctx, w, "body", note, "", "", note.Body.Text.Text)
+	}
+	for _, a := range note.Attachments {
+		if a == nil {
+			continue
+		}
+		writeKeepGetPlainRow(ctx, w, "attachment", note, a.Name, strings.Join(a.MimeType, ","), "")
+	}
+	return nil
+}
+
+func writeKeepGetPlainRow(
+	ctx context.Context,
+	w io.Writer,
+	recordType string,
+	note *keepapi.Note,
+	attachmentName, mimeType, value string,
+) {
+	writeTableRow(ctx, w, []string{
+		recordType,
+		note.Name,
+		note.Title,
+		note.CreateTime,
+		note.UpdateTime,
+		boolString(note.Trashed),
+		attachmentName,
+		mimeType,
+		value,
+	})
 }
 
 type KeepAttachmentCmd struct {

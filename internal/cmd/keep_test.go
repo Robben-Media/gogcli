@@ -229,7 +229,133 @@ func TestKeepList_JSON(t *testing.T) {
 	}
 }
 
-func TestKeepGet_Plain(t *testing.T) {
+const keepGetPlainHeader = "RECORD_TYPE\tNOTE_NAME\tTITLE\tCREATED\tUPDATED\tTRASHED\tATTACHMENT_NAME\tMIME_TYPE\tVALUE\n"
+
+func stubKeepServiceWithSA(t *testing.T, srv *httptest.Server) {
+	t.Helper()
+	orig := newKeepServiceWithSA
+	t.Cleanup(func() { newKeepServiceWithSA = orig })
+	newKeepServiceWithSA = func(ctx context.Context, _, _ string) (*keepapi.Service, error) {
+		return keepapi.NewService(ctx,
+			option.WithEndpoint(srv.URL+"/"),
+			option.WithHTTPClient(srv.Client()),
+			option.WithoutAuthentication(),
+		)
+	}
+}
+
+func TestKeepGet_Plain_FramedTSV(t *testing.T) {
+	// Seam: public CLI `keep get --plain`.
+	// Schema: RECORD_TYPE NOTE_NAME TITLE CREATED UPDATED TRASHED ATTACHMENT_NAME MIME_TYPE VALUE
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg-config"))
+
+	account := "a@b.com"
+	_ = writeKeepSA(t, account)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/notes/abc":
+			_, _ = io.WriteString(w, `{
+				"name":"notes/abc",
+				"title":"Title\twith\ttabs",
+				"createTime":"2026-01-01T00:00:00Z",
+				"updateTime":"2026-01-02T00:00:00Z",
+				"trashed":false,
+				"body":{"text":{"text":"line1\nline2\twith\ttabs\r\nand more"}},
+				"attachments":[
+					{"name":"notes/abc/attachments/att\t1","mimeType":["text/plain","image/png"]},
+					{"name":"notes/abc/attachments/att2","mimeType":["application/pdf"]}
+				]
+			}`)
+			return
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	stubKeepServiceWithSA(t, srv)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"keep", "get", "abc", "--plain", "--account", account}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	want := keepGetPlainHeader +
+		"metadata\tnotes/abc\tTitle with tabs\t2026-01-01T00:00:00Z\t2026-01-02T00:00:00Z\tfalse\t\t\t\n" +
+		"body\tnotes/abc\tTitle with tabs\t2026-01-01T00:00:00Z\t2026-01-02T00:00:00Z\tfalse\t\t\tline1 line2 with tabs and more\n" +
+		"attachment\tnotes/abc\tTitle with tabs\t2026-01-01T00:00:00Z\t2026-01-02T00:00:00Z\tfalse\tnotes/abc/attachments/att 1\ttext/plain,image/png\t\n" +
+		"attachment\tnotes/abc\tTitle with tabs\t2026-01-01T00:00:00Z\t2026-01-02T00:00:00Z\tfalse\tnotes/abc/attachments/att2\tapplication/pdf\t\n"
+	if out != want {
+		t.Fatalf("plain output mismatch:\nwant %q\ngot  %q", want, out)
+	}
+
+	// Free-form values must not inject physical rows/columns or prose scaffolding.
+	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+	if len(lines) != 5 {
+		t.Fatalf("expected header + 4 records, got %d lines: %q", len(lines), out)
+	}
+	for i, line := range lines {
+		if n := strings.Count(line, "\t"); n != 8 {
+			t.Fatalf("line %d has %d tabs (want 8): %q", i, n, line)
+		}
+	}
+	for _, banned := range []string{"\n\n", "attachments\t", "  notes/", "name\tnotes/abc"} {
+		if strings.Contains(out, banned) {
+			t.Fatalf("plain output still contains banned fragment %q: %q", banned, out)
+		}
+	}
+}
+
+func TestKeepGet_Plain_MetadataOnly_NoBodyNoAttachments(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg-config"))
+
+	account := "a@b.com"
+	_ = writeKeepSA(t, account)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/notes/empty":
+			_, _ = io.WriteString(w, `{
+				"name":"notes/empty",
+				"title":"",
+				"createTime":"2026-01-01T00:00:00Z",
+				"updateTime":"2026-01-02T00:00:00Z",
+				"trashed":true
+			}`)
+			return
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	stubKeepServiceWithSA(t, srv)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"keep", "get", "empty", "--plain", "--account", account}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	want := keepGetPlainHeader +
+		"metadata\tnotes/empty\t\t2026-01-01T00:00:00Z\t2026-01-02T00:00:00Z\ttrue\t\t\t\n"
+	if out != want {
+		t.Fatalf("plain metadata-only output mismatch:\nwant %q\ngot  %q", want, out)
+	}
+	if strings.Contains(out, "\nbody\t") || strings.Contains(out, "\nattachment\t") {
+		t.Fatalf("expected only metadata record, got: %q", out)
+	}
+}
+
+func TestKeepGet_Plain_DoesNotChangeDefaultHuman(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg-config"))
@@ -247,29 +373,23 @@ func TestKeepGet_Plain(t *testing.T) {
 		}
 	}))
 	t.Cleanup(srv.Close)
-
-	orig := newKeepServiceWithSA
-	t.Cleanup(func() { newKeepServiceWithSA = orig })
-	newKeepServiceWithSA = func(ctx context.Context, _, _ string) (*keepapi.Service, error) {
-		return keepapi.NewService(ctx,
-			option.WithEndpoint(srv.URL+"/"),
-			option.WithHTTPClient(srv.Client()),
-			option.WithoutAuthentication(),
-		)
-	}
+	stubKeepServiceWithSA(t, srv)
 
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			if err := Execute([]string{"keep", "get", "abc", "--plain", "--account", account}); err != nil {
+			if err := Execute([]string{"keep", "get", "abc", "--account", account}); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
 		})
 	})
 	if !strings.Contains(out, "name\tnotes/abc") {
-		t.Fatalf("unexpected output: %q", out)
+		t.Fatalf("unexpected human output: %q", out)
 	}
 	if !strings.Contains(out, "attachments\t1") {
-		t.Fatalf("expected attachments, got: %q", out)
+		t.Fatalf("expected human attachments count, got: %q", out)
+	}
+	if strings.Contains(out, "RECORD_TYPE") {
+		t.Fatalf("human mode should not emit RECORD_TYPE header: %q", out)
 	}
 }
 
