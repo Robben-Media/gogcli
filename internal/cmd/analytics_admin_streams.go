@@ -184,16 +184,12 @@ func (c *AADataStreamsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	w, flush := tableWriter(ctx)
 	defer flush()
-	fmt.Fprintln(w, "NAME\tTYPE\tDISPLAY_NAME\tCREATED\tUPDATED")
+	writeTableRow(ctx, w, []string{"NAME", "TYPE", "DISPLAY_NAME", "CREATED", "UPDATED", "MEASUREMENT_ID"})
 	measurementID := ""
 	if resp.WebStreamData != nil {
 		measurementID = resp.WebStreamData.MeasurementId
 	}
-	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", resp.Name, resp.Type, resp.DisplayName, resp.CreateTime, resp.UpdateTime)
-	if measurementID != "" {
-		u := ui.FromContext(ctx)
-		u.Out().Printf("Measurement ID: %s", measurementID)
-	}
+	writeTableRow(ctx, w, []string{resp.Name, resp.Type, resp.DisplayName, resp.CreateTime, resp.UpdateTime, measurementID})
 	return nil
 }
 
