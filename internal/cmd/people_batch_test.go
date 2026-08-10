@@ -668,10 +668,11 @@ func TestContactsBatchUpdate_PlainTSV(t *testing.T) {
 		})
 	})
 
+	resource := "people/2"
 	want := "" +
 		"REQUEST_KEY\tRESOURCE\tNAME\tEMAIL\tSTATUS\tERROR\n" +
 		"people/1\t\t\t\tERROR\tnot found\n" +
-		"people/2\tpeople/2\tJane Smith\tjane@example.com\tOK\t\n"
+		resource + "\t" + resource + "\tJane Smith\tjane@example.com\tOK\t\n"
 	if out != want {
 		t.Fatalf("plain batch update output = %q, want %q", out, want)
 	}
