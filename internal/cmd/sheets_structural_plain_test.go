@@ -153,7 +153,7 @@ func TestSheetsStructuralMutations_PlainReceipts(t *testing.T) {
 		{
 			name: "sheet delete",
 			args: []string{
-				"--plain", "--account", "a@b.com",
+				"--plain", "--force", "--account", "a@b.com",
 				"sheets", "sheet", "delete", "ss-tabs",
 				"--sheet-id", "55",
 			},
