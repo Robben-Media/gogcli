@@ -31,7 +31,7 @@ func setupSearchConsoleMutationService(t *testing.T, handler http.HandlerFunc) {
 	newSearchConsoleService = func(context.Context, string) (*searchconsole.Service, error) { return svc, nil }
 }
 
-func searchConsoleMutationOK(w http.ResponseWriter, r *http.Request) {
+func searchConsoleMutationOK(w http.ResponseWriter, _ *http.Request) {
 	// Mutation endpoints return empty success bodies (204 / empty JSON).
 	w.WriteHeader(http.StatusNoContent)
 }
