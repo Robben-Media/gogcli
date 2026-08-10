@@ -120,10 +120,11 @@ func (c *SearchConsoleQueryCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	req := &searchconsole.SearchAnalyticsQueryRequest{
-		StartDate: startDate,
-		EndDate:   endDate,
-		RowLimit:  c.RowLimit,
-		StartRow:  c.StartRow,
+		StartDate:       startDate,
+		EndDate:         endDate,
+		RowLimit:        c.RowLimit,
+		StartRow:        c.StartRow,
+		ForceSendFields: []string{"StartRow"},
 	}
 
 	if dims := strings.TrimSpace(c.Dimensions); dims != "" {

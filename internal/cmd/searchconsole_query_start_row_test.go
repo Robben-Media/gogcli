@@ -57,12 +57,19 @@ func TestExecute_SearchConsoleQuery_StartRow_OmittedAndExplicit(t *testing.T) {
 			origNew := newSearchConsoleService
 			t.Cleanup(func() { newSearchConsoleService = origNew })
 
-			var got searchconsole.SearchAnalyticsQueryRequest
-			var sawBody bool
+			var gotStartRow int64
+			var sawBody, sawStartRow bool
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if strings.Contains(r.URL.Path, "searchAnalytics/query") && r.Method == http.MethodPost {
-					if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+					var body map[string]json.RawMessage
+					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 						t.Errorf("decode body: %v", err)
+					}
+					if raw, ok := body["startRow"]; ok {
+						sawStartRow = true
+						if err := json.Unmarshal(raw, &gotStartRow); err != nil {
+							t.Errorf("decode startRow: %v", err)
+						}
 					}
 					sawBody = true
 					w.Header().Set("Content-Type", "application/json")
@@ -115,8 +122,11 @@ func TestExecute_SearchConsoleQuery_StartRow_OmittedAndExplicit(t *testing.T) {
 			if !sawBody {
 				t.Fatal("expected Search Analytics query request body")
 			}
-			if got.StartRow != tc.wantStartRow {
-				t.Fatalf("startRow=%d, want %d", got.StartRow, tc.wantStartRow)
+			if !sawStartRow {
+				t.Fatal("expected request body to contain startRow")
+			}
+			if gotStartRow != tc.wantStartRow {
+				t.Fatalf("startRow=%d, want %d", gotStartRow, tc.wantStartRow)
 			}
 
 			var parsed struct {
