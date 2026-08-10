@@ -338,10 +338,7 @@ func (c *SheetsValuesBatchClearCmd) Run(ctx context.Context, flags *RootFlags) e
 		})
 	}
 	if outfmt.IsPlain(ctx) {
-		spreadsheetIDOut := spreadsheetID
-		if strings.TrimSpace(resp.SpreadsheetId) != "" {
-			spreadsheetIDOut = resp.SpreadsheetId
-		}
+		spreadsheetIDOut := sheetsMutationSpreadsheetID(spreadsheetID, resp.SpreadsheetId)
 		writeSheetsValueMutationPlainClears(ctx, "batch-clear", spreadsheetIDOut, resp.ClearedRanges)
 		return nil
 	}
@@ -403,10 +400,7 @@ func (c *SheetsValuesBatchClearByFilterCmd) Run(ctx context.Context, flags *Root
 		})
 	}
 	if outfmt.IsPlain(ctx) {
-		spreadsheetIDOut := spreadsheetID
-		if strings.TrimSpace(resp.SpreadsheetId) != "" {
-			spreadsheetIDOut = resp.SpreadsheetId
-		}
+		spreadsheetIDOut := sheetsMutationSpreadsheetID(spreadsheetID, resp.SpreadsheetId)
 		writeSheetsValueMutationPlainClears(ctx, "batch-clear-by-filter", spreadsheetIDOut, resp.ClearedRanges)
 		return nil
 	}
@@ -579,32 +573,22 @@ func (c *SheetsValuesBatchUpdateByFilterCmd) Run(ctx context.Context, flags *Roo
 		})
 	}
 	if outfmt.IsPlain(ctx) {
-		spreadsheetIDOut := spreadsheetID
-		if strings.TrimSpace(resp.SpreadsheetId) != "" {
-			spreadsheetIDOut = resp.SpreadsheetId
-		}
-		if len(resp.Responses) > 0 {
-			rows := make([]sheetsValueMutationPlainRow, 0, len(resp.Responses))
-			for _, r := range resp.Responses {
-				if r == nil {
-					continue
-				}
-				rows = append(rows, sheetsValueMutationPlainRow{
-					Action:         "batch-update-by-filter",
-					SpreadsheetID:  spreadsheetIDOut,
-					Range:          r.UpdatedRange,
-					UpdatedRows:    formatInt64Field(r.UpdatedRows),
-					UpdatedColumns: formatInt64Field(r.UpdatedColumns),
-					UpdatedCells:   formatInt64Field(r.UpdatedCells),
-					Status:         "ok",
-				})
-			}
-			if len(rows) > 0 {
-				writeSheetsValueMutationPlain(ctx, rows)
-				return nil
+		spreadsheetIDOut := sheetsMutationSpreadsheetID(spreadsheetID, resp.SpreadsheetId)
+		rows := make([]sheetsValueMutationPlainRow, 0, len(resp.Responses)+1)
+		for _, response := range resp.Responses {
+			if response != nil {
+				rows = append(rows, newSheetsValueMutationUpdateRow("batch-update-by-filter", spreadsheetIDOut, response.UpdatedRange, response.UpdatedRows, response.UpdatedColumns, response.UpdatedCells))
 			}
 		}
-		writeSheetsValueMutationPlainSingle(ctx, "batch-update-by-filter", spreadsheetIDOut, "", resp.TotalUpdatedRows, resp.TotalUpdatedColumns, resp.TotalUpdatedCells, resp.TotalUpdatedSheets)
+		writeSheetsValueMutationPlain(ctx, sheetsValueMutationRowsWithTotals(
+			"batch-update-by-filter",
+			spreadsheetIDOut,
+			rows,
+			resp.TotalUpdatedRows,
+			resp.TotalUpdatedColumns,
+			resp.TotalUpdatedCells,
+			resp.TotalUpdatedSheets,
+		))
 		return nil
 	}
 

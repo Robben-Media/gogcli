@@ -229,7 +229,7 @@ func (c *SheetsUpdateCmd) Run(ctx context.Context, flags *RootFlags) error {
 		})
 	}
 	if outfmt.IsPlain(ctx) {
-		writeSheetsValueMutationPlainSingle(ctx, "update", spreadsheetID, resp.UpdatedRange, resp.UpdatedRows, resp.UpdatedColumns, resp.UpdatedCells, 0)
+		writeSheetsValueMutationPlainSingle(ctx, "update", sheetsMutationSpreadsheetID(spreadsheetID, resp.SpreadsheetId), resp.UpdatedRange, resp.UpdatedRows, resp.UpdatedColumns, resp.UpdatedCells)
 		return nil
 	}
 
@@ -327,21 +327,17 @@ func (c *SheetsAppendCmd) Run(ctx context.Context, flags *RootFlags) error {
 		})
 	}
 	if outfmt.IsPlain(ctx) {
-		spreadsheetIDOut := spreadsheetID
-		if resp.Updates != nil && strings.TrimSpace(resp.Updates.SpreadsheetId) != "" {
-			spreadsheetIDOut = resp.Updates.SpreadsheetId
-		} else if strings.TrimSpace(resp.SpreadsheetId) != "" {
-			spreadsheetIDOut = resp.SpreadsheetId
-		}
+		spreadsheetIDOut := sheetsMutationSpreadsheetID(spreadsheetID, resp.SpreadsheetId)
 		var updatedRange string
 		var updatedRows, updatedColumns, updatedCells int64
 		if resp.Updates != nil {
+			spreadsheetIDOut = sheetsMutationSpreadsheetID(spreadsheetIDOut, resp.Updates.SpreadsheetId)
 			updatedRange = resp.Updates.UpdatedRange
 			updatedRows = resp.Updates.UpdatedRows
 			updatedColumns = resp.Updates.UpdatedColumns
 			updatedCells = resp.Updates.UpdatedCells
 		}
-		writeSheetsValueMutationPlainSingle(ctx, "append", spreadsheetIDOut, updatedRange, updatedRows, updatedColumns, updatedCells, 0)
+		writeSheetsValueMutationPlainSingle(ctx, "append", spreadsheetIDOut, updatedRange, updatedRows, updatedColumns, updatedCells)
 		return nil
 	}
 
@@ -390,10 +386,7 @@ func (c *SheetsClearCmd) Run(ctx context.Context, flags *RootFlags) error {
 		})
 	}
 	if outfmt.IsPlain(ctx) {
-		spreadsheetIDOut := spreadsheetID
-		if strings.TrimSpace(resp.SpreadsheetId) != "" {
-			spreadsheetIDOut = resp.SpreadsheetId
-		}
+		spreadsheetIDOut := sheetsMutationSpreadsheetID(spreadsheetID, resp.SpreadsheetId)
 		writeSheetsValueMutationPlainClears(ctx, "clear", spreadsheetIDOut, []string{resp.ClearedRange})
 		return nil
 	}

@@ -161,32 +161,22 @@ func (c *SheetsBatchUpdateCmd) Run(ctx context.Context, flags *RootFlags) error 
 		})
 	}
 	if outfmt.IsPlain(ctx) {
-		spreadsheetIDOut := id
-		if strings.TrimSpace(resp.SpreadsheetId) != "" {
-			spreadsheetIDOut = resp.SpreadsheetId
-		}
-		if len(resp.Responses) > 0 {
-			rows := make([]sheetsValueMutationPlainRow, 0, len(resp.Responses))
-			for _, r := range resp.Responses {
-				if r == nil {
-					continue
-				}
-				rows = append(rows, sheetsValueMutationPlainRow{
-					Action:         "batch-update",
-					SpreadsheetID:  spreadsheetIDOut,
-					Range:          r.UpdatedRange,
-					UpdatedRows:    formatInt64Field(r.UpdatedRows),
-					UpdatedColumns: formatInt64Field(r.UpdatedColumns),
-					UpdatedCells:   formatInt64Field(r.UpdatedCells),
-					Status:         "ok",
-				})
-			}
-			if len(rows) > 0 {
-				writeSheetsValueMutationPlain(ctx, rows)
-				return nil
+		spreadsheetIDOut := sheetsMutationSpreadsheetID(id, resp.SpreadsheetId)
+		rows := make([]sheetsValueMutationPlainRow, 0, len(resp.Responses)+1)
+		for _, response := range resp.Responses {
+			if response != nil {
+				rows = append(rows, newSheetsValueMutationUpdateRow("batch-update", spreadsheetIDOut, response.UpdatedRange, response.UpdatedRows, response.UpdatedColumns, response.UpdatedCells))
 			}
 		}
-		writeSheetsValueMutationPlainSingle(ctx, "batch-update", spreadsheetIDOut, "", resp.TotalUpdatedRows, resp.TotalUpdatedColumns, resp.TotalUpdatedCells, resp.TotalUpdatedSheets)
+		writeSheetsValueMutationPlain(ctx, sheetsValueMutationRowsWithTotals(
+			"batch-update",
+			spreadsheetIDOut,
+			rows,
+			resp.TotalUpdatedRows,
+			resp.TotalUpdatedColumns,
+			resp.TotalUpdatedCells,
+			resp.TotalUpdatedSheets,
+		))
 		return nil
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 // sheetsValueMutationPlainRow is one TSV receipt for a Sheets value mutation.
@@ -19,11 +20,40 @@ type sheetsValueMutationPlainRow struct {
 	Status         string
 }
 
-func formatInt64Field(v int64) string {
-	if v == 0 {
-		return ""
+func sheetsMutationSpreadsheetID(requestID, responseID string) string {
+	if id := strings.TrimSpace(responseID); id != "" {
+		return id
 	}
+	return requestID
+}
+
+func formatSheetsMutationCount(v int64) string {
 	return strconv.FormatInt(v, 10)
+}
+
+func newSheetsValueMutationUpdateRow(action, spreadsheetID, updatedRange string, updatedRows, updatedColumns, updatedCells int64) sheetsValueMutationPlainRow {
+	return sheetsValueMutationPlainRow{
+		Action:         action,
+		SpreadsheetID:  spreadsheetID,
+		Range:          updatedRange,
+		UpdatedRows:    formatSheetsMutationCount(updatedRows),
+		UpdatedColumns: formatSheetsMutationCount(updatedColumns),
+		UpdatedCells:   formatSheetsMutationCount(updatedCells),
+		Status:         "ok",
+	}
+}
+
+func sheetsValueMutationRowsWithTotals(action, spreadsheetID string, rows []sheetsValueMutationPlainRow, totalRows, totalColumns, totalCells, totalSheets int64) []sheetsValueMutationPlainRow {
+	rows = append(rows, sheetsValueMutationPlainRow{
+		Action:         action,
+		SpreadsheetID:  spreadsheetID,
+		UpdatedRows:    formatSheetsMutationCount(totalRows),
+		UpdatedColumns: formatSheetsMutationCount(totalColumns),
+		UpdatedCells:   formatSheetsMutationCount(totalCells),
+		UpdatedSheets:  formatSheetsMutationCount(totalSheets),
+		Status:         "ok",
+	})
+	return rows
 }
 
 func writeSheetsValueMutationPlain(ctx context.Context, rows []sheetsValueMutationPlainRow) {
@@ -48,15 +78,14 @@ func writeSheetsValueMutationPlain(ctx context.Context, rows []sheetsValueMutati
 	}
 }
 
-func writeSheetsValueMutationPlainSingle(ctx context.Context, action, spreadsheetID, rangeSpec string, updatedRows, updatedColumns, updatedCells, updatedSheets int64) {
+func writeSheetsValueMutationPlainSingle(ctx context.Context, action, spreadsheetID, rangeSpec string, updatedRows, updatedColumns, updatedCells int64) {
 	writeSheetsValueMutationPlain(ctx, []sheetsValueMutationPlainRow{{
 		Action:         action,
 		SpreadsheetID:  spreadsheetID,
 		Range:          rangeSpec,
-		UpdatedRows:    formatInt64Field(updatedRows),
-		UpdatedColumns: formatInt64Field(updatedColumns),
-		UpdatedCells:   formatInt64Field(updatedCells),
-		UpdatedSheets:  formatInt64Field(updatedSheets),
+		UpdatedRows:    formatSheetsMutationCount(updatedRows),
+		UpdatedColumns: formatSheetsMutationCount(updatedColumns),
+		UpdatedCells:   formatSheetsMutationCount(updatedCells),
 		Status:         "ok",
 	}})
 }

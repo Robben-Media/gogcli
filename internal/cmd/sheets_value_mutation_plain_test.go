@@ -25,11 +25,21 @@ func TestSheetsValueMutations_PlainReceipts(t *testing.T) {
 		switch {
 		case r.Method == http.MethodPut && strings.Contains(path, "/v4/spreadsheets/ss-update/values/"):
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"spreadsheetId":  "ss-update",
+				"spreadsheetId":  "ss-update-response",
 				"updatedRange":   "Sheet1!A1:B2",
 				"updatedRows":    2,
 				"updatedColumns": 2,
 				"updatedCells":   4,
+			})
+			return
+
+		case r.Method == http.MethodPut && strings.Contains(path, "/v4/spreadsheets/ss-update-zero/values/"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"spreadsheetId":  "ss-update-zero",
+				"updatedRange":   "Sheet1!A1",
+				"updatedRows":    0,
+				"updatedColumns": 0,
+				"updatedCells":   0,
 			})
 			return
 
@@ -150,7 +160,16 @@ func TestSheetsValueMutations_PlainReceipts(t *testing.T) {
 				"sheets", "update", "ss-update", "Sheet1!A1:B2",
 				"--values-json", `[["a","b"],["c","d"]]`,
 			},
-			want: sheetsValueMutationPlainHeader + "update\tss-update\tSheet1!A1:B2\t2\t2\t4\t\tok\n",
+			want: sheetsValueMutationPlainHeader + "update\tss-update-response\tSheet1!A1:B2\t2\t2\t4\t\tok\n",
+		},
+		{
+			name: "update preserves zero counts",
+			args: []string{
+				"--plain", "--account", "a@b.com",
+				"sheets", "update", "ss-update-zero", "Sheet1!A1",
+				"--values-json", `[[""]]`,
+			},
+			want: sheetsValueMutationPlainHeader + "update\tss-update-zero\tSheet1!A1\t0\t0\t0\t\tok\n",
 		},
 		{
 			name: "append",
@@ -178,7 +197,8 @@ func TestSheetsValueMutations_PlainReceipts(t *testing.T) {
 			},
 			want: sheetsValueMutationPlainHeader +
 				"batch-update\tss-batch-update\tSheet1!A1:B2\t2\t2\t4\t\tok\n" +
-				"batch-update\tss-batch-update\tSheet1!C1\t1\t1\t1\t\tok\n",
+				"batch-update\tss-batch-update\tSheet1!C1\t1\t1\t1\t\tok\n" +
+				"batch-update\tss-batch-update\t\t3\t2\t5\t1\tok\n",
 		},
 		{
 			name: "batch-update totals only",
@@ -208,7 +228,9 @@ func TestSheetsValueMutations_PlainReceipts(t *testing.T) {
 				"sheets", "batch-update-by-filter", "ss-filter-update",
 				"--data-json", `[{"dataFilter":{"a1Range":"Sheet1!A1:B2"},"values":[["a","b"],["c","d"]]}]`,
 			},
-			want: sheetsValueMutationPlainHeader + "batch-update-by-filter\tss-filter-update\tSheet1!A1:B2\t2\t2\t4\t\tok\n",
+			want: sheetsValueMutationPlainHeader +
+				"batch-update-by-filter\tss-filter-update\tSheet1!A1:B2\t2\t2\t4\t\tok\n" +
+				"batch-update-by-filter\tss-filter-update\t\t2\t2\t4\t1\tok\n",
 		},
 		{
 			name: "batch-clear-by-filter",
