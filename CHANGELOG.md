@@ -23,6 +23,7 @@
 - Gmail: require shared destructive confirmation before deleting a resolved label. (#56)
 - Gmail: require shared destructive confirmation before removing a delegate, send-as alias, filter, or forwarding address. (#57)
 - Sheets: require shared destructive confirmation before deleting a sheet tab. (#58)
+- Sheets: require shared destructive confirmation before `sheets clear` removes values from a range. (#59)
 
 ## 0.10.0 - 2026-08-07
 
