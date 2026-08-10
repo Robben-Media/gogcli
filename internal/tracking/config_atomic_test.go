@@ -3,10 +3,18 @@ package tracking
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+)
+
+var (
+	errInjectedWriteFailure   = errors.New("injected write failure")
+	errInjectedSyncFailure    = errors.New("injected sync failure")
+	errInjectedCloseFailure   = errors.New("injected close failure")
+	errInjectedReplaceFailure = errors.New("injected replace failure")
 )
 
 func TestSaveConfigRetainsAccountsAndOwnerOnlyPerms(t *testing.T) {
@@ -35,6 +43,7 @@ func TestSaveConfigRetainsAccountsAndOwnerOnlyPerms(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stat: %v", err)
 	}
+
 	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("final permissions = %04o, want 0600", info.Mode().Perm())
 	}
@@ -45,12 +54,14 @@ func TestSaveConfigRetainsAccountsAndOwnerOnlyPerms(t *testing.T) {
 	}
 
 	var fileCfg fileConfig
-	if err := json.Unmarshal(data, &fileCfg); err != nil {
-		t.Fatalf("parse tracking config: %v\n%s", err, data)
+	if unmarshalErr := json.Unmarshal(data, &fileCfg); unmarshalErr != nil {
+		t.Fatalf("parse tracking config: %v\n%s", unmarshalErr, data)
 	}
+
 	if fileCfg.Accounts["a@example.com"] == nil || fileCfg.Accounts["a@example.com"].WorkerURL != "https://a.example" {
 		t.Fatalf("missing prior account a: %#v", fileCfg.Accounts)
 	}
+
 	if fileCfg.Accounts["b@example.com"] == nil || fileCfg.Accounts["b@example.com"].WorkerURL != "https://b.example" {
 		t.Fatalf("missing account b: %#v", fileCfg.Accounts)
 	}
@@ -59,6 +70,7 @@ func TestSaveConfigRetainsAccountsAndOwnerOnlyPerms(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Glob: %v", err)
 	}
+
 	if len(temps) != 0 {
 		t.Fatalf("temporary artifacts left behind: %v", temps)
 	}
@@ -78,6 +90,7 @@ func TestSaveConfigFailurePreservesPriorBytesAndCleansTemp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConfigPath: %v", err)
 	}
+
 	prior, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read prior: %v", err)
@@ -93,8 +106,9 @@ func TestSaveConfigFailurePreservesPriorBytesAndCleansTemp(t *testing.T) {
 				t.Helper()
 				original := writeTrackingConfigFile
 				writeTrackingConfigFile = func(f *os.File, data []byte) (int, error) {
-					return 0, errors.New("injected write failure")
+					return 0, errInjectedWriteFailure
 				}
+
 				t.Cleanup(func() { writeTrackingConfigFile = original })
 			},
 		},
@@ -104,8 +118,9 @@ func TestSaveConfigFailurePreservesPriorBytesAndCleansTemp(t *testing.T) {
 				t.Helper()
 				original := syncTrackingConfigFile
 				syncTrackingConfigFile = func(*os.File) error {
-					return errors.New("injected sync failure")
+					return errInjectedSyncFailure
 				}
+
 				t.Cleanup(func() { syncTrackingConfigFile = original })
 			},
 		},
@@ -115,8 +130,9 @@ func TestSaveConfigFailurePreservesPriorBytesAndCleansTemp(t *testing.T) {
 				t.Helper()
 				original := closeTrackingConfigFile
 				closeTrackingConfigFile = func(*os.File) error {
-					return errors.New("injected close failure")
+					return errInjectedCloseFailure
 				}
+
 				t.Cleanup(func() { closeTrackingConfigFile = original })
 			},
 		},
@@ -126,8 +142,9 @@ func TestSaveConfigFailurePreservesPriorBytesAndCleansTemp(t *testing.T) {
 				t.Helper()
 				original := replaceTrackingConfigFile
 				replaceTrackingConfigFile = func(string, string) error {
-					return errors.New("injected replace failure")
+					return errInjectedReplaceFailure
 				}
+
 				t.Cleanup(func() { replaceTrackingConfigFile = original })
 			},
 		},
@@ -149,6 +166,7 @@ func TestSaveConfigFailurePreservesPriorBytesAndCleansTemp(t *testing.T) {
 			if readErr != nil {
 				t.Fatalf("read after failure: %v", readErr)
 			}
+
 			if string(got) != string(prior) {
 				t.Fatalf("prior config changed on %s failure\nprior:\n%s\ngot:\n%s", tc.name, prior, got)
 			}
@@ -157,11 +175,13 @@ func TestSaveConfigFailurePreservesPriorBytesAndCleansTemp(t *testing.T) {
 			if listErr != nil {
 				t.Fatalf("ReadDir: %v", listErr)
 			}
+
 			for _, entry := range entries {
 				name := entry.Name()
 				if name == filepath.Base(path) {
 					continue
 				}
+
 				if strings.Contains(name, "tmp") || strings.HasPrefix(name, "tracking.json.") {
 					t.Fatalf("temporary artifact left after %s failure: %s", tc.name, name)
 				}
@@ -178,11 +198,13 @@ func TestSaveConfigTempUsesOwnerOnlyPermissions(t *testing.T) {
 	writeTrackingConfigFile = func(f *os.File, data []byte) (int, error) {
 		info, err := f.Stat()
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("stat temp tracking config: %w", err)
 		}
 		sawTempPerm = info.Mode().Perm()
+
 		return originalWrite(f, data)
 	}
+
 	t.Cleanup(func() { writeTrackingConfigFile = originalWrite })
 
 	if err := SaveConfig("a@example.com", &Config{
@@ -191,6 +213,7 @@ func TestSaveConfigTempUsesOwnerOnlyPermissions(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveConfig: %v", err)
 	}
+
 	if sawTempPerm != 0o600 {
 		t.Fatalf("temp permissions = %04o, want 0600", sawTempPerm)
 	}

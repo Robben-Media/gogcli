@@ -174,6 +174,7 @@ func SaveConfig(account string, cfg *Config) error {
 	if err != nil {
 		return fmt.Errorf("marshal tracking config: %w", err)
 	}
+
 	data = append(data, '\n')
 
 	if writeErr := writeConfigAtomic(path, data); writeErr != nil {
@@ -196,10 +197,12 @@ func writeConfigAtomic(path string, data []byte) error {
 	if chmodErr := chmodTrackingConfigFile(tmpName, 0o600); chmodErr != nil {
 		_ = closeTrackingConfigFile(tmp)
 		_ = removeTrackingConfigFile(tmpName)
+
 		return fmt.Errorf("chmod temp tracking config: %w", chmodErr)
 	}
 
 	cleanup := true
+
 	defer func() {
 		if cleanup {
 			_ = removeTrackingConfigFile(tmpName)
@@ -224,11 +227,6 @@ func writeConfigAtomic(path string, data []byte) error {
 		return fmt.Errorf("commit tracking config: %w", replaceErr)
 	}
 	cleanup = false
-
-	// Re-assert final permissions in case an existing destination was more permissive.
-	if chmodErr := chmodTrackingConfigFile(path, 0o600); chmodErr != nil {
-		return fmt.Errorf("chmod tracking config: %w", chmodErr)
-	}
 
 	return nil
 }
