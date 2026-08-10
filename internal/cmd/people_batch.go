@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
+	"strconv"
 	"strings"
 
 	"google.golang.org/api/people/v1"
@@ -98,6 +100,16 @@ func (c *ContactsBatchCreateCmd) Run(ctx context.Context, flags *RootFlags) erro
 			"createdContacts": resp.CreatedPeople,
 			"count":           len(resp.CreatedPeople),
 		})
+	}
+
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		writeTableRow(ctx, w, []string{"REQUEST_KEY", "RESOURCE", "NAME", "EMAIL", "STATUS", "ERROR"})
+		for i, r := range resp.CreatedPeople {
+			writePeopleBatchPlainRow(ctx, w, strconv.Itoa(i), r)
+		}
+		return nil
 	}
 
 	if len(resp.CreatedPeople) == 0 {
@@ -242,6 +254,22 @@ func (c *ContactsBatchUpdateCmd) Run(ctx context.Context, flags *RootFlags) erro
 		})
 	}
 
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		writeTableRow(ctx, w, []string{"REQUEST_KEY", "RESOURCE", "NAME", "EMAIL", "STATUS", "ERROR"})
+		keys := make([]string, 0, len(resp.UpdateResult))
+		for key := range resp.UpdateResult {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			result := resp.UpdateResult[key]
+			writePeopleBatchPlainRow(ctx, w, key, &result)
+		}
+		return nil
+	}
+
 	u.Out().Printf("Updated %d contact(s)", len(contactsMap))
 	return nil
 }
@@ -329,6 +357,28 @@ func (c *ContactsBatchGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 		)
 	}
 	return nil
+}
+
+func writePeopleBatchPlainRow(ctx context.Context, w io.Writer, requestKey string, r *people.PersonResponse) {
+	resource := ""
+	name := ""
+	email := ""
+	status := "OK"
+	errMsg := ""
+
+	if r != nil {
+		if r.Person != nil {
+			resource = r.Person.ResourceName
+			name = primaryName(r.Person)
+			email = primaryEmail(r.Person)
+		}
+		if r.Status != nil && r.Status.Code != 0 {
+			status = "ERROR"
+			errMsg = r.Status.Message
+		}
+	}
+
+	writeTableRow(ctx, w, []string{requestKey, resource, name, email, status, errMsg})
 }
 
 // readContactsJSON reads JSON input from either raw string or file path.

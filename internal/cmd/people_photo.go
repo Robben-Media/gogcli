@@ -129,6 +129,14 @@ func (c *ContactsPhotoUpdateCmd) Run(ctx context.Context, flags *RootFlags) erro
 		})
 	}
 
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		writeTableRow(ctx, w, []string{"RESOURCE", "STATUS"})
+		writeTableRow(ctx, w, []string{resourceName, "OK"})
+		return nil
+	}
+
 	u.Out().Printf("Updated photo for %s", resourceName)
 	return nil
 }

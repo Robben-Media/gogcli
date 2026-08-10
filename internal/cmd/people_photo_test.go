@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"google.golang.org/api/option"
@@ -300,3 +301,101 @@ func createTempImageFile(t *testing.T, data []byte) string {
 	})
 	return tmpFile.Name()
 }
+
+func TestContactsPhotoUpdate_PlainTSV(t *testing.T) {
+	origNew := newPeopleContactsService
+	t.Cleanup(func() { newPeopleContactsService = origNew })
+
+	testImageData := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01")
+	tmpFile := createTempImageFile(t, testImageData)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/people/123:updateContactPhoto" {
+			http.NotFound(w, r)
+			return
+		}
+		resp := &people.UpdateContactPhotoResponse{
+			Person: &people.Person{ResourceName: "people/123"},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	t.Cleanup(srv.Close)
+
+	svc, err := people.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newPeopleContactsService = func(context.Context, string) (*people.Service, error) { return svc, nil }
+
+	out := captureStdout(t, func() {
+		stderr := captureStderr(t, func() {
+			if execErr := Execute([]string{
+				"--plain", "--account", "a@b.com",
+				"contacts", "photo", "update", "123",
+				"--file", tmpFile,
+			}); execErr != nil {
+				t.Fatalf("Execute: %v", execErr)
+			}
+		})
+		if stderr != "" {
+			t.Fatalf("unexpected stderr under --plain: %q", stderr)
+		}
+	})
+
+	want := "RESOURCE\tSTATUS\npeople/123\tOK\n"
+	if out != want {
+		t.Fatalf("plain photo update output = %q, want %q", out, want)
+	}
+}
+
+func TestContactsPhotoUpdate_HumanStillPrintsProse(t *testing.T) {
+	origNew := newPeopleContactsService
+	t.Cleanup(func() { newPeopleContactsService = origNew })
+
+	testImageData := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01")
+	tmpFile := createTempImageFile(t, testImageData)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := &people.UpdateContactPhotoResponse{
+			Person: &people.Person{ResourceName: "people/123"},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	t.Cleanup(srv.Close)
+
+	svc, err := people.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newPeopleContactsService = func(context.Context, string) (*people.Service, error) { return svc, nil }
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if execErr := Execute([]string{
+				"--account", "a@b.com",
+				"contacts", "photo", "update", "people/123",
+				"--file", tmpFile,
+			}); execErr != nil {
+				t.Fatalf("Execute: %v", execErr)
+			}
+		})
+	})
+	want := "Updated photo for people/123\n"
+	if out != want {
+		t.Fatalf("human photo update output = %q, want %q", out, want)
+	}
+	if strings.Contains(out, "RESOURCE\tSTATUS") {
+		t.Fatalf("human photo update unexpectedly used plain schema: %q", out)
+	}
+}
+
