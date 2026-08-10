@@ -15,6 +15,7 @@
 
 ### Fixed
 
+- Calendar: paginate multi-calendar event listings with an opaque per-calendar aggregate `--page` cursor so busy calendars are not silently truncated. (#99)
 - Policy: enforce normalized service policies for canonical hyphenated Business Profile, Search Console, and Tag Manager commands. (#50, #100)
 - Analytics: preserve physical TSV row and column boundaries for report and audience values in `--plain` output. (#51, #101)
 - BigQuery: preserve physical TSV row and column boundaries for query results in `--plain` output. (#52, #102)

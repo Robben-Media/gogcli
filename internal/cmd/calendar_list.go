@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -13,6 +15,25 @@ import (
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/ui"
 )
+
+// multiCalendarPageCursorPrefix marks opaque aggregate page tokens for multi-calendar
+// event listing. Single-calendar mode continues to use raw Google page tokens.
+const multiCalendarPageCursorPrefix = "mcal1."
+
+// multiCalendarPageCursor is the decoded form of an aggregate multi-calendar page token.
+// Selection is the exact calendar set the cursor was issued for.
+// Next maps unfinished calendars to their Google page token; an empty value means the
+// calendar still needs its first page (used to retry first-page failures without
+// treating the calendar as exhausted).
+type multiCalendarPageCursor struct {
+	Selection []string
+	Next      map[string]string
+}
+
+type multiCalendarPageCursorPayload struct {
+	Selection []string          `json:"s"`
+	Next      map[string]string `json:"n"`
+}
 
 func listCalendarEvents(ctx context.Context, svc *calendar.Service, calendarID, from, to string, maxResults int64, page, query, privatePropFilter, sharedPropFilter, fields string, showWeekday bool) error {
 	u := ui.FromContext(ctx)
@@ -111,18 +132,47 @@ func listSelectedCalendarsEvents(ctx context.Context, svc *calendar.Service, cal
 func listCalendarIDsEvents(ctx context.Context, svc *calendar.Service, calendarIDs []string, from, to string, maxResults int64, page, query, privatePropFilter, sharedPropFilter, fields string, showWeekday bool) error {
 	u := ui.FromContext(ctx)
 
-	all := []*eventWithCalendar{}
-	failures := []calendarEventError{}
+	selected := make([]string, 0, len(calendarIDs))
+	selectedSet := make(map[string]struct{}, len(calendarIDs))
 	for _, calID := range calendarIDs {
 		calID = strings.TrimSpace(calID)
 		if calID == "" {
 			continue
 		}
+		if _, ok := selectedSet[calID]; ok {
+			continue
+		}
+		selectedSet[calID] = struct{}{}
+		selected = append(selected, calID)
+	}
+
+	cursor, decodeErr := decodeMultiCalendarPageCursor(page)
+	if decodeErr != nil {
+		return decodeErr
+	}
+	if compatibilityErr := ensureMultiCalendarCursorCompatible(selected, selectedSet, cursor); compatibilityErr != nil {
+		return compatibilityErr
+	}
+
+	all := []*eventWithCalendar{}
+	failures := []calendarEventError{}
+	nextTokens := map[string]string{}
+	for _, calID := range selected {
+		pageToken := ""
+		if cursor != nil {
+			token, ok := cursor.Next[calID]
+			if !ok {
+				// Exhausted on a previous aggregate page; do not restart.
+				continue
+			}
+			pageToken = token
+		}
+
 		call := svc.Events.List(calID).
 			TimeMin(from).
 			TimeMax(to).
 			MaxResults(maxResults).
-			PageToken(page).
+			PageToken(pageToken).
 			SingleEvents(true).
 			OrderBy("startTime")
 		if strings.TrimSpace(query) != "" {
@@ -137,12 +187,17 @@ func listCalendarIDsEvents(ctx context.Context, svc *calendar.Service, calendarI
 		if strings.TrimSpace(fields) != "" {
 			call = call.Fields(gapi.Field(fields))
 		}
-		events, err := call.Context(ctx).Do()
-		if err != nil {
-			failure := calendarEventError{CalendarID: calID, Error: err.Error()}
+		events, listErr := call.Context(ctx).Do()
+		if listErr != nil {
+			failure := calendarEventError{CalendarID: calID, Error: listErr.Error()}
 			failures = append(failures, failure)
 			u.Err().Printf("calendar %s: %s", failure.CalendarID, failure.Error)
+			// Keep the failed request retryable without restarting exhausted calendars.
+			nextTokens[calID] = pageToken
 			continue
+		}
+		if strings.TrimSpace(events.NextPageToken) != "" {
+			nextTokens[calID] = events.NextPageToken
 		}
 		for _, e := range events.Items {
 			startDay, endDay := eventDaysOfWeek(e)
@@ -161,6 +216,11 @@ func listCalendarIDsEvents(ctx context.Context, svc *calendar.Service, calendarI
 		}
 	}
 
+	nextPageToken, err := encodeMultiCalendarPageCursor(selected, nextTokens)
+	if err != nil {
+		return err
+	}
+
 	var resultErr error
 	if len(failures) > 0 {
 		resultErr = fmt.Errorf("failed to fetch events from %d calendar(s)", len(failures))
@@ -168,9 +228,10 @@ func listCalendarIDsEvents(ctx context.Context, svc *calendar.Service, calendarI
 
 	if outfmt.IsJSON(ctx) {
 		if err := outfmt.WriteJSON(os.Stdout, map[string]any{
-			"events":   all,
-			"errors":   failures,
-			"complete": len(failures) == 0,
+			"events":        all,
+			"errors":        failures,
+			"complete":      len(failures) == 0,
+			"nextPageToken": nextPageToken,
 		}); err != nil {
 			return err
 		}
@@ -178,6 +239,7 @@ func listCalendarIDsEvents(ctx context.Context, svc *calendar.Service, calendarI
 	}
 	if len(all) == 0 && len(failures) == 0 {
 		u.Err().Println("No events")
+		printNextPageHint(u, nextPageToken)
 		return nil
 	}
 
@@ -204,7 +266,136 @@ func listCalendarIDsEvents(ctx context.Context, svc *calendar.Service, calendarI
 		row[len(row)-1] = sanitizeTab(failure.Error)
 		writeTableRow(ctx, w, row)
 	}
+	printNextPageHint(u, nextPageToken)
 	return resultErr
+}
+
+func encodeMultiCalendarPageCursor(selection []string, next map[string]string) (string, error) {
+	if len(next) == 0 {
+		return "", nil
+	}
+	cleanSelection := make([]string, 0, len(selection))
+	seen := make(map[string]struct{}, len(selection))
+	for _, calID := range selection {
+		calID = strings.TrimSpace(calID)
+		if calID == "" {
+			continue
+		}
+		if _, ok := seen[calID]; ok {
+			continue
+		}
+		seen[calID] = struct{}{}
+		cleanSelection = append(cleanSelection, calID)
+	}
+	if len(cleanSelection) == 0 {
+		return "", nil
+	}
+
+	cleanNext := make(map[string]string, len(next))
+	for calID, token := range next {
+		calID = strings.TrimSpace(calID)
+		if calID == "" {
+			continue
+		}
+		if _, ok := seen[calID]; !ok {
+			return "", fmt.Errorf("internal error: unfinished calendar %q not in selection", calID)
+		}
+		// Preserve empty tokens: they mean retry the first page.
+		cleanNext[calID] = strings.TrimSpace(token)
+	}
+	if len(cleanNext) == 0 {
+		return "", nil
+	}
+
+	raw, err := json.Marshal(multiCalendarPageCursorPayload{
+		Selection: cleanSelection,
+		Next:      cleanNext,
+	})
+	if err != nil {
+		return "", err
+	}
+	return multiCalendarPageCursorPrefix + base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
+func decodeMultiCalendarPageCursor(page string) (*multiCalendarPageCursor, error) {
+	page = strings.TrimSpace(page)
+	if page == "" {
+		// A nil cursor marks the first aggregate page.
+		return nil, nil //nolint:nilnil
+	}
+	if !strings.HasPrefix(page, multiCalendarPageCursorPrefix) {
+		return nil, usage("invalid multi-calendar page token")
+	}
+	encoded := strings.TrimPrefix(page, multiCalendarPageCursorPrefix)
+	if encoded == "" {
+		return nil, usage("invalid multi-calendar page token")
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, usagef("invalid multi-calendar page token: %v", err)
+	}
+	var payload multiCalendarPageCursorPayload
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, usagef("invalid multi-calendar page token: %v", err)
+	}
+
+	selection := make([]string, 0, len(payload.Selection))
+	selectedSet := make(map[string]struct{}, len(payload.Selection))
+	for _, calID := range payload.Selection {
+		calID = strings.TrimSpace(calID)
+		if calID == "" {
+			return nil, usage("invalid multi-calendar page token: empty calendar id in selection")
+		}
+		if _, ok := selectedSet[calID]; ok {
+			continue
+		}
+		selectedSet[calID] = struct{}{}
+		selection = append(selection, calID)
+	}
+	if len(selection) == 0 {
+		return nil, usage("invalid multi-calendar page token: empty selection")
+	}
+
+	next := make(map[string]string)
+	for calID, token := range payload.Next {
+		calID = strings.TrimSpace(calID)
+		if calID == "" {
+			return nil, usage("invalid multi-calendar page token: empty calendar id")
+		}
+		if _, ok := selectedSet[calID]; !ok {
+			return nil, usagef("invalid multi-calendar page token: unfinished calendar not in selection: %s", calID)
+		}
+		// Empty token is valid and means retry first page.
+		next[calID] = strings.TrimSpace(token)
+	}
+	if len(next) == 0 {
+		return nil, usage("invalid multi-calendar page token: no unfinished calendars")
+	}
+	return &multiCalendarPageCursor{Selection: selection, Next: next}, nil
+}
+
+func ensureMultiCalendarCursorCompatible(selected []string, selectedSet map[string]struct{}, cursor *multiCalendarPageCursor) error {
+	if cursor == nil {
+		return nil
+	}
+	if len(cursor.Selection) != len(selectedSet) {
+		return usage("multi-calendar page token selection does not match requested calendars")
+	}
+	for _, calID := range cursor.Selection {
+		if _, ok := selectedSet[calID]; !ok {
+			return usagef("multi-calendar page token selection does not match requested calendars: %s", calID)
+		}
+	}
+	// selected is already unique; require exact set equality with cursor.Selection.
+	if len(selected) != len(cursor.Selection) {
+		return usage("multi-calendar page token selection does not match requested calendars")
+	}
+	for calID := range cursor.Next {
+		if _, ok := selectedSet[calID]; !ok {
+			return usagef("multi-calendar page token includes calendar not in selection: %s", calID)
+		}
+	}
+	return nil
 }
 
 func resolveCalendarIDs(ctx context.Context, svc *calendar.Service, inputs []string) ([]string, error) {
