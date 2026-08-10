@@ -410,6 +410,66 @@ func TestWriteDownloadFile_FollowsSymlinkAndPreservesTargetMode(t *testing.T) {
 	}
 }
 
+func TestWriteDownloadFile_FollowsDanglingSymlinkChain(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target.bin")
+	intermediate := filepath.Join(dir, "intermediate.bin")
+	if err := os.Symlink(target, intermediate); err != nil {
+		t.Fatalf("create intermediate symlink: %v", err)
+	}
+	link := filepath.Join(dir, "link.bin")
+	if err := os.Symlink(intermediate, link); err != nil {
+		t.Fatalf("create destination symlink: %v", err)
+	}
+
+	if _, err := writeDownloadFile(link, func(w io.Writer) (int64, error) {
+		n, writeErr := io.WriteString(w, "replacement")
+		return int64(n), writeErr
+	}); err != nil {
+		t.Fatalf("writeDownloadFile: %v", err)
+	}
+	for _, symlink := range []string{link, intermediate} {
+		info, err := os.Lstat(symlink)
+		if err != nil {
+			t.Fatalf("lstat %s: %v", symlink, err)
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			t.Fatalf("symlink was replaced: %s", symlink)
+		}
+	}
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	if string(data) != "replacement" {
+		t.Fatalf("target data = %q, want replacement", data)
+	}
+}
+
+func TestWriteDownloadFile_PreservesZeroMode(t *testing.T) {
+	dest := filepath.Join(t.TempDir(), "file.bin")
+	if err := os.WriteFile(dest, []byte("original"), 0o600); err != nil {
+		t.Fatalf("write destination: %v", err)
+	}
+	if err := os.Chmod(dest, 0); err != nil {
+		t.Fatalf("chmod destination: %v", err)
+	}
+
+	if _, err := writeDownloadFile(dest, func(w io.Writer) (int64, error) {
+		n, writeErr := io.WriteString(w, "replacement")
+		return int64(n), writeErr
+	}); err != nil {
+		t.Fatalf("writeDownloadFile: %v", err)
+	}
+	info, err := os.Stat(dest)
+	if err != nil {
+		t.Fatalf("stat destination: %v", err)
+	}
+	if gotMode := info.Mode().Perm(); gotMode != 0 {
+		t.Fatalf("destination mode = %04o, want 0000", gotMode)
+	}
+}
+
 func TestDownloadDriveFile_CreateError(t *testing.T) {
 	orig := driveDownload
 	t.Cleanup(func() { driveDownload = orig })

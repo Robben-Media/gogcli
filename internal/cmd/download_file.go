@@ -27,7 +27,9 @@ func writeDownloadFile(destPath string, write func(io.Writer) (int64, error)) (i
 	}
 
 	var existingMode os.FileMode
+	hadDestination := false
 	if info, statErr := os.Stat(resolvedPath); statErr == nil {
+		hadDestination = true
 		existingMode = info.Mode().Perm()
 	} else if !os.IsNotExist(statErr) {
 		return 0, statErr
@@ -62,7 +64,7 @@ func writeDownloadFile(destPath string, write func(io.Writer) (int64, error)) (i
 		return 0, fmt.Errorf("replacing destination: %w", err)
 	}
 	committed = true
-	if existingMode != 0 {
+	if hadDestination {
 		if err := os.Chmod(resolvedPath, existingMode); err != nil {
 			return 0, fmt.Errorf("restoring destination permissions: %w", err)
 		}
@@ -71,26 +73,32 @@ func writeDownloadFile(destPath string, write func(io.Writer) (int64, error)) (i
 }
 
 func resolveDownloadDestination(path string) (string, error) {
-	info, err := os.Lstat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
+	seen := make(map[string]struct{})
+	for {
+		path = filepath.Clean(path)
+		if _, ok := seen[path]; ok {
+			return "", fmt.Errorf("resolve destination symlink: cycle at %s", path)
+		}
+		seen[path] = struct{}{}
+
+		info, err := os.Lstat(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return path, nil
+			}
+			return "", err
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
 			return path, nil
 		}
-		return "", err
+
+		target, err := os.Readlink(path)
+		if err != nil {
+			return "", fmt.Errorf("resolve destination symlink: %w", err)
+		}
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(path), target)
+		}
+		path = target
 	}
-	if info.Mode()&os.ModeSymlink == 0 {
-		return path, nil
-	}
-	resolved, err := filepath.EvalSymlinks(path)
-	if err == nil {
-		return resolved, nil
-	}
-	target, readErr := os.Readlink(path)
-	if readErr != nil {
-		return "", fmt.Errorf("resolve destination symlink: %w", err)
-	}
-	if !filepath.IsAbs(target) {
-		target = filepath.Join(filepath.Dir(path), target)
-	}
-	return filepath.Clean(target), nil
 }
