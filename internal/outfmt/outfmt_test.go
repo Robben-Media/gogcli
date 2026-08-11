@@ -48,14 +48,44 @@ func TestWriteJSON(t *testing.T) {
 func TestFromEnvAndParseError(t *testing.T) {
 	t.Setenv("GOG_JSON", "yes")
 	t.Setenv("GOG_PLAIN", "0")
+	t.Setenv("GOG_WRAP_UNTRUSTED", "")
 	mode := FromEnv()
 
-	if !mode.JSON || mode.Plain {
+	if !mode.JSON || mode.Plain || mode.WrapUntrusted {
 		t.Fatalf("unexpected env mode: %#v", mode)
+	}
+
+	t.Setenv("GOG_WRAP_UNTRUSTED", "true")
+	mode = FromEnv()
+	if !mode.WrapUntrusted {
+		t.Fatalf("expected wrap from env: %#v", mode)
 	}
 
 	if err := (&ParseError{msg: "boom"}).Error(); err != "boom" {
 		t.Fatalf("unexpected parse error: %q", err)
+	}
+}
+
+func TestFromFlagsFull(t *testing.T) {
+	got, err := FromFlagsFull(true, false, true)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if !got.JSON || got.Plain || !got.WrapUntrusted {
+		t.Fatalf("unexpected mode: %#v", got)
+	}
+	if _, err := FromFlagsFull(true, true, true); err == nil {
+		t.Fatalf("expected conflict error")
+	}
+}
+
+func TestIsWrapUntrusted(t *testing.T) {
+	ctx := WithMode(context.Background(), Mode{WrapUntrusted: true})
+	if !IsWrapUntrusted(ctx) {
+		t.Fatalf("expected wrap true")
+	}
+	if IsWrapUntrusted(context.Background()) {
+		t.Fatalf("expected wrap false by default")
 	}
 }
 

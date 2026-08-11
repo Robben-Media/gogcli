@@ -48,6 +48,7 @@ Every command inherits these. Do NOT re-declare them on individual commands.
 | `--client` | string | `"default"` | `GOG_CLIENT` | OAuth client name |
 | `--json` | bool | false | `GOG_JSON` | JSON output to stdout |
 | `--plain` | bool | false | `GOG_PLAIN` | TSV output, no colors |
+| `--wrap-untrusted` | bool | false | `GOG_WRAP_UNTRUSTED` | JSON only: fence free-text Workspace fields as untrusted (agents) |
 | `--color` | string | `"auto"` | `GOG_COLOR` | Color mode: auto/always/never |
 | `--force` | bool | false | — | Skip destructive confirmations |
 | `--no-input` | bool | false | — | Never prompt, fail instead |
@@ -62,6 +63,7 @@ Every command inherits these. Do NOT re-declare them on individual commands.
 |------|------|----------|-----------------|
 | Default | (none) | Colored table, human hints to stderr | Humans in terminal |
 | JSON | `--json` | Pretty JSON to stdout, nothing to stderr | Scripts, piping |
+| JSON + wrap | `--json --wrap-untrusted` | Same as JSON, free-text fields fenced as untrusted | Agents reading Workspace content |
 | Plain | `--plain` | TSV to stdout, no colors | grep/awk/cut pipelines |
 
 ### JSON Structure

@@ -10,8 +10,9 @@ import (
 )
 
 type Mode struct {
-	JSON  bool
-	Plain bool
+	JSON          bool
+	Plain         bool
+	WrapUntrusted bool
 }
 
 type ParseError struct{ msg string }
@@ -26,10 +27,21 @@ func FromFlags(jsonOut bool, plainOut bool) (Mode, error) {
 	return Mode{JSON: jsonOut, Plain: plainOut}, nil
 }
 
+// FromFlagsFull builds Mode from all root output-related flags.
+func FromFlagsFull(jsonOut, plainOut, wrapUntrusted bool) (Mode, error) {
+	m, err := FromFlags(jsonOut, plainOut)
+	if err != nil {
+		return Mode{}, err
+	}
+	m.WrapUntrusted = wrapUntrusted
+	return m, nil
+}
+
 func FromEnv() Mode {
 	return Mode{
-		JSON:  envBool("GOG_JSON"),
-		Plain: envBool("GOG_PLAIN"),
+		JSON:          envBool("GOG_JSON"),
+		Plain:         envBool("GOG_PLAIN"),
+		WrapUntrusted: envBool("GOG_WRAP_UNTRUSTED"),
 	}
 }
 
@@ -52,7 +64,13 @@ func FromContext(ctx context.Context) Mode {
 func IsJSON(ctx context.Context) bool  { return FromContext(ctx).JSON }
 func IsPlain(ctx context.Context) bool { return FromContext(ctx).Plain }
 
+// WriteJSON encodes v as indented JSON to w.
+// When process encode mode has WrapUntrusted set (via SetEncodeMode), free-text
+// fields are wrapped before encoding. Wrapping is a no-op when that flag is off
+// (the default). Plain/human output paths never call WriteJSON.
 func WriteJSON(w io.Writer, v any) error {
+	v = maybeWrapForEncode(v)
+
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "  ")
