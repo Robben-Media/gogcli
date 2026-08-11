@@ -485,7 +485,7 @@ Two complementary invocation allowlists restrict which commands may run:
 Matching rules for exact paths:
 
 - Identity is the Kong-resolved command path: command segments only (flags and positional values are excluded)
-- Documented aliases resolve via the parser model (`mail search` == `gmail search`; invocation `gmail read <id>` has identity `gmail thread get`). Group aliases in the allowlist (e.g. `gmail read`) match the group path only and do not implicitly allow default child leaves
+- Documented aliases resolve via the parser model (`mail search` == `gmail search`; `gmail read` == `gmail thread get`); parent paths written by primary name do not implicitly allow default child leaves
 - Parent paths do **not** allow children (`gmail thread` does not allow `gmail thread get`)
 - When both lists are set, a match in **either** list permits the command (OR)
 - When neither list is set, enablement is unrestricted

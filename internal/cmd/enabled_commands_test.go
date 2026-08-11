@@ -7,9 +7,9 @@ import (
 	"github.com/steipete/gogcli/internal/config"
 )
 
-func TestParseEnabledCommands(t *testing.T) {
-	allow := parseEnabledCommands("calendar, tasks ,Gmail")
-	if !allow["calendar"] || !allow["tasks"] || !allow["gmail"] {
+func TestParseEnabledTopLevelCommands(t *testing.T) {
+	allow, configured := parseEnabledTopLevelCommands("calendar, tasks ,Gmail")
+	if !configured || !allow["calendar"] || !allow["tasks"] || !allow["gmail"] {
 		t.Fatalf("unexpected allow map: %#v", allow)
 	}
 }
@@ -155,9 +155,9 @@ func TestEnforceEnabledCommands_AliasAllowlistEntries(t *testing.T) {
 	if err := enforceEnabledCommands(read, "", "gmail thread get"); err != nil {
 		t.Fatalf("expected nested alias invocation to share canonical allow identity: %v", err)
 	}
-	// Allowlisting the group alias alone is still a parent path, not the leaf.
-	if err := enforceEnabledCommands(read, "", "gmail read"); err == nil {
-		t.Fatalf("expected group alias allowlist entry not to allow the default leaf")
+	// An alias that selects the default command canonicalizes to its leaf.
+	if err := enforceEnabledCommands(read, "", "gmail read"); err != nil {
+		t.Fatalf("expected alias allowlist entry to match default leaf: %v", err)
 	}
 }
 

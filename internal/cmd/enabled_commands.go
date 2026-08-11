@@ -79,12 +79,6 @@ func parseEnabledTopLevelCommands(value string) (map[string]bool, bool) {
 	return out, configured
 }
 
-// parseEnabledCommands remains for tests and callers that only need the map.
-func parseEnabledCommands(value string) map[string]bool {
-	allow, _ := parseEnabledTopLevelCommands(value)
-	return allow
-}
-
 // parseEnabledCommandPaths builds the exact-path allow set.
 // When a Kong context is available, each entry is walked through the command
 // model so documented aliases collapse to the same canonical path identity.
@@ -124,29 +118,31 @@ func canonicalizeEnabledPath(kctx *kong.Context, segments []string) string {
 
 // resolveCommandPath walks the Kong command tree matching each segment by
 // primary name or alias. It returns the canonical primary-name path written by
-// the user; an exact-path entry for a parent does not follow its default child.
+// the user; a final alias that selects a default command includes that leaf.
+// An exact-path entry written with a parent primary name does not follow it.
 func resolveCommandPath(root *kong.Node, segments []string) ([]string, bool) {
 	if root == nil || len(segments) == 0 {
 		return nil, false
 	}
 	node := root
-	path := make([]string, 0, len(segments))
-	for _, segment := range segments {
-		child := findCommandChild(node, segment)
+	path := make([]string, 0, len(segments)+1)
+	for i, segment := range segments {
+		child, isAlias := findCommandChild(node, segment)
 		if child == nil {
 			return nil, false
 		}
 		path = append(path, child.Name)
 		node = child
+		if i == len(segments)-1 && isAlias && node.DefaultCmd != nil {
+			path = append(path, node.DefaultCmd.Name)
+		}
 	}
-	// Exact matching intentionally stops at the written parent, so
-	// "gmail thread" stays "gmail thread" rather than its default leaf.
 	return path, true
 }
 
-func findCommandChild(node *kong.Node, segment string) *kong.Node {
+func findCommandChild(node *kong.Node, segment string) (*kong.Node, bool) {
 	if node == nil {
-		return nil
+		return nil, false
 	}
 	segment = strings.ToLower(strings.TrimSpace(segment))
 	for _, child := range node.Children {
@@ -154,15 +150,15 @@ func findCommandChild(node *kong.Node, segment string) *kong.Node {
 			continue
 		}
 		if strings.EqualFold(child.Name, segment) {
-			return child
+			return child, false
 		}
 		for _, alias := range child.Aliases {
 			if strings.EqualFold(alias, segment) {
-				return child
+				return child, true
 			}
 		}
 	}
-	return nil
+	return nil, false
 }
 
 func topAllowsCommand(allow map[string]bool, top string) bool {
