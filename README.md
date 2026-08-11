@@ -161,6 +161,13 @@ Show current auth state/services for the active account:
 gog auth status
 ```
 
+Run a read-only auth health check (config, keyring, credentials, accounts, token usability):
+
+```bash
+gog auth doctor
+gog --json auth doctor
+```
+
 ### Multiple OAuth clients
 
 Use `--client` (or `GOG_CLIENT`) to select a named OAuth client:
@@ -536,6 +543,7 @@ gog auth service-account unset <email>             # Remove service account
 gog auth keep <email> --key <path>                 # Legacy alias (Keep)
 gog auth keyring [backend]            # Show/set keyring backend (auto|keychain|file)
 gog auth status                       # Show current auth state/services
+gog auth doctor                       # Read-only auth/keyring/token health check
 gog auth services                     # List available services and OAuth scopes
 gog auth list                         # List stored accounts
 gog auth list --check                 # Validate stored refresh tokens
