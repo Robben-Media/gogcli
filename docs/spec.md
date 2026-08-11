@@ -152,6 +152,7 @@ Flag aliases:
 
 ### Implemented
 
+- `gog auth setup` (guided project/API/OAuth client/first-account setup; see docs/auth-clients.md)
 - `gog auth credentials <credentials.json|->`
 - `gog auth credentials list`
 - `gog --client <name> auth credentials <credentials.json|->`
@@ -312,6 +313,7 @@ Flag aliases:
 ### Planned high-level command tree
 
 - `gog auth …`
+  - `gog auth setup`
   - `gog auth credentials <credentials.json>`
   - `gog auth credentials list`
   - `gog --client <name> auth credentials <credentials.json>`

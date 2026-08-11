@@ -15,16 +15,21 @@ var (
 type ClientCredentials struct {
 	ClientID     string `json:"client_id"`
 	ClientSecret string `json:"client_secret"`
+	// ProjectID is the Google Cloud project_id from the downloaded OAuth client
+	// JSON when present. Optional for backwards compatibility.
+	ProjectID string `json:"project_id,omitempty"`
 }
 
 type googleCredentialsFile struct {
 	Installed *struct {
 		ClientID     string `json:"client_id"`
 		ClientSecret string `json:"client_secret"`
+		ProjectID    string `json:"project_id"`
 	} `json:"installed"`
 	Web *struct {
 		ClientID     string `json:"client_id"`
 		ClientSecret string `json:"client_secret"`
+		ProjectID    string `json:"project_id"`
 	} `json:"web"`
 }
 
@@ -34,18 +39,22 @@ func ParseGoogleOAuthClientJSON(b []byte) (ClientCredentials, error) {
 		return ClientCredentials{}, fmt.Errorf("decode credentials json: %w", err)
 	}
 
-	var clientID, clientSecret string
+	var clientID, clientSecret, projectID string
 	if f.Installed != nil {
-		clientID, clientSecret = f.Installed.ClientID, f.Installed.ClientSecret
+		clientID, clientSecret, projectID = f.Installed.ClientID, f.Installed.ClientSecret, f.Installed.ProjectID
 	} else if f.Web != nil {
-		clientID, clientSecret = f.Web.ClientID, f.Web.ClientSecret
+		clientID, clientSecret, projectID = f.Web.ClientID, f.Web.ClientSecret, f.Web.ProjectID
 	}
 
 	if clientID == "" || clientSecret == "" {
 		return ClientCredentials{}, errInvalidCredentials
 	}
 
-	return ClientCredentials{ClientID: clientID, ClientSecret: clientSecret}, nil
+	return ClientCredentials{
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		ProjectID:    projectID,
+	}, nil
 }
 
 func WriteClientCredentials(c ClientCredentials) error {
@@ -129,6 +138,12 @@ func ClientCredentialsExists(client string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// SameClientCredentials reports whether two stored credential sets match for
+// idempotent install (client id/secret/project).
+func SameClientCredentials(a, b ClientCredentials) bool {
+	return a.ClientID == b.ClientID && a.ClientSecret == b.ClientSecret && a.ProjectID == b.ProjectID
 }
 
 type CredentialsMissingError struct {

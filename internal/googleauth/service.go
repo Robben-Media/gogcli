@@ -64,10 +64,11 @@ type ScopeOptions struct {
 }
 
 type serviceInfo struct {
-	scopes []string
-	user   bool
-	apis   []string
-	note   string
+	scopes          []string
+	user            bool
+	apis            []string // human labels for docs/help
+	serviceUsageIDs []string // Google Service Usage API IDs (e.g. gmail.googleapis.com)
+	note            string
 }
 
 var serviceOrder = []Service{
@@ -98,13 +99,15 @@ var serviceInfoByService = map[Service]serviceInfo{
 			"https://www.googleapis.com/auth/gmail.settings.basic",
 			"https://www.googleapis.com/auth/gmail.settings.sharing",
 		},
-		user: true,
-		apis: []string{"Gmail API"},
+		user:            true,
+		apis:            []string{"Gmail API"},
+		serviceUsageIDs: []string{"gmail.googleapis.com"},
 	},
 	ServiceCalendar: {
-		scopes: []string{"https://www.googleapis.com/auth/calendar"},
-		user:   true,
-		apis:   []string{"Calendar API"},
+		scopes:          []string{"https://www.googleapis.com/auth/calendar"},
+		user:            true,
+		apis:            []string{"Calendar API"},
+		serviceUsageIDs: []string{"calendar-json.googleapis.com"},
 	},
 	ServiceChat: {
 		scopes: []string{
@@ -113,8 +116,9 @@ var serviceInfoByService = map[Service]serviceInfo{
 			"https://www.googleapis.com/auth/chat.memberships",
 			"https://www.googleapis.com/auth/chat.users.readstate.readonly",
 		},
-		user: true,
-		apis: []string{"Chat API"},
+		user:            true,
+		apis:            []string{"Chat API"},
+		serviceUsageIDs: []string{"chat.googleapis.com"},
 	},
 	ServiceClassroom: {
 		scopes: []string{
@@ -129,13 +133,15 @@ var serviceInfoByService = map[Service]serviceInfo{
 			"https://www.googleapis.com/auth/classroom.profile.emails",
 			"https://www.googleapis.com/auth/classroom.profile.photos",
 		},
-		user: true,
-		apis: []string{"Classroom API"},
+		user:            true,
+		apis:            []string{"Classroom API"},
+		serviceUsageIDs: []string{"classroom.googleapis.com"},
 	},
 	ServiceDrive: {
-		scopes: []string{"https://www.googleapis.com/auth/drive"},
-		user:   true,
-		apis:   []string{"Drive API"},
+		scopes:          []string{"https://www.googleapis.com/auth/drive"},
+		user:            true,
+		apis:            []string{"Drive API"},
+		serviceUsageIDs: []string{"drive.googleapis.com"},
 	},
 	ServiceDocs: {
 		// Docs commands are implemented via Drive APIs (export/copy/create),
@@ -144,9 +150,10 @@ var serviceInfoByService = map[Service]serviceInfo{
 			"https://www.googleapis.com/auth/drive",
 			"https://www.googleapis.com/auth/documents",
 		},
-		user: true,
-		apis: []string{"Docs API", "Drive API"},
-		note: "Export/copy/create via Drive",
+		user:            true,
+		apis:            []string{"Docs API", "Drive API"},
+		note:            "Export/copy/create via Drive",
+		serviceUsageIDs: []string{"docs.googleapis.com", "drive.googleapis.com"},
 	},
 	ServiceContacts: {
 		scopes: []string{
@@ -154,55 +161,63 @@ var serviceInfoByService = map[Service]serviceInfo{
 			"https://www.googleapis.com/auth/contacts.other.readonly",
 			"https://www.googleapis.com/auth/directory.readonly",
 		},
-		user: true,
-		apis: []string{"People API"},
-		note: "Contacts + other contacts + directory",
+		user:            true,
+		apis:            []string{"People API"},
+		note:            "Contacts + other contacts + directory",
+		serviceUsageIDs: []string{"people.googleapis.com"},
 	},
 	ServiceTasks: {
-		scopes: []string{"https://www.googleapis.com/auth/tasks"},
-		user:   true,
-		apis:   []string{"Tasks API"},
+		scopes:          []string{"https://www.googleapis.com/auth/tasks"},
+		user:            true,
+		apis:            []string{"Tasks API"},
+		serviceUsageIDs: []string{"tasks.googleapis.com"},
 	},
 	ServicePeople: {
 		// Needed for "people/me" requests.
-		scopes: []string{"profile"},
-		user:   true,
-		apis:   []string{"People API"},
-		note:   "OIDC profile scope",
+		scopes:          []string{"profile"},
+		user:            true,
+		apis:            []string{"People API"},
+		note:            "OIDC profile scope",
+		serviceUsageIDs: []string{"people.googleapis.com"},
 	},
 	ServiceSheets: {
 		scopes: []string{
 			"https://www.googleapis.com/auth/drive",
 			"https://www.googleapis.com/auth/spreadsheets",
 		},
-		user: true,
-		apis: []string{"Sheets API", "Drive API"},
-		note: "Export via Drive",
+		user:            true,
+		apis:            []string{"Sheets API", "Drive API"},
+		note:            "Export via Drive",
+		serviceUsageIDs: []string{"sheets.googleapis.com", "drive.googleapis.com"},
 	},
 	ServiceGroups: {
-		scopes: []string{"https://www.googleapis.com/auth/cloud-identity.groups.readonly"},
-		user:   false,
-		apis:   []string{"Cloud Identity API"},
-		note:   "Workspace only",
+		scopes:          []string{"https://www.googleapis.com/auth/cloud-identity.groups.readonly"},
+		user:            false,
+		apis:            []string{"Cloud Identity API"},
+		note:            "Workspace only",
+		serviceUsageIDs: []string{"cloudidentity.googleapis.com"},
 	},
 	ServiceKeep: {
-		scopes: []string{"https://www.googleapis.com/auth/keep.readonly"},
-		user:   false,
-		apis:   []string{"Keep API"},
-		note:   "Workspace only; service account (domain-wide delegation)",
+		scopes:          []string{"https://www.googleapis.com/auth/keep.readonly"},
+		user:            false,
+		apis:            []string{"Keep API"},
+		note:            "Workspace only; service account (domain-wide delegation)",
+		serviceUsageIDs: []string{"keep.googleapis.com"},
 	},
 	ServiceYoutube: {
-		scopes: []string{"https://www.googleapis.com/auth/youtube.readonly"},
-		user:   true,
-		apis:   []string{"YouTube Data API v3"},
+		scopes:          []string{"https://www.googleapis.com/auth/youtube.readonly"},
+		user:            true,
+		apis:            []string{"YouTube Data API v3"},
+		serviceUsageIDs: []string{"youtube.googleapis.com"},
 	},
 	ServiceBigquery: {
 		scopes: []string{
 			"https://www.googleapis.com/auth/bigquery",
 			"https://www.googleapis.com/auth/bigquery.readonly",
 		},
-		user: true,
-		apis: []string{"BigQuery API"},
+		user:            true,
+		apis:            []string{"BigQuery API"},
+		serviceUsageIDs: []string{"bigquery.googleapis.com"},
 	},
 	ServiceAnalytics: {
 		// manage.users* is required for accessBindings / adding users with roles.
@@ -214,17 +229,19 @@ var serviceInfoByService = map[Service]serviceInfo{
 			"https://www.googleapis.com/auth/analytics.manage.users.readonly",
 			"https://www.googleapis.com/auth/analytics.manage.users",
 		},
-		user: true,
-		apis: []string{"Analytics Data API", "Analytics Admin API"},
-		note: "Includes manage.users for accessBindings / invite users",
+		user:            true,
+		apis:            []string{"Analytics Data API", "Analytics Admin API"},
+		note:            "Includes manage.users for accessBindings / invite users",
+		serviceUsageIDs: []string{"analyticsdata.googleapis.com", "analyticsadmin.googleapis.com"},
 	},
 	ServiceSearchConsole: {
 		scopes: []string{
 			"https://www.googleapis.com/auth/webmasters.readonly",
 			"https://www.googleapis.com/auth/webmasters",
 		},
-		user: true,
-		apis: []string{"Search Console API"},
+		user:            true,
+		apis:            []string{"Search Console API"},
+		serviceUsageIDs: []string{"searchconsole.googleapis.com"},
 	},
 	ServiceTagManager: {
 		// readonly alone cannot manage users. manage.users is required for
@@ -237,14 +254,16 @@ var serviceInfoByService = map[Service]serviceInfo{
 			"https://www.googleapis.com/auth/tagmanager.manage.users",
 			"https://www.googleapis.com/auth/tagmanager.publish",
 		},
-		user: true,
-		apis: []string{"Tag Manager API v2"},
-		note: "Includes manage.users + edit/publish (not delete.containers)",
+		user:            true,
+		apis:            []string{"Tag Manager API v2"},
+		note:            "Includes manage.users + edit/publish (not delete.containers)",
+		serviceUsageIDs: []string{"tagmanager.googleapis.com"},
 	},
 	ServiceBusinessProfile: {
-		scopes: []string{"https://www.googleapis.com/auth/business.manage"},
-		user:   true,
-		apis:   []string{"Business Information API", "Business Account Management API"},
+		scopes:          []string{"https://www.googleapis.com/auth/business.manage"},
+		user:            true,
+		apis:            []string{"Business Information API", "Business Account Management API"},
+		serviceUsageIDs: []string{"mybusinessbusinessinformation.googleapis.com", "mybusinessaccountmanagement.googleapis.com"},
 	},
 }
 
@@ -356,11 +375,12 @@ func Scopes(service Service) ([]string, error) {
 }
 
 type ServiceInfo struct {
-	Service Service  `json:"service"`
-	User    bool     `json:"user"`
-	Scopes  []string `json:"scopes"`
-	APIs    []string `json:"apis,omitempty"`
-	Note    string   `json:"note,omitempty"`
+	Service         Service  `json:"service"`
+	User            bool     `json:"user"`
+	Scopes          []string `json:"scopes"`
+	APIs            []string `json:"apis,omitempty"`
+	ServiceUsageIDs []string `json:"service_usage_ids,omitempty"`
+	Note            string   `json:"note,omitempty"`
 }
 
 func ServicesInfo() []ServiceInfo {
@@ -372,15 +392,61 @@ func ServicesInfo() []ServiceInfo {
 		}
 
 		out = append(out, ServiceInfo{
-			Service: svc,
-			User:    info.user,
-			Scopes:  append([]string(nil), info.scopes...),
-			APIs:    append([]string(nil), info.apis...),
-			Note:    info.note,
+			Service:         svc,
+			User:            info.user,
+			Scopes:          append([]string(nil), info.scopes...),
+			APIs:            append([]string(nil), info.apis...),
+			ServiceUsageIDs: append([]string(nil), info.serviceUsageIDs...),
+			Note:            info.note,
 		})
 	}
 
 	return out
+}
+
+// ServiceUsageIDs returns the Google Service Usage API IDs required by service.
+func ServiceUsageIDs(service Service) ([]string, error) {
+	info, ok := serviceInfoByService[service]
+	if !ok {
+		return nil, errUnknownService
+	}
+
+	return append([]string(nil), info.serviceUsageIDs...), nil
+}
+
+// ServiceUsageIDsForServices returns a sorted, deduplicated union of Service
+// Usage IDs for the selected services. Empty input uses UserServices().
+func ServiceUsageIDsForServices(services []Service) ([]string, error) {
+	if len(services) == 0 {
+		services = UserServices()
+	}
+
+	set := make(map[string]struct{})
+
+	for _, svc := range services {
+		ids, err := ServiceUsageIDs(svc)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, id := range ids {
+			id = strings.TrimSpace(id)
+			if id == "" {
+				continue
+			}
+
+			set[id] = struct{}{}
+		}
+	}
+
+	out := make([]string, 0, len(set))
+	for id := range set {
+		out = append(out, id)
+	}
+
+	sort.Strings(out)
+
+	return out, nil
 }
 
 func ServicesMarkdown(infos []ServiceInfo) string {

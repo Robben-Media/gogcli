@@ -1,6 +1,9 @@
 package googleauth
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseService(t *testing.T) {
 	tests := []struct {
@@ -491,5 +494,118 @@ func TestScopes_GmailIncludesSettingsSharing(t *testing.T) {
 func TestScopes_UnknownService(t *testing.T) {
 	if _, err := Scopes(Service("nope")); err == nil {
 		t.Fatalf("expected error")
+	}
+}
+
+func TestServiceUsageIDs(t *testing.T) {
+	tests := []struct {
+		svc  Service
+		want []string
+	}{
+		{ServiceGmail, []string{"gmail.googleapis.com"}},
+		{ServiceCalendar, []string{"calendar-json.googleapis.com"}},
+		{ServiceDocs, []string{"docs.googleapis.com", "drive.googleapis.com"}},
+		{ServiceSheets, []string{"sheets.googleapis.com", "drive.googleapis.com"}},
+		{ServiceAnalytics, []string{"analyticsadmin.googleapis.com", "analyticsdata.googleapis.com"}},
+		{ServiceBusinessProfile, []string{"mybusinessaccountmanagement.googleapis.com", "mybusinessbusinessinformation.googleapis.com"}},
+	}
+
+	for _, tt := range tests {
+		got, err := ServiceUsageIDs(tt.svc)
+		if err != nil {
+			t.Fatalf("ServiceUsageIDs(%q): %v", tt.svc, err)
+		}
+
+		set := make(map[string]bool, len(got))
+		for _, id := range got {
+			set[id] = true
+		}
+
+		if len(got) != len(tt.want) {
+			t.Fatalf("ServiceUsageIDs(%q)=%v want %v", tt.svc, got, tt.want)
+		}
+
+		for _, id := range tt.want {
+			if !set[id] {
+				t.Fatalf("ServiceUsageIDs(%q) missing %q in %v", tt.svc, id, got)
+			}
+		}
+	}
+}
+
+func TestServiceUsageIDsForServices_DedupAndSort(t *testing.T) {
+	got, err := ServiceUsageIDsForServices([]Service{ServiceDocs, ServiceSheets, ServiceDrive})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	want := []string{"docs.googleapis.com", "drive.googleapis.com", "sheets.googleapis.com"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v want %v", got, want)
+	}
+
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v want %v", got, want)
+		}
+	}
+}
+
+func TestServiceUsageIDsForServices_EmptyUsesUserServices(t *testing.T) {
+	got, err := ServiceUsageIDsForServices(nil)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	if len(got) == 0 {
+		t.Fatalf("expected non-empty usage ids for user services")
+	}
+
+	for _, svc := range UserServices() {
+		ids, usageErr := ServiceUsageIDs(svc)
+		if usageErr != nil {
+			t.Fatalf("ServiceUsageIDs(%q): %v", svc, usageErr)
+		}
+
+		if len(ids) == 0 {
+			t.Fatalf("service %q has no usage ids", svc)
+		}
+	}
+
+	ids, keepErr := ServiceUsageIDs(ServiceKeep)
+	if keepErr != nil || len(ids) == 0 {
+		t.Fatalf("keep usage ids: %v %v", ids, keepErr)
+	}
+}
+
+func TestServiceUsageIDs_AllServicesPresent(t *testing.T) {
+	for _, svc := range AllServices() {
+		ids, err := ServiceUsageIDs(svc)
+		if err != nil {
+			t.Fatalf("%q: %v", svc, err)
+		}
+
+		if len(ids) == 0 {
+			t.Fatalf("%q: empty service usage ids", svc)
+		}
+
+		for _, id := range ids {
+			if id == "" || !strings.Contains(id, ".googleapis.com") {
+				t.Fatalf("%q: invalid id %q", svc, id)
+			}
+		}
+	}
+}
+
+func TestServicesInfo_IncludesServiceUsageIDs(t *testing.T) {
+	infos := ServicesInfo()
+	if len(infos) == 0 {
+		t.Fatalf("empty infos")
+	}
+
+	for _, info := range infos {
+		if len(info.ServiceUsageIDs) == 0 {
+			t.Fatalf("%s missing ServiceUsageIDs", info.Service)
+		}
 	}
 }

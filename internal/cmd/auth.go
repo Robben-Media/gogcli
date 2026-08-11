@@ -53,6 +53,7 @@ const (
 )
 
 type AuthCmd struct {
+	Setup       AuthSetupCmd          `cmd:"" name:"setup" help:"Guide Google Cloud and OAuth setup"`
 	Credentials AuthCredentialsCmd    `cmd:"" name:"credentials" help:"Manage OAuth client credentials"`
 	Add         AuthAddCmd            `cmd:"" name:"add" help:"Authorize and store a refresh token"`
 	Services    AuthServicesCmd       `cmd:"" name:"services" help:"List supported auth services and scopes"`
@@ -84,54 +85,26 @@ func (c *AuthCredentialsSetCmd) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	inPath := c.Path
-	var b []byte
-	if inPath == "-" {
-		b, err = io.ReadAll(os.Stdin)
-	} else {
-		inPath, err = config.ExpandPath(inPath)
-		if err != nil {
-			return err
-		}
-		b, err = os.ReadFile(inPath) //nolint:gosec // user-provided path
-	}
+	result, err := InstallClientCredentials(InstallCredentialsOptions{
+		Client:  client,
+		Path:    c.Path,
+		Domains: c.Domains,
+	})
 	if err != nil {
 		return err
 	}
-
-	creds, err := config.ParseGoogleOAuthClientJSON(b)
-	if err != nil {
-		return err
-	}
-
-	if err := config.WriteClientCredentialsFor(client, creds); err != nil {
-		return err
-	}
-
-	outPath, _ := config.ClientCredentialsPathFor(client)
-	if strings.TrimSpace(c.Domains) != "" {
-		cfg, err := config.ReadConfig()
-		if err != nil {
-			return err
-		}
-		for _, domain := range splitCommaList(c.Domains) {
-			if err := config.SetClientDomain(&cfg, domain, client); err != nil {
-				return err
-			}
-		}
-		if err := config.WriteConfig(cfg); err != nil {
-			return err
-		}
+	if result.Replaced {
+		u.Err().Printf("OAuth credentials for client %q changed; reauthorize stored accounts before use.", result.Client)
 	}
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"saved":  true,
-			"path":   outPath,
-			"client": client,
+			"path":   result.Path,
+			"client": result.Client,
 		}))
 	}
-	u.Out().Printf("path\t%s", outPath)
-	u.Out().Printf("client\t%s", client)
+	u.Out().Printf("path\t%s", result.Path)
+	u.Out().Printf("client\t%s", result.Client)
 	return nil
 }
 
@@ -495,121 +468,34 @@ type AuthAddCmd struct {
 
 func (c *AuthAddCmd) Run(ctx context.Context) error {
 	u := ui.FromContext(ctx)
-
-	override := authclient.ClientOverrideFromContext(ctx)
-	client, err := authclient.ResolveClientWithOverride(c.Email, override)
-	if err != nil {
-		return err
-	}
-
-	services, err := parseAuthServices(c.ServicesCSV)
-	if err != nil {
-		return err
-	}
-	if len(services) == 0 {
-		return fmt.Errorf("no services selected")
-	}
-
-	if c.Readonly && c.DriveScope == strFile {
-		return usage("cannot combine --readonly with --drive-scope=file (file is write-capable)")
-	}
-	driveScope := strings.ToLower(strings.TrimSpace(c.DriveScope))
-	gmailScope := strings.ToLower(strings.TrimSpace(c.GmailScope))
-	scopes, err := googleauth.ScopesForManageWithOptions(services, googleauth.ScopeOptions{
-		Readonly:   c.Readonly,
-		DriveScope: googleauth.DriveScopeMode(c.DriveScope),
-		GmailScope: googleauth.GmailScopeMode(c.GmailScope),
-	})
-	if err != nil {
-		return err
-	}
-
-	// Pre-flight: ensure keychain is accessible before starting OAuth
-	if keychainErr := ensureKeychainAccessIfNeeded(); keychainErr != nil {
-		return fmt.Errorf("keychain access: %w", keychainErr)
-	}
-	store, err := openSecretsStore()
-	if err != nil {
-		return err
-	}
-
-	existing, existingErr := store.GetToken(client, c.Email)
-	hasExisting := existingErr == nil
-	if existingErr != nil && !errors.Is(existingErr, keyring.ErrKeyNotFound) {
-		return fmt.Errorf("read existing token: %w", existingErr)
-	}
-
-	if hasExisting && !c.ReplaceScopes {
-		services, scopes = googleauth.MergeAuthGrant(services, scopes, existing.Services, existing.Scopes)
-	}
-
-	serviceNames := authServiceNames(services)
-	forceConsent := c.ForceConsent || c.ReplaceScopes
-	// Scope variants must be requested exactly because Google can reject a
-	// historical grant containing incompatible variants (for example old
-	// YouTube scopes plus drive.file). Existing scopes are still explicitly
-	// included above unless the user chose --replace-scopes.
-	disableIncludeGrantedScopes := forceConsent ||
-		c.Readonly ||
-		driveScope == "readonly" ||
-		driveScope == strFile ||
-		gmailScope == "readonly"
 	if c.ReplaceScopes {
 		u.Err().Println("Replacing the existing OAuth grant with exactly the selected services and scopes.")
 	}
-
-	refreshToken, err := authorizeGoogle(ctx, googleauth.AuthorizeOptions{
-		Services:                    services,
-		Scopes:                      scopes,
-		Manual:                      c.Manual,
-		ForceConsent:                forceConsent,
-		DisableIncludeGrantedScopes: disableIncludeGrantedScopes,
-		Client:                      client,
+	result, err := AuthorizeAndStoreAccount(ctx, AuthorizeAccountOptions{
+		Email:         c.Email,
+		Client:        authclient.ClientOverrideFromContext(ctx),
+		ServicesCSV:   c.ServicesCSV,
+		Manual:        c.Manual,
+		ForceConsent:  c.ForceConsent,
+		ReplaceScopes: c.ReplaceScopes,
+		Readonly:      c.Readonly,
+		DriveScope:    c.DriveScope,
+		GmailScope:    c.GmailScope,
 	})
 	if err != nil {
 		return err
-	}
-
-	authorizedEmail, err := fetchAuthorizedEmail(ctx, client, refreshToken, scopes, 15*time.Second)
-	if err != nil {
-		return fmt.Errorf("fetch authorized email: %w", err)
-	}
-	if normalizeEmail(authorizedEmail) != normalizeEmail(c.Email) {
-		return fmt.Errorf("authorized as %s, expected %s", authorizedEmail, c.Email)
-	}
-
-	if err := store.SetToken(client, authorizedEmail, secrets.Token{
-		Client:       client,
-		Email:        authorizedEmail,
-		Services:     serviceNames,
-		Scopes:       scopes,
-		RefreshToken: refreshToken,
-	}); err != nil {
-		return err
-	}
-	if override != "" {
-		cfg, err := config.ReadConfig()
-		if err != nil {
-			return err
-		}
-		if err := config.SetAccountClient(&cfg, authorizedEmail, client); err != nil {
-			return err
-		}
-		if err := config.WriteConfig(cfg); err != nil {
-			return err
-		}
 	}
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"stored":   true,
-			"email":    authorizedEmail,
-			"services": serviceNames,
-			"client":   client,
+			"email":    result.Email,
+			"services": result.Services,
+			"client":   result.Client,
 		}))
 	}
-	u.Out().Printf("email\t%s", authorizedEmail)
-	u.Out().Printf("services\t%s", strings.Join(serviceNames, ","))
-	u.Out().Printf("client\t%s", client)
+	u.Out().Printf("email\t%s", result.Email)
+	u.Out().Printf("services\t%s", strings.Join(result.Services, ","))
+	u.Out().Printf("client\t%s", result.Client)
 	return nil
 }
 
