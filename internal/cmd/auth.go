@@ -16,6 +16,7 @@ import (
 
 	"github.com/steipete/gogcli/internal/authclient"
 	"github.com/steipete/gogcli/internal/config"
+	"github.com/steipete/gogcli/internal/googleapi"
 	"github.com/steipete/gogcli/internal/googleauth"
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/secrets"
@@ -487,13 +488,13 @@ type AuthAddCmd struct {
 	ForceConsent  bool   `name:"force-consent" help:"Force consent screen to obtain a refresh token"`
 	ReplaceScopes bool   `name:"replace-scopes" help:"Replace an existing grant with exactly --services scopes (implies --force-consent)"`
 	ServicesCSV   string `name:"services" help:"Services to authorize: user|all or comma-separated ${auth_services} (Keep uses service account: gog auth service-account set)" default:"user"`
-	Readonly      bool   `name:"readonly" help:"Use read-only scopes where available (still includes OIDC identity scopes)"`
 	DriveScope    string `name:"drive-scope" help:"Drive scope mode: full|readonly|file" enum:"full,readonly,file" default:"full"`
 	GmailScope    string `name:"gmail-scope" help:"Gmail scope mode: full|readonly" enum:"full,readonly" default:"full"`
 }
 
 func (c *AuthAddCmd) Run(ctx context.Context) error {
 	u := ui.FromContext(ctx)
+	readonly := googleapi.ReadOnly(ctx)
 
 	override := authclient.ClientOverrideFromContext(ctx)
 	client, err := authclient.ResolveClientWithOverride(c.Email, override)
@@ -509,13 +510,13 @@ func (c *AuthAddCmd) Run(ctx context.Context) error {
 		return fmt.Errorf("no services selected")
 	}
 
-	if c.Readonly && c.DriveScope == strFile {
+	if readonly && c.DriveScope == strFile {
 		return usage("cannot combine --readonly with --drive-scope=file (file is write-capable)")
 	}
 	driveScope := strings.ToLower(strings.TrimSpace(c.DriveScope))
 	gmailScope := strings.ToLower(strings.TrimSpace(c.GmailScope))
 	scopes, err := googleauth.ScopesForManageWithOptions(services, googleauth.ScopeOptions{
-		Readonly:   c.Readonly,
+		Readonly:   readonly,
 		DriveScope: googleauth.DriveScopeMode(c.DriveScope),
 		GmailScope: googleauth.GmailScopeMode(c.GmailScope),
 	})
@@ -549,7 +550,7 @@ func (c *AuthAddCmd) Run(ctx context.Context) error {
 	// YouTube scopes plus drive.file). Existing scopes are still explicitly
 	// included above unless the user chose --replace-scopes.
 	disableIncludeGrantedScopes := forceConsent ||
-		c.Readonly ||
+		readonly ||
 		driveScope == "readonly" ||
 		driveScope == strFile ||
 		gmailScope == "readonly"

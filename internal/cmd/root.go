@@ -14,6 +14,7 @@ import (
 	"github.com/steipete/gogcli/internal/authclient"
 	"github.com/steipete/gogcli/internal/config"
 	"github.com/steipete/gogcli/internal/errfmt"
+	"github.com/steipete/gogcli/internal/googleapi"
 	"github.com/steipete/gogcli/internal/googleauth"
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/secrets"
@@ -44,6 +45,7 @@ type RootFlags struct {
 	Version        bool   `help:"Print version and exit"`
 	Force          bool   `help:"Skip confirmations for destructive commands"`
 	NoInput        bool   `help:"Never prompt; fail instead (useful for CI)"`
+	ReadOnly       bool   `name:"readonly" help:"Block mutating API requests at runtime" default:"${readonly}"`
 	Verbose        bool   `help:"Enable verbose logging"`
 }
 
@@ -141,6 +143,7 @@ func Execute(args []string) (err error) {
 	}
 
 	ctx := context.Background()
+	ctx = googleapi.WithReadOnly(ctx, cli.ReadOnly)
 	ctx = outfmt.WithMode(ctx, mode)
 	ctx = authclient.WithClient(ctx, cli.Client)
 
@@ -177,6 +180,9 @@ func Execute(args []string) (err error) {
 	err = kctx.Run()
 	if err == nil {
 		return nil
+	}
+	if errors.Is(err, googleapi.ErrReadOnly) {
+		err = &ExitError{Code: 2, Err: err}
 	}
 
 	if u := ui.FromContext(ctx); u != nil {
@@ -237,6 +243,7 @@ func newParser(description string) (*kong.Kong, *CLI, error) {
 		"enabled_commands": envOr("GOG_ENABLE_COMMANDS", ""),
 		"json":             boolString(envMode.JSON),
 		"plain":            boolString(envMode.Plain),
+		"readonly":         boolString(envOr("GOG_READONLY", "") == "1"),
 		"version":          VersionString(),
 	}
 

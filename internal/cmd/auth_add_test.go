@@ -476,7 +476,7 @@ func TestAuthAddCmd_DriveScopeFile(t *testing.T) {
 }
 
 func TestAuthAddCmd_ReadonlyWithDriveScopeFileRejected(t *testing.T) {
-	err := Execute([]string{"auth", "add", "user@example.com", "--services", "drive", "--readonly", "--drive-scope", "file"})
+	err := Execute([]string{"--readonly", "auth", "add", "user@example.com", "--services", "drive", "--drive-scope", "file"})
 	if err == nil {
 		t.Fatalf("expected error")
 	}
