@@ -11,6 +11,7 @@ type readOnlyTestTransport struct{ calls int }
 
 func (t *readOnlyTestTransport) RoundTrip(*http.Request) (*http.Response, error) {
 	t.calls++
+
 	return &http.Response{StatusCode: http.StatusNoContent, Body: http.NoBody}, nil
 }
 
@@ -29,18 +30,25 @@ func TestReadOnlyTransportBlocksMutationsAndPermitsReads(t *testing.T) {
 		{http.MethodPost, "https://www.googleapis.com/gmail/v1/users/me/messages/send", false},
 		{http.MethodDelete, "https://www.googleapis.com/drive/v3/files/id", false},
 	} {
-		req, err := http.NewRequest(tc.method, tc.url, nil)
+		req, err := http.NewRequestWithContext(context.Background(), tc.method, tc.url, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = transport.RoundTrip(req)
+
+		response, err := transport.RoundTrip(req)
+		if response != nil {
+			defer response.Body.Close()
+		}
+
 		if tc.allow && err != nil {
 			t.Errorf("%s %s: %v", tc.method, tc.url, err)
 		}
+
 		if !tc.allow && !errors.Is(err, ErrReadOnly) {
 			t.Errorf("%s %s error = %v, want ErrReadOnly", tc.method, tc.url, err)
 		}
 	}
+
 	if base.calls != 3 {
 		t.Fatalf("base calls = %d, want 3", base.calls)
 	}
@@ -52,34 +60,75 @@ func TestReadOnlyPOSTRegistryRejectsNearMatchesAndOverrides(t *testing.T) {
 		"https://searchconsole.googleapis.com/webmasters/v3/sites/example/searchAnalytics/query",
 		"https://sheets.googleapis.com/v4/spreadsheets/id/values:batchGetByDataFilter",
 	} {
-		req, err := http.NewRequest(http.MethodPost, raw, nil)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, raw, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		if !ReadOnlyRequestAllowed(req) {
 			t.Errorf("ReadOnlyRequestAllowed(%q) = false, want true", raw)
 		}
 	}
+
 	for _, raw := range []string{
 		"http://www.googleapis.com/calendar/v3/freeBusy",
 		"https://example.test/calendar/v3/freeBusy",
 		"https://www.googleapis.com/v2/activity:query",
 		"https://sheets.googleapis.com/v4/spreadsheets/id:batchUpdate",
 	} {
-		req, err := http.NewRequest(http.MethodPost, raw, nil)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, raw, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		if ReadOnlyRequestAllowed(req) {
 			t.Errorf("ReadOnlyRequestAllowed(%q) = true, want false", raw)
 		}
 	}
-	req, err := http.NewRequest(http.MethodPost, "https://www.googleapis.com/calendar/v3/freeBusy", nil)
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://www.googleapis.com/calendar/v3/freeBusy", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	req.Header.Set("X-HTTP-Method-Override", http.MethodDelete)
+
 	if ReadOnlyRequestAllowed(req) {
 		t.Fatal("request with method override unexpectedly allowed")
+	}
+}
+
+func TestReadOnlyWriteExceptionIsInvocationScoped(t *testing.T) {
+	base := &readOnlyTestTransport{}
+	ctx := WithReadOnlyWriteException(WithReadOnly(context.Background(), true), "gmail:send")
+	transport := readOnlyTransportFromContext(ctx, base)
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://www.googleapis.com/gmail/v1/users/me/messages/send", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	response, err := transport.RoundTrip(req)
+	if err != nil {
+		t.Fatalf("declared exception blocked: %v", err)
+	}
+	defer response.Body.Close()
+
+	if base.calls != 1 {
+		t.Fatalf("base calls = %d, want 1", base.calls)
+	}
+
+	blocked, err := http.NewRequestWithContext(context.Background(), http.MethodDelete, "https://www.googleapis.com/drive/v3/files/id", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	blockedResponse, blockedErr := transport.RoundTrip(blocked)
+	if blockedResponse != nil {
+		defer blockedResponse.Body.Close()
+	}
+
+	if !errors.Is(blockedErr, ErrReadOnly) {
+		t.Fatalf("unrelated mutation error = %v, want ErrReadOnly", blockedErr)
 	}
 }

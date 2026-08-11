@@ -16,6 +16,7 @@ type File struct {
 	AccountClients  map[string]string `json:"account_clients,omitempty"`
 	ClientDomains   map[string]string `json:"client_domains,omitempty"`
 	Policies        []Policy          `json:"policies,omitempty"`
+	WriteExceptions []WriteException  `json:"write_exceptions,omitempty"`
 }
 
 func ConfigPath() (string, error) {

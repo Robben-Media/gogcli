@@ -4,6 +4,7 @@
 
 ### Added
 
+- Safety: add runtime `--readonly` mode with scoped write exceptions, read-only OAuth scopes, guarded service-account clients, and fail-closed outbound mutation protection. (#154)
 - Search Console: add `--start-row` to `search-console query` for zero-based Search Analytics result windows. (#98)
 - Tag Manager: add workspace trigger and variable create/delete/get/revert/update commands plus built-in-variable management. (#12, #45, #46, #47)
 - Tag Manager: add composable workspace version creation and container-version publishing commands. (#11)

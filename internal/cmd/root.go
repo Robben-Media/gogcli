@@ -144,6 +144,11 @@ func Execute(args []string) (err error) {
 
 	ctx := context.Background()
 	ctx = googleapi.WithReadOnly(ctx, cli.ReadOnly)
+	if action, preflightErr := preflightDeclaredWrite(kctx, &cli.RootFlags); preflightErr != nil {
+		return reportPreUIError(preflightErr)
+	} else if action != "" {
+		ctx = googleapi.WithReadOnlyWriteException(ctx, action)
+	}
 	ctx = outfmt.WithMode(ctx, mode)
 	ctx = authclient.WithClient(ctx, cli.Client)
 

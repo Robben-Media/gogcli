@@ -4,4 +4,4 @@ Runtime read-only mode will combine selective command-level declarations with a 
 
 ## Consequences
 
-The public interface remains compatible with upstream `--readonly` and `GOG_READONLY=1`, but “read-only” is a protected default rather than an absolute prohibition: prompts may grant writes, and piped standard input may answer them. Persistent exceptions belong to the canonical policy system, default to account-and-client scope, expose broader scopes only through explicit progressive selection, and must be listable and revocable.
+The public interface remains compatible with upstream `--readonly` and `GOG_READONLY=1`, but “read-only” is a protected default rather than an absolute prohibition: prompts may grant writes, and piped standard input may answer them. Persistent exceptions belong to the canonical policy system, default to account-and-client scope, expose broader scopes only through explicit progressive selection, and must be listable and revocable. MCP and schema exposure are not applicable to #154: this repository has no MCP server or schema runtime, so no such subsystem is introduced.
