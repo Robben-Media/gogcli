@@ -53,7 +53,7 @@ func (c *TasksMoveCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"task": moved})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"task": moved})
 	}
 	u.Out().Printf("id\t%s", moved.Id)
 	u.Out().Printf("title\t%s", moved.Title)
@@ -127,7 +127,7 @@ func (c *TasksReplaceCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"task": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"task": updated})
 	}
 	u.Out().Printf("id\t%s", updated.Id)
 	u.Out().Printf("title\t%s", updated.Title)

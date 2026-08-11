@@ -43,7 +43,7 @@ func (c *SearchConsoleSitemapsGetCmd) Run(ctx context.Context, flags *RootFlags)
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"sitemap": sm})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"sitemap": sm})
 	}
 
 	// Text output

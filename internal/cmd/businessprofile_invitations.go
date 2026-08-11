@@ -56,7 +56,7 @@ func (c *BusinessProfileInvitationsListCmd) Run(ctx context.Context, flags *Root
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"invitations": resp.Invitations,
 		})
 	}

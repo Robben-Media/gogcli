@@ -42,6 +42,7 @@ type RootFlags struct {
 	EnableCommandPaths string `help:"Comma-separated list of enabled exact command paths (e.g. 'gmail search,calendar events'; restricts CLI)" default:"${enabled_command_paths}"`
 	JSON               bool   `help:"Output JSON to stdout (best for scripting)" default:"${json}"`
 	Plain              bool   `help:"Output stable, parseable text to stdout (TSV; no colors)" default:"${plain}"`
+	WrapUntrusted      bool   `name:"wrap-untrusted" help:"Wrap free-text Workspace fields in JSON with untrusted-content fences (agents; requires --json / GOG_JSON; no-op otherwise)" default:"${wrap_untrusted}"`
 	Version            bool   `help:"Print version and exit"`
 	Force              bool   `help:"Skip confirmations for destructive commands"`
 	NoInput            bool   `help:"Never prompt; fail instead (useful for CI)"`
@@ -136,11 +137,10 @@ func Execute(args []string) (err error) {
 		Level: logLevel,
 	})))
 
-	mode, err := outfmt.FromFlags(cli.JSON, cli.Plain)
+	mode, err := outfmt.FromFlagsFull(cli.JSON, cli.Plain, cli.WrapUntrusted)
 	if err != nil {
 		return reportPreUIError(newUsageError(err))
 	}
-
 	ctx := context.Background()
 	ctx = outfmt.WithMode(ctx, mode)
 	ctx = authclient.WithClient(ctx, cli.Client)
@@ -239,6 +239,7 @@ func newParser(description string) (*kong.Kong, *CLI, error) {
 		"enabled_command_paths": envOr("GOG_ENABLE_COMMAND_PATHS", ""),
 		"json":                  boolString(envMode.JSON),
 		"plain":                 boolString(envMode.Plain),
+		"wrap_untrusted":        boolString(envMode.WrapUntrusted),
 		"version":               VersionString(),
 	}
 
@@ -317,6 +318,7 @@ func outputModeFromVersionArgs(args []string) (outfmt.Mode, error) {
 	envMode := outfmt.FromEnv()
 	jsonOut := envMode.JSON
 	plainOut := envMode.Plain
+	wrapOut := envMode.WrapUntrusted
 
 	for _, arg := range args {
 		if arg == "--" {
@@ -327,6 +329,8 @@ func outputModeFromVersionArgs(args []string) (outfmt.Mode, error) {
 			jsonOut = true
 		case arg == "--plain":
 			plainOut = true
+		case arg == "--wrap-untrusted":
+			wrapOut = true
 		case strings.HasPrefix(arg, "--json="):
 			v, err := parseFlagBool(strings.TrimPrefix(arg, "--json="))
 			if err != nil {
@@ -339,10 +343,16 @@ func outputModeFromVersionArgs(args []string) (outfmt.Mode, error) {
 				return outfmt.Mode{}, err
 			}
 			plainOut = v
+		case strings.HasPrefix(arg, "--wrap-untrusted="):
+			v, err := parseFlagBool(strings.TrimPrefix(arg, "--wrap-untrusted="))
+			if err != nil {
+				return outfmt.Mode{}, err
+			}
+			wrapOut = v
 		}
 	}
 
-	return outfmt.FromFlags(jsonOut, plainOut)
+	return outfmt.FromFlagsFull(jsonOut, plainOut, wrapOut)
 }
 
 func parseFlagBool(value string) (bool, error) {

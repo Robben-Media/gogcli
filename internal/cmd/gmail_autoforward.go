@@ -38,7 +38,7 @@ func (c *GmailAutoForwardGetCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"autoForwarding": autoForward})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"autoForwarding": autoForward})
 	}
 
 	u.Out().Printf("enabled\t%t", autoForward.Enabled)
@@ -117,7 +117,7 @@ func (c *GmailAutoForwardUpdateCmd) Run(ctx context.Context, kctx *kong.Context,
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"autoForwarding": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"autoForwarding": updated})
 	}
 
 	if outfmt.IsPlain(ctx) {

@@ -52,7 +52,7 @@ func (c *BusinessProfileAccountAdminsListCmd) Run(ctx context.Context, flags *Ro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"admins": resp.AccountAdmins,
 		})
 	}
@@ -114,7 +114,7 @@ func (c *BusinessProfileAccountAdminsCreateCmd) Run(ctx context.Context, flags *
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"admin": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"admin": resp})
 	}
 
 	if resp.Name != "" {
@@ -205,7 +205,7 @@ func (c *BusinessProfileAccountAdminsPatchCmd) Run(ctx context.Context, flags *R
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"admin": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"admin": resp})
 	}
 
 	if resp.Name != "" {

@@ -47,7 +47,7 @@ func (c *ChatEventsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"event": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"event": resp})
 	}
 
 	if resp.Name != "" {
@@ -119,7 +119,7 @@ func (c *ChatEventsListCmd) Run(ctx context.Context, flags *RootFlags) error {
 				EventTime: evt.EventTime,
 			})
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"spaceEvents":   items,
 			"nextPageToken": resp.NextPageToken,
 		})

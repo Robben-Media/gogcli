@@ -107,7 +107,7 @@ func (c *ChatMessagesListCmd) Run(ctx context.Context, flags *RootFlags) error {
 				Thread:     chatMessageThread(msg),
 			})
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"messages":      items,
 			"nextPageToken": resp.NextPageToken,
 		})
@@ -188,7 +188,7 @@ func (c *ChatMessagesSendCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"message": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"message": resp})
 	}
 
 	if resp == nil {

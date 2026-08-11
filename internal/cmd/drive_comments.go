@@ -70,7 +70,7 @@ func (c *DriveCommentsListCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"fileId":        fileID,
 			"comments":      resp.Comments,
 			"nextPageToken": resp.NextPageToken,
@@ -159,7 +159,7 @@ func (c *DriveCommentsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"comment": comment})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"comment": comment})
 	}
 
 	u.Out().Printf("id\t%s", comment.Id)
@@ -225,7 +225,7 @@ func (c *DriveCommentsCreateCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"comment": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"comment": created})
 	}
 
 	u.Out().Printf("id\t%s", created.Id)
@@ -277,7 +277,7 @@ func (c *DriveCommentsUpdateCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"comment": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"comment": updated})
 	}
 
 	u.Out().Printf("id\t%s", updated.Id)
@@ -320,7 +320,7 @@ func (c *DriveCommentsDeleteCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"deleted":   true,
 			"fileId":    fileID,
 			"commentId": commentID,
@@ -376,7 +376,7 @@ func (c *DriveCommentReplyCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"reply": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"reply": created})
 	}
 
 	u.Out().Printf("id\t%s", created.Id)
@@ -437,7 +437,7 @@ func (c *DriveRepliesListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"fileId":        fileID,
 			"commentId":     commentID,
 			"replies":       resp.Replies,
@@ -510,7 +510,7 @@ func (c *DriveRepliesGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"reply": reply})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"reply": reply})
 	}
 
 	u.Out().Printf("id\t%s", reply.Id)
@@ -567,7 +567,7 @@ func (c *DriveRepliesCreateCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"reply": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"reply": created})
 	}
 
 	u.Out().Printf("id\t%s", created.Id)
@@ -625,7 +625,7 @@ func (c *DriveRepliesUpdateCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"reply": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"reply": updated})
 	}
 
 	u.Out().Printf("id\t%s", updated.Id)
@@ -674,7 +674,7 @@ func (c *DriveRepliesDeleteCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"deleted":   true,
 			"fileId":    fileID,
 			"commentId": commentID,

@@ -58,7 +58,7 @@ func (c *TagManagerAccountsCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"accounts": resp.Account,
 		})
 	}
@@ -105,7 +105,7 @@ func (c *TagManagerContainersCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"containers": resp.Container,
 		})
 	}
@@ -157,7 +157,7 @@ func (c *TagManagerTagsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"tags": resp.Tag,
 		})
 	}
@@ -204,7 +204,7 @@ func (c *TagManagerTagCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"tag": tag})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"tag": tag})
 	}
 	if outfmt.IsPlain(ctx) {
 		return writeTagManagerTagPlain(ctx, tag)
@@ -350,7 +350,7 @@ func (c *TagManagerTriggersListCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"triggers": resp.Trigger,
 		})
 	}
@@ -411,7 +411,7 @@ func (c *TagManagerVariablesListCmd) Run(ctx context.Context, flags *RootFlags) 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"variables": resp.Variable,
 		})
 	}
@@ -467,7 +467,7 @@ func (c *TagManagerVersionsListCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"versionHeaders": resp.ContainerVersionHeader,
 		})
 	}

@@ -277,8 +277,11 @@ gog auth list
 - Default: human-friendly tables on stdout.
 - `--plain`: stable TSV on stdout (tabs preserved; best for piping to tools that expect `\t`).
 - `--json`: JSON on stdout (best for scripting).
+- `--wrap-untrusted` / `GOG_WRAP_UNTRUSTED`: when combined with JSON mode, free-text fields from Workspace (mail bodies/subjects, doc/sheet text, names, summaries, etc.) are wrapped in machine-readable untrusted-content fences so agents can treat them as data, not instructions. Default **off**. No effect on `--plain` or human table output; no-op without JSON mode.
 - Human-facing hints/progress go to stderr.
 - Colors are enabled only in rich TTY output and are disabled automatically for `--json` and `--plain`.
+
+Agent tip: prefer `gog --json --wrap-untrusted …` (or `GOG_JSON=1 GOG_WRAP_UNTRUSTED=1`) when reading Gmail/Docs/Sheets/Drive/Calendar text into a model context.
 
 ### Service Scopes
 

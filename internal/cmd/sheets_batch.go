@@ -74,7 +74,7 @@ func (c *SheetsBatchGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"spreadsheetId": resp.SpreadsheetId,
 			"valueRanges":   resp.ValueRanges,
 		})
@@ -152,7 +152,7 @@ func (c *SheetsBatchUpdateCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"spreadsheetId":       resp.SpreadsheetId,
 			"totalUpdatedRows":    resp.TotalUpdatedRows,
 			"totalUpdatedColumns": resp.TotalUpdatedColumns,

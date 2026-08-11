@@ -48,7 +48,7 @@ func (c *SheetsDeveloperMetadataGetCmd) Run(ctx context.Context, flags *RootFlag
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"metadata": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"metadata": resp})
 	}
 
 	u.Out().Printf("ID\t%d", resp.MetadataId)
@@ -148,7 +148,7 @@ func (c *SheetsDeveloperMetadataSearchCmd) Run(ctx context.Context, flags *RootF
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"matchedDeveloperMetadata": resp.MatchedDeveloperMetadata,
 		})
 	}
@@ -216,7 +216,7 @@ func (c *SheetsGetByFilterCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"spreadsheetId": resp.SpreadsheetId,
 			"title":         resp.Properties.Title,
 			"sheets":        resp.Sheets,
@@ -267,7 +267,7 @@ func (c *SheetsCopyToCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"sheetId":   resp.SheetId,
 			"title":     resp.Title,
 			"index":     resp.Index,
@@ -332,7 +332,7 @@ func (c *SheetsValuesBatchClearCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"spreadsheetId": resp.SpreadsheetId,
 			"clearedRanges": resp.ClearedRanges,
 		})
@@ -394,7 +394,7 @@ func (c *SheetsValuesBatchClearByFilterCmd) Run(ctx context.Context, flags *Root
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"spreadsheetId": resp.SpreadsheetId,
 			"clearedRanges": resp.ClearedRanges,
 		})
@@ -465,7 +465,7 @@ func (c *SheetsValuesBatchGetByFilterCmd) Run(ctx context.Context, flags *RootFl
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"valueRanges": resp.ValueRanges,
 		})
 	}
@@ -563,7 +563,7 @@ func (c *SheetsValuesBatchUpdateByFilterCmd) Run(ctx context.Context, flags *Roo
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"spreadsheetId":       resp.SpreadsheetId,
 			"totalUpdatedRows":    resp.TotalUpdatedRows,
 			"totalUpdatedColumns": resp.TotalUpdatedColumns,

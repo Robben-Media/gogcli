@@ -73,7 +73,7 @@ func (c *AnalyticsAudienceExportsCreateCmd) Run(ctx context.Context, flags *Root
 	// The create method returns an Operation. When done, the response contains the AudienceExport.
 	// For now, we just return the operation metadata.
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"operation": map[string]any{
 				"name":     resp.Name,
 				"done":     resp.Done,
@@ -124,7 +124,7 @@ func (c *AnalyticsAudienceExportsGetCmd) Run(ctx context.Context, flags *RootFla
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, resp)
+		return outfmt.WriteJSON(ctx, os.Stdout, resp)
 	}
 
 	w, flush := tableWriter(ctx)
@@ -188,7 +188,7 @@ func (c *AnalyticsAudienceExportsListCmd) Run(ctx context.Context, flags *RootFl
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"audienceExports": resp.AudienceExports,
 			"nextPageToken":   resp.NextPageToken,
 		})
@@ -252,7 +252,7 @@ func (c *AnalyticsAudienceExportsQueryCmd) Run(ctx context.Context, flags *RootF
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"audienceExport": resp.AudienceExport,
 			"audienceRows":   resp.AudienceRows,
 		})
