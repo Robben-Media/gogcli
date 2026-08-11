@@ -22,7 +22,7 @@ Fast, script-friendly CLI for Gmail, Calendar, Chat, Classroom, Drive, Docs, Sli
 - **Groups** - list groups you belong to, view group members (Google Workspace)
 - **Local time** - quick local/UTC time display for scripts and agents
 - **Multiple accounts** - manage multiple Google accounts simultaneously (with aliases)
-- **Command allowlist** - restrict top-level commands for sandboxed/agent runs
+- **Command allowlist** - restrict top-level services and/or exact command paths for sandboxed/agent runs
 - **Secure credential storage** using OS keyring or encrypted on-disk keyring (configurable)
 - **Auto-refreshing tokens** - authenticate once, use indefinitely
 - **Least-privilege auth** - `--readonly` and `--drive-scope` to request fewer scopes
@@ -418,6 +418,7 @@ gog keep get <noteId> --account you@yourdomain.com
 - `GOG_COLOR` - Color mode: `auto` (default), `always`, or `never`
 - `GOG_TIMEZONE` - Default output timezone for Calendar/Gmail (IANA name, `UTC`, or `local`)
 - `GOG_ENABLE_COMMANDS` - Comma-separated allowlist of top-level commands (e.g., `calendar,tasks`)
+- `GOG_ENABLE_COMMAND_PATHS` - Comma-separated allowlist of exact command paths (e.g., `gmail search,calendar events`)
 
 ### Config File (JSON5)
 
@@ -476,13 +477,34 @@ Aliases work anywhere you pass `--account` or `GOG_ACCOUNT` (reserved: `auto`, `
 
 ### Command Allowlist (Sandboxing)
 
+Two complementary invocation allowlists restrict which commands may run:
+
+- `--enable-commands` / `GOG_ENABLE_COMMANDS`: top-level services only (e.g. `gmail`, `calendar`)
+- `--enable-command-paths` / `GOG_ENABLE_COMMAND_PATHS`: exact parser-resolved command paths (e.g. `gmail search`, `gmail thread get`)
+
+Matching rules for exact paths:
+
+- Identity is the Kong-resolved command path: command segments only (flags and positional values are excluded)
+- Documented aliases resolve via the parser model (`mail search` == `gmail search`; invocation `gmail read <id>` has identity `gmail thread get`). Group aliases in the allowlist (e.g. `gmail read`) match the group path only and do not implicitly allow default child leaves
+- Parent paths do **not** allow children (`gmail thread` does not allow `gmail thread get`)
+- When both lists are set, a match in **either** list permits the command (OR)
+- When neither list is set, enablement is unrestricted
+- Persisted `policy` rules remain a separate subsequent gate (AND with enablement)
+
 ```bash
-# Only allow calendar + tasks commands for an agent
+# Only allow calendar + tasks commands for an agent (top-level)
 gog --enable-commands calendar,tasks calendar events --today
 
 # Same via env
 export GOG_ENABLE_COMMANDS=calendar,tasks
 gog tasks list <tasklistId>
+
+# Exact paths: allow Gmail search without other Gmail commands
+gog --enable-command-paths "gmail search" gmail search 'is:unread'
+export GOG_ENABLE_COMMAND_PATHS='gmail search,calendar events'
+
+# Compose: top-level calendar OR exact gmail search
+gog --enable-commands calendar --enable-command-paths "gmail search" gmail search 'is:unread'
 ```
  
 ## Security
@@ -1332,6 +1354,7 @@ All commands support these flags:
 
 - `--account <email|alias|auto>` - Account to use (overrides GOG_ACCOUNT)
 - `--enable-commands <csv>` - Allowlist top-level commands (e.g., `calendar,tasks`)
+- `--enable-command-paths <csv>` - Allowlist exact command paths (e.g., `gmail search,calendar events`)
 - `--json` - Output JSON to stdout (best for scripting)
 - `--plain` - Output stable, parseable text to stdout (TSV; no colors)
 - `--color <mode>` - Color mode: `auto`, `always`, or `never` (default: auto)
