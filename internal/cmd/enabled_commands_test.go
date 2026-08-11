@@ -76,8 +76,8 @@ func TestEnforceEnabledCommands_ExactPathAllowAndSiblingDenial(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse search: %v", err)
 	}
-	if err := enforceEnabledCommands(search, "", "gmail search"); err != nil {
-		t.Fatalf("expected gmail search allow: %v", err)
+	if enforceErr := enforceEnabledCommands(search, "", "gmail search"); enforceErr != nil {
+		t.Fatalf("expected gmail search allow: %v", enforceErr)
 	}
 
 	send, err := parser.Parse([]string{"gmail", "send", "--to", "a@b.com", "--subject", "s", "--body", "b"})
@@ -101,12 +101,12 @@ func TestEnforceEnabledCommands_NestedPathsExactOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse get: %v", err)
 	}
-	if err := enforceEnabledCommands(get, "", "gmail thread get"); err != nil {
-		t.Fatalf("expected nested path allow: %v", err)
+	if enforceErr := enforceEnabledCommands(get, "", "gmail thread get"); enforceErr != nil {
+		t.Fatalf("expected nested path allow: %v", enforceErr)
 	}
 
 	// Parent path must not implicitly allow the leaf.
-	if err := enforceEnabledCommands(get, "", "gmail thread"); err == nil {
+	if enforceErr := enforceEnabledCommands(get, "", "gmail thread"); enforceErr == nil {
 		t.Fatalf("expected parent path not to allow nested leaf")
 	}
 
@@ -130,16 +130,16 @@ func TestEnforceEnabledCommands_AliasAllowlistEntries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	if err := enforceEnabledCommands(kctx, "", "mail search"); err != nil {
-		t.Fatalf("expected alias allowlist entry to match canonical path: %v", err)
+	if enforceErr := enforceEnabledCommands(kctx, "", "mail search"); enforceErr != nil {
+		t.Fatalf("expected alias allowlist entry to match canonical path: %v", enforceErr)
 	}
 
 	aliasInvoke, err := parser.Parse([]string{"mail", "search", "is:unread"})
 	if err != nil {
 		t.Fatalf("Parse alias invoke: %v", err)
 	}
-	if err := enforceEnabledCommands(aliasInvoke, "", "gmail search"); err != nil {
-		t.Fatalf("expected alias invocation to match canonical allowlist: %v", err)
+	if enforceErr := enforceEnabledCommands(aliasInvoke, "", "gmail search"); enforceErr != nil {
+		t.Fatalf("expected alias invocation to match canonical allowlist: %v", enforceErr)
 	}
 
 	// Nested command alias must not bypass a leaf restriction.
@@ -161,34 +161,37 @@ func TestEnforceEnabledCommands_AliasAllowlistEntries(t *testing.T) {
 	}
 }
 
-func TestEnforceEnabledCommands_LegacyTopLevelCompatibility(t *testing.T) {
+func TestEnforceEnabledCommands_LegacyTopLevelMatchesHistoricalExactNames(t *testing.T) {
 	parser, _, err := newParser("test")
 	if err != nil {
 		t.Fatalf("newParser: %v", err)
 	}
 
-	cal, err := parser.Parse([]string{"calendar", "colors"})
-	if err != nil {
-		t.Fatalf("Parse calendar: %v", err)
-	}
-	if err := enforceEnabledCommands(cal, "calendar,tasks", ""); err != nil {
-		t.Fatalf("expected legacy top-level allow: %v", err)
-	}
-
-	tasks, err := parser.Parse([]string{"tasks", "lists"})
-	if err != nil {
-		t.Fatalf("Parse tasks: %v", err)
-	}
-	if err := enforceEnabledCommands(tasks, "calendar,tasks", ""); err != nil {
-		t.Fatalf("expected legacy top-level allow for tasks: %v", err)
+	tests := []struct {
+		name        string
+		args        []string
+		enabled     string
+		wantAllowed bool
+	}{
+		{name: "canonical calendar", args: []string{"calendar", "colors"}, enabled: "calendar", wantAllowed: true},
+		{name: "canonical gmail", args: []string{"gmail", "search", "is:unread"}, enabled: "gmail", wantAllowed: true},
+		{name: "mail alias entry remains inert", args: []string{"mail", "search", "is:unread"}, enabled: "mail", wantAllowed: false},
+		{name: "email alias entry remains inert", args: []string{"email", "search", "is:unread"}, enabled: "email", wantAllowed: false},
+		{name: "bq alias entry remains inert", args: []string{"bq", "datasets", "--project", "test-project"}, enabled: "bq", wantAllowed: false},
+		{name: "gsc alias entry remains inert", args: []string{"gsc", "sites", "list"}, enabled: "gsc", wantAllowed: false},
 	}
 
-	gmail, err := parser.Parse([]string{"gmail", "search", "is:unread"})
-	if err != nil {
-		t.Fatalf("Parse gmail: %v", err)
-	}
-	if err := enforceEnabledCommands(gmail, "calendar,tasks", ""); err == nil {
-		t.Fatalf("expected legacy top-level denial for gmail")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			kctx, parseErr := parser.Parse(tt.args)
+			if parseErr != nil {
+				t.Fatalf("Parse(%v): %v", tt.args, parseErr)
+			}
+			gotAllowed := enforceEnabledCommands(kctx, tt.enabled, "") == nil
+			if gotAllowed != tt.wantAllowed {
+				t.Fatalf("legacy --enable-commands=%q with %v allowed=%t, want %t", tt.enabled, tt.args, gotAllowed, tt.wantAllowed)
+			}
+		})
 	}
 }
 

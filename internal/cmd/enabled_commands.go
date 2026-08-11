@@ -74,9 +74,6 @@ func parseEnabledTopLevelCommands(value string) (map[string]bool, bool) {
 			continue
 		}
 		configured = true
-		if part != "*" && part != "all" {
-			part = normalizeCommandService(part)
-		}
 		out[part] = true
 	}
 	return out, configured
@@ -126,8 +123,8 @@ func canonicalizeEnabledPath(kctx *kong.Context, segments []string) string {
 }
 
 // resolveCommandPath walks the Kong command tree matching each segment by
-// primary name or alias, following default commands when a path ends on a
-// non-leaf that has a default. Returns the canonical primary-name path.
+// primary name or alias. It returns the canonical primary-name path written by
+// the user; an exact-path entry for a parent does not follow its default child.
 func resolveCommandPath(root *kong.Node, segments []string) ([]string, bool) {
 	if root == nil || len(segments) == 0 {
 		return nil, false
@@ -142,10 +139,8 @@ func resolveCommandPath(root *kong.Node, segments []string) ([]string, bool) {
 		path = append(path, child.Name)
 		node = child
 	}
-	// Follow default leaf commands so entries like "gmail thread" that end on
-	// a group with a default do not silently become parent-only identities
-	// unless the user truly stopped there. We intentionally stop at the path
-	// as written: exact matching means "gmail thread" stays "gmail thread".
+	// Exact matching intentionally stops at the written parent, so
+	// "gmail thread" stays "gmail thread" rather than its default leaf.
 	return path, true
 }
 
@@ -174,5 +169,5 @@ func topAllowsCommand(allow map[string]bool, top string) bool {
 	if allow["*"] || allow["all"] {
 		return true
 	}
-	return allow[normalizeCommandService(top)]
+	return allow[top]
 }
