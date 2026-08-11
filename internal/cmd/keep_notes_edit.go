@@ -92,7 +92,7 @@ func (c *KeepNotesCreateCmd) Run(ctx context.Context, flags *RootFlags, keep *Ke
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"note": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"note": created})
 	}
 
 	noteType := "text"
@@ -138,7 +138,7 @@ func (c *KeepNotesDeleteCmd) Run(ctx context.Context, flags *RootFlags, keep *Ke
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"deleted": true,
 			"name":    name,
 		})

@@ -44,7 +44,7 @@ func (c *GmailThreadDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"id":      threadID,
 			"deleted": true,
 		})
@@ -82,7 +82,7 @@ func (c *GmailThreadTrashCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"id":       thread.Id,
 			"threadId": thread.Id,
 			"trashed":  true,
@@ -121,7 +121,7 @@ func (c *GmailThreadUntrashCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"id":        thread.Id,
 			"threadId":  thread.Id,
 			"untrashed": true,

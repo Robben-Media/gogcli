@@ -33,7 +33,8 @@ func FromFlagsFull(jsonOut, plainOut, wrapUntrusted bool) (Mode, error) {
 	if err != nil {
 		return Mode{}, err
 	}
-	m.WrapUntrusted = wrapUntrusted
+	m.WrapUntrusted = m.JSON && wrapUntrusted
+
 	return m, nil
 }
 
@@ -61,15 +62,16 @@ func FromContext(ctx context.Context) Mode {
 	return Mode{}
 }
 
-func IsJSON(ctx context.Context) bool  { return FromContext(ctx).JSON }
-func IsPlain(ctx context.Context) bool { return FromContext(ctx).Plain }
+func IsJSON(ctx context.Context) bool          { return FromContext(ctx).JSON }
+func IsPlain(ctx context.Context) bool         { return FromContext(ctx).Plain }
+func IsWrapUntrusted(ctx context.Context) bool { return FromContext(ctx).WrapUntrusted }
 
-// WriteJSON encodes v as indented JSON to w.
-// When process encode mode has WrapUntrusted set (via SetEncodeMode), free-text
-// fields are wrapped before encoding. Wrapping is a no-op when that flag is off
-// (the default). Plain/human output paths never call WriteJSON.
-func WriteJSON(w io.Writer, v any) error {
-	v = maybeWrapForEncode(v)
+// WriteJSON encodes v as indented JSON to w. Wrapping is scoped to ctx, so
+// concurrent executions cannot affect one another.
+func WriteJSON(ctx context.Context, w io.Writer, v any) error {
+	if IsWrapUntrusted(ctx) {
+		v = WrapUntrustedValue(v)
+	}
 
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)

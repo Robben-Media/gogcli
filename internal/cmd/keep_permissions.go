@@ -75,7 +75,7 @@ func (c *KeepPermissionsBatchCreateCmd) Run(ctx context.Context, flags *RootFlag
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"permissions": resp.Permissions})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"permissions": resp.Permissions})
 	}
 
 	w, flush := tableWriter(ctx)
@@ -140,7 +140,7 @@ func (c *KeepPermissionsBatchDeleteCmd) Run(ctx context.Context, flags *RootFlag
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"deleted": true,
 			"parent":  parent,
 			"count":   len(names),

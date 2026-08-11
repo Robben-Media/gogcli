@@ -40,7 +40,7 @@ func (c *SearchConsoleSitesGetCmd) Run(ctx context.Context, flags *RootFlags) er
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"site": site})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"site": site})
 	}
 
 	// Text output
@@ -160,7 +160,7 @@ func (c *SearchConsoleMobileFriendlyTestCmd) Run(ctx context.Context, flags *Roo
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"testResult": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"testResult": resp})
 	}
 
 	// Text output

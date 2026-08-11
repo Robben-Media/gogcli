@@ -124,7 +124,7 @@ func (c *DocsInfoCmd) Run(ctx context.Context, flags *RootFlags) error {
 		if tabProps != nil {
 			payload["tab"] = tabProps
 		}
-		return outfmt.WriteJSON(os.Stdout, payload)
+		return outfmt.WriteJSON(ctx, os.Stdout, payload)
 	}
 
 	u.Out().Printf("id\t%s", doc.DocumentId)
@@ -211,7 +211,7 @@ func (c *DocsCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 		if link := docsWebViewLink(doc.DocumentId, ""); link != "" {
 			file["webViewLink"] = link
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			strFile:    file,
 			"document": doc,
 		})
@@ -340,7 +340,7 @@ func (c *DocsWriteCmd) Run(ctx context.Context, kctx *kong.Context, flags *RootF
 		if resp.WriteControl != nil {
 			payload["writeControl"] = resp.WriteControl
 		}
-		return outfmt.WriteJSON(os.Stdout, payload)
+		return outfmt.WriteJSON(ctx, os.Stdout, payload)
 	}
 
 	u.Out().Printf("id\t%s", resp.DocumentId)
@@ -403,7 +403,7 @@ func (c *DocsCatCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"text": text})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"text": text})
 	}
 	_, err = io.WriteString(os.Stdout, text)
 	return err
@@ -485,7 +485,7 @@ func (c *DocsInsertCmd) Run(ctx context.Context, flags *RootFlags) error {
 		if tabID != "" {
 			out["tabId"] = tabID
 		}
-		return outfmt.WriteJSON(os.Stdout, out)
+		return outfmt.WriteJSON(ctx, os.Stdout, out)
 	}
 
 	u.Out().Printf("id\t%s", resp.DocumentId)
@@ -566,7 +566,7 @@ func (c *DocsReplaceCmd) Run(ctx context.Context, flags *RootFlags) error {
 		if tabID != "" {
 			out["tabId"] = tabID
 		}
-		return outfmt.WriteJSON(os.Stdout, out)
+		return outfmt.WriteJSON(ctx, os.Stdout, out)
 	}
 
 	u.Out().Printf("id\t%s", resp.DocumentId)
@@ -823,7 +823,7 @@ func (c *DocsUpdateCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"documentId":   resp.DocumentId,
 			"replies":      resp.Replies,
 			"writeControl": resp.WriteControl,
@@ -882,7 +882,7 @@ func (c *DocsTabsListCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	tabs := flattenDocsTabs(doc.Tabs)
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"documentId": doc.DocumentId,
 			"tabs":       tabs,
 			"tabCount":   len(tabs),
@@ -974,7 +974,7 @@ func (c *DocsTabsAddCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"documentId": resp.DocumentId,
 			"tab":        tabProps,
 		})
@@ -1071,7 +1071,7 @@ func (c *DocsTabsUpdateCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"documentId": resp.DocumentId,
 			"tabId":      tabID,
 			"fields":     fields,
@@ -1128,7 +1128,7 @@ func (c *DocsTabsDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"deleted":    true,
 			"documentId": id,
 			"tabId":      tabID,

@@ -52,7 +52,7 @@ func (c *ClassroomGuardiansListCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"guardians":     resp.Guardians,
 			"nextPageToken": resp.NextPageToken,
 		})
@@ -111,7 +111,7 @@ func (c *ClassroomGuardiansGetCmd) Run(ctx context.Context, flags *RootFlags) er
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"guardian": guardian})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"guardian": guardian})
 	}
 
 	u.Out().Printf("id\t%s", guardian.GuardianId)
@@ -156,7 +156,7 @@ func (c *ClassroomGuardiansDeleteCmd) Run(ctx context.Context, flags *RootFlags)
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"deleted":    true,
 			"studentId":  studentID,
 			"guardianId": guardianID,
@@ -216,7 +216,7 @@ func (c *ClassroomGuardianInvitesListCmd) Run(ctx context.Context, flags *RootFl
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"invitations":   resp.GuardianInvitations,
 			"nextPageToken": resp.NextPageToken,
 		})
@@ -276,7 +276,7 @@ func (c *ClassroomGuardianInvitesGetCmd) Run(ctx context.Context, flags *RootFla
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"invitation": inv})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"invitation": inv})
 	}
 
 	u.Out().Printf("id\t%s", inv.InvitationId)
@@ -321,7 +321,7 @@ func (c *ClassroomGuardianInvitesCreateCmd) Run(ctx context.Context, flags *Root
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"invitation": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"invitation": created})
 	}
 	u.Out().Printf("id\t%s", created.InvitationId)
 	u.Out().Printf("student_id\t%s", created.StudentId)

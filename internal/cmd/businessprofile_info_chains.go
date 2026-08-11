@@ -47,7 +47,7 @@ func (c *BusinessProfileInfoChainsGetCmd) Run(ctx context.Context, flags *RootFl
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"chain": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"chain": resp})
 	}
 
 	u.Out().Printf("name\t%s", resp.Name)
@@ -92,7 +92,7 @@ func (c *BusinessProfileInfoChainsSearchCmd) Run(ctx context.Context, flags *Roo
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"chains": resp.Chains,
 		})
 	}

@@ -59,7 +59,7 @@ func (c *ContactGroupsListCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"contactGroups": resp.ContactGroups,
 			"nextPageToken": resp.NextPageToken,
 			"nextSyncToken": resp.NextSyncToken,
@@ -129,7 +129,7 @@ func (c *ContactGroupsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"contactGroup": g})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"contactGroup": g})
 	}
 
 	u.Out().Printf("resource\t%s", g.ResourceName)
@@ -190,7 +190,7 @@ func (c *ContactGroupsBatchGetCmd) Run(ctx context.Context, flags *RootFlags) er
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"responses": resp.Responses,
 		})
 	}
@@ -254,7 +254,7 @@ func (c *ContactGroupsCreateCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"contactGroup": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"contactGroup": created})
 	}
 
 	u.Out().Printf("resource\t%s", created.ResourceName)
@@ -318,7 +318,7 @@ func (c *ContactGroupsUpdateCmd) Run(ctx context.Context, kctx *kong.Context, fl
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"contactGroup": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"contactGroup": updated})
 	}
 
 	u.Out().Printf("resource\t%s", updated.ResourceName)

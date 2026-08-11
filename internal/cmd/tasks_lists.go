@@ -45,7 +45,7 @@ func (c *TasksListsListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"tasklists":     resp.Items,
 			"nextPageToken": resp.NextPageToken,
 		})
@@ -92,7 +92,7 @@ func (c *TasksListsCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"tasklist": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"tasklist": created})
 	}
 	u.Out().Printf("id\t%s", created.Id)
 	u.Out().Printf("title\t%s", created.Title)

@@ -89,7 +89,6 @@ func Execute(args []string) (err error) {
 		if innerErr != nil {
 			return reportPreUIError(newUsageError(innerErr))
 		}
-		outfmt.SetEncodeMode(mode)
 		ctx := outfmt.WithMode(context.Background(), mode)
 		return (&VersionCmd{}).Run(ctx)
 	}
@@ -141,10 +140,6 @@ func Execute(args []string) (err error) {
 	if err != nil {
 		return reportPreUIError(newUsageError(err))
 	}
-	// Process-level encode options so outfmt.WriteJSON can wrap at one chokepoint
-	// without every command call site passing wrap flags.
-	outfmt.SetEncodeMode(mode)
-
 	ctx := context.Background()
 	ctx = outfmt.WithMode(ctx, mode)
 	ctx = authclient.WithClient(ctx, cli.Client)

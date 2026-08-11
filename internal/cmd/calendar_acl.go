@@ -64,7 +64,7 @@ func (c *CalendarAclListCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"rules":         resp.Items,
 			"nextPageToken": resp.NextPageToken,
 		})
@@ -122,7 +122,7 @@ func (c *CalendarAclGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"rule": rule})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"rule": rule})
 	}
 
 	u.Out().Printf("id\t%s", rule.Id)
@@ -197,7 +197,7 @@ func (c *CalendarAclInsertCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"rule": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"rule": created})
 	}
 
 	u.Out().Printf("id\t%s", created.Id)
@@ -247,7 +247,7 @@ func (c *CalendarAclDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"id":      ruleID,
 			"deleted": true,
 		})
@@ -305,7 +305,7 @@ func (c *CalendarAclPatchCmd) Run(ctx context.Context, kctx *kong.Context, flags
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"rule": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"rule": updated})
 	}
 
 	u.Out().Printf("id\t%s", updated.Id)
@@ -379,7 +379,7 @@ func (c *CalendarAclWatchCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"channel": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"channel": resp})
 	}
 
 	u.Out().Printf("channel_id\t%s", resp.Id)

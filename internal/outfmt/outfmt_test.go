@@ -36,7 +36,7 @@ func TestContextMode(t *testing.T) {
 
 func TestWriteJSON(t *testing.T) {
 	var buf bytes.Buffer
-	if err := WriteJSON(&buf, map[string]any{"ok": true}); err != nil {
+	if err := WriteJSON(context.Background(), &buf, map[string]any{"ok": true}); err != nil {
 		t.Fatalf("err: %v", err)
 	}
 
@@ -56,6 +56,7 @@ func TestFromEnvAndParseError(t *testing.T) {
 	}
 
 	t.Setenv("GOG_WRAP_UNTRUSTED", "true")
+
 	mode = FromEnv()
 	if !mode.WrapUntrusted {
 		t.Fatalf("expected wrap from env: %#v", mode)
@@ -71,9 +72,11 @@ func TestFromFlagsFull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
+
 	if !got.JSON || got.Plain || !got.WrapUntrusted {
 		t.Fatalf("unexpected mode: %#v", got)
 	}
+
 	if _, err := FromFlagsFull(true, true, true); err == nil {
 		t.Fatalf("expected conflict error")
 	}
@@ -84,6 +87,7 @@ func TestIsWrapUntrusted(t *testing.T) {
 	if !IsWrapUntrusted(ctx) {
 		t.Fatalf("expected wrap true")
 	}
+
 	if IsWrapUntrusted(context.Background()) {
 		t.Fatalf("expected wrap false by default")
 	}

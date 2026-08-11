@@ -60,7 +60,7 @@ func (c *DocsDeleteRangeCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"documentId": resp.DocumentId,
 			"replies":    resp.Replies,
 		})
@@ -180,7 +180,7 @@ func (c *DocsFormatCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"documentId": resp.DocumentId,
 			"replies":    resp.Replies,
 		})
@@ -241,7 +241,7 @@ func (c *DocsInsertTableCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"documentId": resp.DocumentId,
 			"replies":    resp.Replies,
 		})
@@ -299,7 +299,7 @@ func (c *DocsInsertImageCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"documentId": resp.DocumentId,
 			"replies":    resp.Replies,
 		})
@@ -362,7 +362,7 @@ func (c *DocsBulletsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"documentId": resp.DocumentId,
 			"replies":    resp.Replies,
 		})

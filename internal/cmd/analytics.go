@@ -114,7 +114,7 @@ func (c *AnalyticsReportCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"dimensionHeaders": resp.DimensionHeaders,
 			"metricHeaders":    resp.MetricHeaders,
 			"rows":             resp.Rows,
@@ -211,7 +211,7 @@ func (c *AnalyticsRealtimeCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"dimensionHeaders": resp.DimensionHeaders,
 			"metricHeaders":    resp.MetricHeaders,
 			"rows":             resp.Rows,
@@ -279,7 +279,7 @@ func (c *AnalyticsPropertiesCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"accountSummaries": resp.AccountSummaries,
 			"nextPageToken":    resp.NextPageToken,
 		})
@@ -331,7 +331,7 @@ func (c *AnalyticsAccountsCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"accounts":      resp.Accounts,
 			"nextPageToken": resp.NextPageToken,
 		})
@@ -382,7 +382,7 @@ func (c *AnalyticsDimensionsCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"dimensions": resp.Dimensions,
 		})
 	}
@@ -431,7 +431,7 @@ func (c *AnalyticsMetricsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"metrics": resp.Metrics,
 		})
 	}

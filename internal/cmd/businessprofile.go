@@ -31,7 +31,7 @@ func writeBusinessProfileMutationReceipt(ctx context.Context, action, resource, 
 		if destination != "" {
 			payload["destination"] = destination
 		}
-		return outfmt.WriteJSON(os.Stdout, payload)
+		return outfmt.WriteJSON(ctx, os.Stdout, payload)
 	}
 
 	if outfmt.IsPlain(ctx) {
@@ -111,7 +111,7 @@ func (c *BusinessProfileLocationsCmd) Run(ctx context.Context, flags *RootFlags)
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"locations":     resp.Locations,
 			"nextPageToken": resp.NextPageToken,
 		})
@@ -166,7 +166,7 @@ func (c *BusinessProfileGetCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"location": loc})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"location": loc})
 	}
 
 	u.Out().Printf("name\t%s", loc.Name)

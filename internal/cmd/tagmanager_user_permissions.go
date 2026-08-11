@@ -141,7 +141,7 @@ func (c *TagManagerUserPermissionsDeleteCmd) Run(ctx context.Context, flags *Roo
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"deleted": true, "path": path})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"deleted": true, "path": path})
 	}
 	if outfmt.IsPlain(ctx) {
 		w, flush := tableWriter(ctx)
@@ -205,7 +205,7 @@ func (c *TagManagerUserPermissionsListCmd) Run(ctx context.Context, flags *RootF
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"userPermissions": resp.UserPermission, "nextPageToken": resp.NextPageToken})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"userPermissions": resp.UserPermission, "nextPageToken": resp.NextPageToken})
 	}
 	u := ui.FromContext(ctx)
 	if len(resp.UserPermission) == 0 {
@@ -291,7 +291,7 @@ func tagManagerPermissionID(path string) string {
 
 func writeTagManagerUserPermission(ctx context.Context, action string, permission *tagmanager.UserPermission) error {
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"userPermission": permission})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"userPermission": permission})
 	}
 	accountAccess := ""
 	if permission.AccountAccess != nil {
