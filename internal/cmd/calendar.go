@@ -77,10 +77,10 @@ func (c *CalendarCalendarsListCmd) Run(ctx context.Context, flags *RootFlags) er
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"calendars":     resp.Items,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Items))
 	}
 	if len(resp.Items) == 0 {
 		u.Err().Println("No calendars")

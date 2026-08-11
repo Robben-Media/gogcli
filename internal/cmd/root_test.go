@@ -87,6 +87,51 @@ func TestExecute_UnknownFlag(t *testing.T) {
 	}
 }
 
+func TestExecute_JSONTransformationsRequireJSON(t *testing.T) {
+	for _, args := range [][]string{
+		{"--results-only", "version"},
+		{"--select", "version,commit", "version"},
+		{"--plain", "--results-only", "version"},
+		{"--version", "--select", "version"},
+	} {
+		t.Run(strings.Join(args, "_"), func(t *testing.T) {
+			var execErr error
+			stdout := captureStdout(t, func() {
+				stderr := captureStderr(t, func() {
+					execErr = Execute(args)
+				})
+				if !strings.Contains(stderr, "require --json") {
+					t.Fatalf("expected require --json diagnostic, got %q", stderr)
+				}
+			})
+			if execErr == nil || ExitCode(execErr) != 2 {
+				t.Fatalf("expected usage error, got %v", execErr)
+			}
+			if stdout != "" {
+				t.Fatalf("unexpected partial output: %q", stdout)
+			}
+		})
+	}
+}
+
+func TestExecute_InvalidJSONSelectionReportsUsageError(t *testing.T) {
+	var execErr error
+	stdout := captureStdout(t, func() {
+		stderr := captureStderr(t, func() {
+			execErr = Execute([]string{"--json", "--select", "version,,commit", "version"})
+		})
+		if !strings.Contains(stderr, "invalid JSON selection path") {
+			t.Fatalf("unexpected stderr: %q", stderr)
+		}
+	})
+	if execErr == nil || ExitCode(execErr) != 2 {
+		t.Fatalf("expected usage error, got %v", execErr)
+	}
+	if stdout != "" {
+		t.Fatalf("unexpected partial output: %q", stdout)
+	}
+}
+
 func TestExecute_ConflictingOutputModesReportsStderr(t *testing.T) {
 	errText := captureStderr(t, func() {
 		_ = captureStdout(t, func() {
@@ -101,6 +146,19 @@ func TestExecute_ConflictingOutputModesReportsStderr(t *testing.T) {
 	})
 	if !strings.Contains(errText, "invalid output mode") {
 		t.Fatalf("expected stderr diagnostic, got %q", errText)
+	}
+}
+
+func TestExecute_VersionSelectsJSONFields(t *testing.T) {
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--version", "--json", "--select", "version"}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+	if !strings.Contains(out, "\"version\"") || strings.Contains(out, "\"commit\"") {
+		t.Fatalf("unexpected selected version output: %q", out)
 	}
 }
 

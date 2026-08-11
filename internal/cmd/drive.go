@@ -111,10 +111,10 @@ func (c *DriveLsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"files":         resp.Files,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Files))
 	}
 
 	if len(resp.Files) == 0 {
@@ -178,10 +178,10 @@ func (c *DriveSearchCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"files":         resp.Files,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Files))
 	}
 
 	if len(resp.Files) == 0 {
@@ -237,7 +237,7 @@ func (c *DriveGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{strFile: f})
+		return outfmt.WriteJSON(os.Stdout, outfmt.PrimaryResult(map[string]any{strFile: f}, f))
 	}
 
 	u.Out().Printf("id\t%s", f.Id)

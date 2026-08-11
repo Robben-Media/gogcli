@@ -277,6 +277,9 @@ gog auth list
 - Default: human-friendly tables on stdout.
 - `--plain`: stable TSV on stdout (tabs preserved; best for piping to tools that expect `\t`).
 - `--json`: JSON on stdout (best for scripting).
+- `--results-only`: with `--json`, emit only the command's declared primary result instead of its response envelope.
+- `--select <paths>`: with `--json`, project comma-separated fields such as `id,name` or `sender.email`; dotted paths preserve nested shape and missing fields are omitted.
+- When combined, `--results-only` runs before `--select`.
 - Human-facing hints/progress go to stderr.
 - Colors are enabled only in rich TTY output and are disabled automatically for `--json` and `--plain`.
 
@@ -1201,15 +1204,17 @@ $ gog gmail messages search 'newer_than:7d' --max 1 --include-body --json
 }
 ```
 
-Data goes to stdout, errors and progress to stderr for clean piping:
+Data goes to stdout, errors and progress to stderr for clean piping. Built-in projection can replace common envelope-scraping `jq` usage:
 
 ```bash
-gog --json drive ls --max 5 | jq '.files[] | select(.mimeType=="application/pdf")'
+# Emit the file array without nextPageToken, then retain only selected fields.
+gog --json --results-only --select id,name,mimeType drive ls --max 5
+
+# Filtering expressions remain a jq use case.
+gog --json --results-only drive ls --max 5 | jq '.[] | select(.mimeType=="application/pdf")'
 ```
 
-Useful pattern:
-
-- `gog --json ... | jq .`
+`--select` projects objects or each object in an array. It is separate from command-specific options such as Calendar's `--fields`: `--fields` controls the Google API partial response, while `--select` shapes the JSON printed by `gog`; they can be combined.
 
 Calendar JSON convenience fields:
 
@@ -1333,6 +1338,8 @@ All commands support these flags:
 - `--account <email|alias|auto>` - Account to use (overrides GOG_ACCOUNT)
 - `--enable-commands <csv>` - Allowlist top-level commands (e.g., `calendar,tasks`)
 - `--json` - Output JSON to stdout (best for scripting)
+- `--results-only` - Output the command's declared primary result (requires `--json`)
+- `--select <paths>` - Project comma-separated dotted paths from JSON output (requires `--json`)
 - `--plain` - Output stable, parseable text to stdout (TSV; no colors)
 - `--color <mode>` - Color mode: `auto`, `always`, or `never` (default: auto)
 - `--force` - Skip confirmations for destructive commands

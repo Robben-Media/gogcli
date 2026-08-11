@@ -41,6 +41,8 @@ type RootFlags struct {
 	EnableCommands string `help:"Comma-separated list of enabled top-level commands (restricts CLI)" default:"${enabled_commands}"`
 	JSON           bool   `help:"Output JSON to stdout (best for scripting)" default:"${json}"`
 	Plain          bool   `help:"Output stable, parseable text to stdout (TSV; no colors)" default:"${plain}"`
+	ResultsOnly    bool   `name:"results-only" help:"Output only the declared primary result (requires --json)"`
+	Select         string `name:"select" help:"Comma-separated fields to select from JSON output (requires --json)"`
 	Version        bool   `help:"Print version and exit"`
 	Force          bool   `help:"Skip confirmations for destructive commands"`
 	NoInput        bool   `help:"Never prompt; fail instead (useful for CI)"`
@@ -84,10 +86,15 @@ type exitPanic struct{ code int }
 
 func Execute(args []string) (err error) {
 	if hasVersionFlag(args) {
-		mode, innerErr := outputModeFromVersionArgs(args)
+		mode, jsonConfig, innerErr := outputModeFromVersionArgs(args)
 		if innerErr != nil {
 			return reportPreUIError(newUsageError(innerErr))
 		}
+		restoreJSON, innerErr := outfmt.ConfigureJSON(jsonConfig)
+		if innerErr != nil {
+			return reportPreUIError(newUsageError(innerErr))
+		}
+		defer restoreJSON()
 		ctx := outfmt.WithMode(context.Background(), mode)
 		return (&VersionCmd{}).Run(ctx)
 	}
@@ -139,6 +146,15 @@ func Execute(args []string) (err error) {
 	if err != nil {
 		return reportPreUIError(newUsageError(err))
 	}
+	jsonConfig, err := jsonConfigFromFlags(mode, cli.ResultsOnly, cli.Select)
+	if err != nil {
+		return reportPreUIError(newUsageError(err))
+	}
+	restoreJSON, err := outfmt.ConfigureJSON(jsonConfig)
+	if err != nil {
+		return reportPreUIError(newUsageError(err))
+	}
+	defer restoreJSON()
 
 	ctx := context.Background()
 	ctx = outfmt.WithMode(ctx, mode)
@@ -185,6 +201,19 @@ func Execute(args []string) (err error) {
 	}
 	_, _ = fmt.Fprintln(os.Stderr, errfmt.Format(err))
 	return err
+}
+
+func jsonConfigFromFlags(mode outfmt.Mode, resultsOnly bool, selectPaths string) (outfmt.JSONConfig, error) {
+	selectPaths = strings.TrimSpace(selectPaths)
+	if !mode.JSON && (resultsOnly || selectPaths != "") {
+		return outfmt.JSONConfig{}, errors.New("--results-only and --select require --json")
+	}
+
+	jsonOutput := outfmt.JSONConfig{ResultsOnly: resultsOnly}
+	if selectPaths != "" {
+		jsonOutput.Select = strings.Split(selectPaths, ",")
+	}
+	return jsonOutput, nil
 }
 
 func wrapParseError(err error) error {
@@ -311,12 +340,15 @@ func hasVersionFlag(args []string) bool {
 	return false
 }
 
-func outputModeFromVersionArgs(args []string) (outfmt.Mode, error) {
+func outputModeFromVersionArgs(args []string) (outfmt.Mode, outfmt.JSONConfig, error) {
 	envMode := outfmt.FromEnv()
 	jsonOut := envMode.JSON
 	plainOut := envMode.Plain
+	resultsOnly := false
+	selectPaths := ""
 
-	for _, arg := range args {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
 		if arg == "--" {
 			break
 		}
@@ -325,22 +357,46 @@ func outputModeFromVersionArgs(args []string) (outfmt.Mode, error) {
 			jsonOut = true
 		case arg == "--plain":
 			plainOut = true
+		case arg == "--results-only":
+			resultsOnly = true
+		case arg == "--select":
+			if i+1 >= len(args) {
+				return outfmt.Mode{}, outfmt.JSONConfig{}, errors.New("--select requires a value")
+			}
+			i++
+			selectPaths = args[i]
 		case strings.HasPrefix(arg, "--json="):
 			v, err := parseFlagBool(strings.TrimPrefix(arg, "--json="))
 			if err != nil {
-				return outfmt.Mode{}, err
+				return outfmt.Mode{}, outfmt.JSONConfig{}, err
 			}
 			jsonOut = v
 		case strings.HasPrefix(arg, "--plain="):
 			v, err := parseFlagBool(strings.TrimPrefix(arg, "--plain="))
 			if err != nil {
-				return outfmt.Mode{}, err
+				return outfmt.Mode{}, outfmt.JSONConfig{}, err
 			}
 			plainOut = v
+		case strings.HasPrefix(arg, "--results-only="):
+			v, err := parseFlagBool(strings.TrimPrefix(arg, "--results-only="))
+			if err != nil {
+				return outfmt.Mode{}, outfmt.JSONConfig{}, err
+			}
+			resultsOnly = v
+		case strings.HasPrefix(arg, "--select="):
+			selectPaths = strings.TrimPrefix(arg, "--select=")
 		}
 	}
 
-	return outfmt.FromFlags(jsonOut, plainOut)
+	mode, err := outfmt.FromFlags(jsonOut, plainOut)
+	if err != nil {
+		return outfmt.Mode{}, outfmt.JSONConfig{}, err
+	}
+	jsonOutput, err := jsonConfigFromFlags(mode, resultsOnly, selectPaths)
+	if err != nil {
+		return outfmt.Mode{}, outfmt.JSONConfig{}, err
+	}
+	return mode, jsonOutput, nil
 }
 
 func parseFlagBool(value string) (bool, error) {

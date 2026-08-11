@@ -186,8 +186,9 @@ func TestCalendarConflicts_SourceErrors_JSONIncompleteAndNonzero(t *testing.T) {
 	newCalendarService = func(context.Context, string) (*calendar.Service, error) { return svc, nil }
 
 	var execErr error
+	var jsonStderr string
 	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
+		jsonStderr = captureStderr(t, func() {
 			execErr = Execute([]string{
 				"--json",
 				"--account", "a@b.com",
@@ -203,6 +204,34 @@ func TestCalendarConflicts_SourceErrors_JSONIncompleteAndNonzero(t *testing.T) {
 	}
 	if ExitCode(execErr) == 0 {
 		t.Fatalf("expected nonzero exit code, got 0 (%v)", execErr)
+	}
+
+	var transformedErr error
+	var transformedStderr string
+	transformedOut := captureStdout(t, func() {
+		transformedStderr = captureStderr(t, func() {
+			transformedErr = Execute([]string{
+				"--json", "--results-only", "--select", "start,end",
+				"--account", "a@b.com",
+				"calendar", "conflicts",
+				"--from", "2024-12-13T09:00:00Z",
+				"--to", "2024-12-13T14:00:00Z",
+				"--calendars", "primary,bad@example.com",
+			})
+		})
+	})
+	if transformedErr == nil || ExitCode(transformedErr) != ExitCode(execErr) {
+		t.Fatalf("transformed error = %v, want exit code %d", transformedErr, ExitCode(execErr))
+	}
+	if transformedStderr != jsonStderr {
+		t.Fatalf("transformed stderr changed\ngot:  %q\nwant: %q", transformedStderr, jsonStderr)
+	}
+	var transformedConflicts []map[string]any
+	if err := json.Unmarshal([]byte(transformedOut), &transformedConflicts); err != nil {
+		t.Fatalf("transformed JSON parse: %v\nout=%q", err, transformedOut)
+	}
+	if len(transformedConflicts) != 0 {
+		t.Fatalf("unexpected transformed conflicts: %#v", transformedConflicts)
 	}
 
 	var parsed struct {
