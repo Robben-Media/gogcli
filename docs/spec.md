@@ -134,6 +134,7 @@ Environment:
 - `GOG_KEYRING_BACKEND={auto|keychain|file}` (force backend; use `file` to avoid Keychain prompts and pair with `GOG_KEYRING_PASSWORD` for non-interactive)
 - `GOG_TIMEZONE=America/New_York` (default output timezone; IANA name or `UTC`; `local` forces local timezone)
 - `GOG_ENABLE_COMMANDS=calendar,tasks` (optional allowlist of top-level commands)
+- `GOG_ENABLE_COMMAND_PATHS=gmail search,calendar events` (optional allowlist of exact command paths; aliases canonicalize; parents do not allow children; ORs with top-level enablement; policies still apply after)
 - `config.json` can also set `keyring_backend` (JSON5; env vars take precedence)
 - `config.json` can also set `default_timezone` (IANA name or `UTC`)
 - `config.json` can also set `account_aliases` for `gog auth alias` (JSON5)
