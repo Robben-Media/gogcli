@@ -53,7 +53,8 @@ Every command inherits these. Do NOT re-declare them on individual commands.
 | `--force` | bool | false | — | Skip destructive confirmations |
 | `--no-input` | bool | false | — | Never prompt, fail instead |
 | `--verbose` | bool | false | — | Enable debug logging |
-| `--enable-commands` | string | — | `GOG_ENABLE_COMMANDS` | Restrict available commands |
+| `--enable-commands` | string | — | `GOG_ENABLE_COMMANDS` | Restrict available top-level commands |
+| `--enable-command-paths` | string | — | `GOG_ENABLE_COMMAND_PATHS` | Restrict available exact command paths |
 
 ## Output Contract
 
