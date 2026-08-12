@@ -4,7 +4,11 @@
 
 ### Added
 
+- Auth: add `gog auth doctor` for unified read-only diagnostics of config, keyring, OAuth client credentials, stored identities, and refresh-token usability. (#157)
 - CLI: add `gog schema` for deterministic, versioned JSON discovery of commands, flags, exit codes, and effective automation safeguards. (#152)
+- CLI: add opt-in `--wrap-untrusted` / `GOG_WRAP_UNTRUSTED` JSON fences for external Workspace text used by agents. (#155)
+- CLI: add `--enable-command-paths` / `GOG_ENABLE_COMMAND_PATHS` for exact command-path allowlisting alongside top-level `--enable-commands`. (#153)
+
 - Search Console: add `--start-row` to `search-console query` for zero-based Search Analytics result windows. (#98)
 - Tag Manager: add workspace trigger and variable create/delete/get/revert/update commands plus built-in-variable management. (#12, #45, #46, #47)
 - Tag Manager: add composable workspace version creation and container-version publishing commands. (#11)

@@ -27,7 +27,7 @@ func (c *AuthAliasListCmd) Run(ctx context.Context) error {
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"aliases": aliases})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"aliases": aliases})
 	}
 	if len(aliases) == 0 {
 		u.Err().Println("No account aliases")
@@ -72,7 +72,7 @@ func (c *AuthAliasSetCmd) Run(ctx context.Context) error {
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"alias": alias,
 			"email": strings.ToLower(email),
 		})
@@ -100,7 +100,7 @@ func (c *AuthAliasUnsetCmd) Run(ctx context.Context) error {
 		return usage("alias not found")
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"deleted": true,
 			"alias":   alias,
 		})

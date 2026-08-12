@@ -71,7 +71,7 @@ func (c *CalendarUsersCmd) Run(ctx context.Context, flags *RootFlags) error {
 				Name:  primaryName(p),
 			})
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"users":         items,
 			"nextPageToken": resp.NextPageToken,
 		})

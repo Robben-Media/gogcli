@@ -40,7 +40,7 @@ func (c *GmailDelegatesListCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"delegates": resp.Delegates})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"delegates": resp.Delegates})
 	}
 
 	if len(resp.Delegates) == 0 {
@@ -85,7 +85,7 @@ func (c *GmailDelegatesGetCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"delegate": delegate})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"delegate": delegate})
 	}
 
 	u.Out().Printf("delegate_email\t%s", delegate.DelegateEmail)
@@ -123,7 +123,7 @@ func (c *GmailDelegatesAddCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"delegate": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"delegate": created})
 	}
 
 	if outfmt.IsPlain(ctx) {
@@ -168,7 +168,7 @@ func (c *GmailDelegatesRemoveCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"success":       true,
 			"delegateEmail": delegateEmail,
 		})

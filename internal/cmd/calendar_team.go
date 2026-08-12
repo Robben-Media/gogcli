@@ -141,7 +141,7 @@ func (c *CalendarTeamCmd) runFreeBusy(ctx context.Context, svc *calendar.Service
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"group":    c.GroupEmail,
 			"timeMin":  tr.From.Format(time.RFC3339),
 			"timeMax":  tr.To.Format(time.RFC3339),
@@ -284,7 +284,7 @@ func (c *CalendarTeamCmd) runEvents(ctx context.Context, svc *calendar.Service, 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		if err := outfmt.WriteJSON(os.Stdout, map[string]any{
+		if err := outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"group":    c.GroupEmail,
 			"timeMin":  tr.From.Format(time.RFC3339),
 			"timeMax":  tr.To.Format(time.RFC3339),

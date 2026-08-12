@@ -73,7 +73,7 @@ func (c *SheetsSheetAddCmd) Run(ctx context.Context, flags *RootFlags) error {
 			out["sheetId"] = addedProps.SheetId
 			out["title"] = addedProps.Title
 		}
-		return outfmt.WriteJSON(os.Stdout, out)
+		return outfmt.WriteJSON(ctx, os.Stdout, out)
 	}
 	if outfmt.IsPlain(ctx) {
 		sheetID, title := "", ""
@@ -131,7 +131,7 @@ func (c *SheetsSheetDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"spreadsheetId":  resp.SpreadsheetId,
 			"deletedSheetId": c.SheetID,
 		})
@@ -212,7 +212,7 @@ func (c *SheetsSheetUpdateCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"spreadsheetId": resp.SpreadsheetId,
 			"sheetId":       c.SheetID,
 			"updatedFields": fields,

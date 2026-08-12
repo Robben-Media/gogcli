@@ -63,7 +63,7 @@ func (c *DriveDrivesCreateCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"drive": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"drive": created})
 	}
 
 	u.Out().Printf("id\t%s", created.Id)
@@ -112,7 +112,7 @@ func (c *DriveDrivesUpdateCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"drive": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"drive": updated})
 	}
 
 	u.Out().Printf("id\t%s", updated.Id)
@@ -158,7 +158,7 @@ func (c *DriveDrivesDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"id":      driveID,
 			"deleted": true,
 		})
@@ -199,7 +199,7 @@ func (c *DriveDrivesHideCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"drive": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"drive": updated})
 	}
 
 	u.Out().Printf("id\t%s", updated.Id)
@@ -238,7 +238,7 @@ func (c *DriveDrivesUnhideCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"drive": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"drive": updated})
 	}
 
 	u.Out().Printf("id\t%s", updated.Id)

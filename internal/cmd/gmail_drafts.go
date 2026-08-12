@@ -64,7 +64,7 @@ func (c *GmailDraftsListCmd) Run(ctx context.Context, flags *RootFlags) error {
 			}
 			items = append(items, item{ID: d.Id, MessageID: msgID, ThreadID: threadID})
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"drafts":        items,
 			"nextPageToken": resp.NextPageToken,
 		})
@@ -115,7 +115,7 @@ func (c *GmailDraftsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 	if draft.Message == nil {
 		if outfmt.IsJSON(ctx) {
-			return outfmt.WriteJSON(os.Stdout, map[string]any{"draft": draft})
+			return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"draft": draft})
 		}
 		if outfmt.IsPlain(ctx) {
 			return writeGmailDraftGetPlain(ctx, os.Stdout, draft, nil, nil)
@@ -134,7 +134,7 @@ func (c *GmailDraftsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 			}
 			out["downloaded"] = attachmentDownloadDraftOutputs(downloads)
 		}
-		return outfmt.WriteJSON(os.Stdout, out)
+		return outfmt.WriteJSON(ctx, os.Stdout, out)
 	}
 
 	attachments := collectAttachments(msg.Payload)
@@ -276,7 +276,7 @@ func (c *GmailDraftsDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"deleted": true, "draftId": draftID})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"deleted": true, "draftId": draftID})
 	}
 	u.Out().Printf("deleted\ttrue")
 	u.Out().Printf("draft_id\t%s", draftID)
@@ -308,7 +308,7 @@ func (c *GmailDraftsSendCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"messageId": msg.Id,
 			"threadId":  msg.ThreadId,
 		})
@@ -423,7 +423,7 @@ func writeDraftResult(ctx context.Context, u *ui.UI, draft *gmail.Draft, threadI
 		threadID = draft.Message.ThreadId
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"draftId":  draft.Id,
 			"message":  draft.Message,
 			"threadId": threadID,

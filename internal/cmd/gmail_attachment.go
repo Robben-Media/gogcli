@@ -65,7 +65,7 @@ func (c *GmailAttachmentCmd) Run(ctx context.Context, flags *RootFlags) error {
 			return dlErr
 		}
 		if outfmt.IsJSON(ctx) {
-			return outfmt.WriteJSON(os.Stdout, map[string]any{"path": path, "cached": cached, "bytes": bytes})
+			return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"path": path, "cached": cached, "bytes": bytes})
 		}
 		u.Out().Printf("path\t%s", path)
 		u.Out().Printf("cached\t%t", cached)
@@ -82,7 +82,7 @@ func (c *GmailAttachmentCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"path": path, "cached": cached, "bytes": bytes})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"path": path, "cached": cached, "bytes": bytes})
 	}
 	u.Out().Printf("path\t%s", path)
 	u.Out().Printf("cached\t%t", cached)

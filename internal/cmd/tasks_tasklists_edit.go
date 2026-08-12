@@ -40,7 +40,7 @@ func (c *TasksListsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"tasklist": tl})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"tasklist": tl})
 	}
 	u.Out().Printf("id\t%s", tl.Id)
 	u.Out().Printf("title\t%s", tl.Title)
@@ -78,7 +78,7 @@ func (c *TasksListsDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"deleted":    true,
 			"tasklistId": tasklistID,
 		})
@@ -125,7 +125,7 @@ func (c *TasksListsPatchCmd) Run(ctx context.Context, kctx *kong.Context, flags 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"tasklist": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"tasklist": updated})
 	}
 	u.Out().Printf("id\t%s", updated.Id)
 	u.Out().Printf("title\t%s", updated.Title)
@@ -165,7 +165,7 @@ func (c *TasksListsUpdateCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"tasklist": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"tasklist": updated})
 	}
 	u.Out().Printf("id\t%s", updated.Id)
 	u.Out().Printf("title\t%s", updated.Title)

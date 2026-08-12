@@ -168,17 +168,7 @@ func policySpecificity(policy config.Policy) int {
 }
 
 func commandActionID(kctx *kong.Context) string {
-	if kctx == nil {
-		return ""
-	}
-	rawParts := strings.Fields(strings.ToLower(strings.TrimSpace(kctx.Command())))
-	parts := make([]string, 0, len(rawParts))
-	for _, part := range rawParts {
-		if strings.HasPrefix(part, "<") && strings.HasSuffix(part, ">") {
-			continue
-		}
-		parts = append(parts, part)
-	}
+	parts := commandPath(kctx)
 	if len(parts) < 2 {
 		return ""
 	}

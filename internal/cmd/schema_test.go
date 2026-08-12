@@ -30,16 +30,18 @@ type decodedSchemaExitCode struct {
 }
 
 type decodedSchemaAutomation struct {
-	JSON            bool                `json:"json"`
-	Plain           bool                `json:"plain"`
-	NoInput         bool                `json:"no_input"`
-	Force           bool                `json:"force"`
-	AccountInput    string              `json:"account_input"`
-	ClientInput     string              `json:"client_input"`
-	Account         string              `json:"account"`
-	Client          string              `json:"client"`
-	EnabledCommands decodedEnabledState `json:"enabled_commands"`
-	Policy          decodedPolicyState  `json:"policy"`
+	JSON                bool                `json:"json"`
+	Plain               bool                `json:"plain"`
+	WrapUntrusted       bool                `json:"wrap_untrusted"`
+	NoInput             bool                `json:"no_input"`
+	Force               bool                `json:"force"`
+	AccountInput        string              `json:"account_input"`
+	ClientInput         string              `json:"client_input"`
+	Account             string              `json:"account"`
+	Client              string              `json:"client"`
+	EnabledCommands     decodedEnabledState `json:"enabled_commands"`
+	EnabledCommandPaths decodedEnabledState `json:"enabled_command_paths"`
+	Policy              decodedPolicyState  `json:"policy"`
 }
 
 type decodedEnabledState struct {
@@ -367,6 +369,22 @@ func TestExecuteSchemaReportsCanonicalAndUnrecognizedEnabledCommands(t *testing.
 	}
 }
 
+func TestExecuteSchemaReportsExactCommandPathRestrictions(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	document, _ := executeSchema(t, "--enable-command-paths", "mail search,unknown command", "schema")
+	state := document.Automation.EnabledCommandPaths
+	if state.Input != "mail search,unknown command" || !state.Restricted {
+		t.Fatalf("exact-path restriction state = %+v", state)
+	}
+	if strings.Join(state.Allowed, ",") != "gmail search" {
+		t.Fatalf("allowed exact paths = %v, want gmail search", state.Allowed)
+	}
+	if strings.Join(state.Unrecognized, ",") != "unknown command" {
+		t.Fatalf("unrecognized exact paths = %v, want unknown command", state.Unrecognized)
+	}
+}
+
 func TestExecuteSchemaReportsPolicyEffectsOrUnresolvedContext(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("GOG_SKIP_UPDATE_CHECK", "1")
@@ -481,7 +499,7 @@ func TestSchemaV1ContractFingerprint(t *testing.T) {
 		t.Fatalf("marshal canonical schema: %v", err)
 	}
 	got := fmt.Sprintf("%x", sha256.Sum256(canonical))
-	const want = "b55b0f31c26dc4ac3983e1b9e53f0bd52a62c3b7a014c83b13e43516b3ac6930"
+	const want = "36db6067e159f2531796850c45a03d8956770e8692c96b87cdde86edb4b8dc72"
 	if got != want {
 		t.Fatalf("schema v1 contract fingerprint = %s, want %s; review the contract change and schema version", got, want)
 	}

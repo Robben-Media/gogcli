@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"reflect"
 	"sort"
@@ -31,16 +32,18 @@ type schemaExitCode struct {
 }
 
 type schemaAutomation struct {
-	JSON            bool               `json:"json"`
-	Plain           bool               `json:"plain"`
-	NoInput         bool               `json:"no_input"`
-	Force           bool               `json:"force"`
-	AccountInput    string             `json:"account_input"`
-	ClientInput     string             `json:"client_input"`
-	Account         string             `json:"account"`
-	Client          string             `json:"client"`
-	EnabledCommands schemaEnabledState `json:"enabled_commands"`
-	Policy          schemaPolicyState  `json:"policy"`
+	JSON                bool               `json:"json"`
+	Plain               bool               `json:"plain"`
+	WrapUntrusted       bool               `json:"wrap_untrusted"`
+	NoInput             bool               `json:"no_input"`
+	Force               bool               `json:"force"`
+	AccountInput        string             `json:"account_input"`
+	ClientInput         string             `json:"client_input"`
+	Account             string             `json:"account"`
+	Client              string             `json:"client"`
+	EnabledCommands     schemaEnabledState `json:"enabled_commands"`
+	EnabledCommandPaths schemaEnabledState `json:"enabled_command_paths"`
+	Policy              schemaPolicyState  `json:"policy"`
 }
 
 type schemaEnabledState struct {
@@ -81,13 +84,13 @@ type schemaValue struct {
 	Help       string   `json:"help"`
 }
 
-func (c *SchemaCmd) Run(flags *RootFlags) error {
+func (c *SchemaCmd) Run(ctx context.Context, flags *RootFlags) error {
 	parser, _, err := newParser(baseDescription())
 	if err != nil {
 		return err
 	}
 	document := buildSchemaDocument(parser.Model.Node, flags)
-	return outfmt.WriteJSON(os.Stdout, document)
+	return outfmt.WriteJSON(ctx, os.Stdout, document)
 }
 
 func buildSchemaDocument(root *kong.Node, flags *RootFlags) schemaDocument {
@@ -121,16 +124,18 @@ func buildSchemaAutomation(root *kong.Node, flags *RootFlags) schemaAutomation {
 	cfg, readErr := config.ReadConfig()
 	resolvedAccount, resolvedClient, resolutionErr := resolveSchemaSelection(cfg, account, client, readErr)
 	return schemaAutomation{
-		JSON:            flags.JSON,
-		Plain:           flags.Plain,
-		NoInput:         flags.NoInput,
-		Force:           flags.Force,
-		AccountInput:    account,
-		ClientInput:     client,
-		Account:         resolvedAccount,
-		Client:          resolvedClient,
-		EnabledCommands: buildSchemaEnabledState(flags.EnableCommands, visibleTopLevelCommands(root)),
-		Policy:          buildSchemaPolicyState(cfg.Policies, resolvedAccount, resolvedClient, readErr, resolutionErr),
+		JSON:                flags.JSON,
+		Plain:               flags.Plain,
+		WrapUntrusted:       flags.WrapUntrusted,
+		NoInput:             flags.NoInput,
+		Force:               flags.Force,
+		AccountInput:        account,
+		ClientInput:         client,
+		Account:             resolvedAccount,
+		Client:              resolvedClient,
+		EnabledCommands:     buildSchemaEnabledState(flags.EnableCommands, visibleTopLevelCommands(root)),
+		EnabledCommandPaths: buildSchemaEnabledPathState(root, flags.EnableCommandPaths),
+		Policy:              buildSchemaPolicyState(cfg.Policies, resolvedAccount, resolvedClient, readErr, resolutionErr),
 	}
 }
 
@@ -158,7 +163,7 @@ func resolveSchemaSelection(cfg config.File, accountInput string, clientInput st
 
 func buildSchemaEnabledState(input string, known map[string]bool) schemaEnabledState {
 	input = strings.TrimSpace(input)
-	allowedSet := parseEnabledCommands(input)
+	allowedSet, _ := parseEnabledTopLevelCommands(input)
 	if input == "" || len(allowedSet) == 0 || allowedSet["*"] || allowedSet["all"] {
 		return schemaEnabledState{Input: input, Allowed: []string{}, Unrecognized: []string{}}
 	}
@@ -174,6 +179,58 @@ func buildSchemaEnabledState(input string, known map[string]bool) schemaEnabledS
 	sort.Strings(allowed)
 	sort.Strings(unrecognized)
 	return schemaEnabledState{Input: input, Restricted: true, Allowed: allowed, Unrecognized: unrecognized}
+}
+
+func buildSchemaEnabledPathState(root *kong.Node, input string) schemaEnabledState {
+	input = strings.TrimSpace(input)
+	allowedSet := map[string]bool{}
+	configured := false
+	for _, part := range strings.Split(input, ",") {
+		segments := strings.Fields(strings.ToLower(strings.TrimSpace(part)))
+		if len(segments) == 0 {
+			continue
+		}
+		configured = true
+		if path, ok := resolveCommandPath(root, segments); ok {
+			allowedSet[strings.Join(path, " ")] = true
+		} else {
+			allowedSet[strings.Join(segments, " ")] = true
+		}
+	}
+	if !configured {
+		return schemaEnabledState{Input: input, Allowed: []string{}, Unrecognized: []string{}}
+	}
+	known := schemaCanonicalCommandPaths(root)
+	allowed := make([]string, 0, len(allowedSet))
+	unrecognized := make([]string, 0, len(allowedSet))
+	for command := range allowedSet {
+		if known[command] {
+			allowed = append(allowed, command)
+		} else {
+			unrecognized = append(unrecognized, command)
+		}
+	}
+	sort.Strings(allowed)
+	sort.Strings(unrecognized)
+	return schemaEnabledState{Input: input, Restricted: true, Allowed: allowed, Unrecognized: unrecognized}
+}
+
+func schemaCanonicalCommandPaths(root *kong.Node) map[string]bool {
+	paths := map[string]bool{}
+	var walk func(*kong.Node)
+	walk = func(node *kong.Node) {
+		for _, child := range node.Children {
+			if child.Hidden {
+				continue
+			}
+			if child.Type == kong.CommandNode {
+				paths[canonicalCommandPath(child)] = true
+			}
+			walk(child)
+		}
+	}
+	walk(root)
+	return paths
 }
 
 func visibleTopLevelCommands(root *kong.Node) map[string]bool {

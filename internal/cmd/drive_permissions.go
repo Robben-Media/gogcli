@@ -76,7 +76,7 @@ func (c *DrivePermissionsListCmd) Run(ctx context.Context, flags *RootFlags) err
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"fileId":          fileID,
 			"permissions":     resp.Permissions,
 			"permissionCount": len(resp.Permissions),
@@ -150,7 +150,7 @@ func (c *DrivePermissionsGetCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"permission": perm})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"permission": perm})
 	}
 
 	u.Out().Printf("id\t%s", perm.Id)
@@ -289,7 +289,7 @@ func (c *DrivePermissionsCreateCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"link":         link,
 			"permissionId": created.Id,
 			"permission":   created,
@@ -375,7 +375,7 @@ func (c *DrivePermissionsUpdateCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"permission": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"permission": updated})
 	}
 
 	u.Out().Printf("id\t%s", updated.Id)
@@ -425,7 +425,7 @@ func (c *DrivePermissionsDeleteCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"removed":      true,
 			"fileId":       fileID,
 			"permissionId": permissionID,

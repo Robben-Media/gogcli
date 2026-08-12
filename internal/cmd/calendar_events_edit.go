@@ -66,7 +66,7 @@ func (c *CalendarEventsWatchCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"channel": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"channel": resp})
 	}
 
 	u.Out().Printf("channel_id\t%s", resp.Id)
@@ -174,7 +174,7 @@ func (c *CalendarEventsImportCmd) Run(ctx context.Context, flags *RootFlags) err
 
 	tz, loc, _ := getCalendarLocation(ctx, svc, calendarID)
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"event": wrapEventWithDaysWithTimezone(imported, tz, loc)})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"event": wrapEventWithDaysWithTimezone(imported, tz, loc)})
 	}
 	printCalendarEventWithTimezone(u, imported, tz, loc)
 	return nil
@@ -239,7 +239,7 @@ func (c *CalendarEventsInstancesCmd) Run(ctx context.Context, flags *RootFlags) 
 
 	tz, _, _ := getCalendarLocation(ctx, svc, calendarID)
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"instances":     resp.Items,
 			"nextPageToken": resp.NextPageToken,
 			"timeZone":      tz,
@@ -309,7 +309,7 @@ func (c *CalendarEventsQuickAddCmd) Run(ctx context.Context, flags *RootFlags) e
 
 	tz, loc, _ := getCalendarLocation(ctx, svc, calendarID)
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"event": wrapEventWithDaysWithTimezone(created, tz, loc)})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"event": wrapEventWithDaysWithTimezone(created, tz, loc)})
 	}
 	printCalendarEventWithTimezone(u, created, tz, loc)
 	return nil
@@ -365,7 +365,7 @@ func (c *CalendarEventsMoveCmd) Run(ctx context.Context, flags *RootFlags) error
 
 	tz, loc, _ := getCalendarLocation(ctx, svc, destinationCalendarID)
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"event":          wrapEventWithDaysWithTimezone(moved, tz, loc),
 			"sourceCalendar": sourceCalendarID,
 			"destCalendar":   destinationCalendarID,

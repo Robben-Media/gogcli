@@ -46,7 +46,7 @@ func (c *CalendarSettingsListCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"settings":      resp.Items,
 			"nextPageToken": resp.NextPageToken,
 		})
@@ -94,7 +94,7 @@ func (c *CalendarSettingsGetCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"setting": setting})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"setting": setting})
 	}
 
 	u.Out().Printf("id\t%s", setting.Id)
@@ -146,7 +146,7 @@ func (c *CalendarSettingsWatchCmd) Run(ctx context.Context, flags *RootFlags) er
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"channel": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"channel": resp})
 	}
 
 	u.Out().Printf("channel_id\t%s", resp.Id)

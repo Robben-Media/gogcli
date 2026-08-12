@@ -56,7 +56,7 @@ func (c *BusinessProfileAccountsCreateCmd) Run(ctx context.Context, flags *RootF
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"account": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"account": resp})
 	}
 
 	if resp.Name != "" {
@@ -105,7 +105,7 @@ func (c *BusinessProfileAccountsGetCmd) Run(ctx context.Context, flags *RootFlag
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"account": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"account": resp})
 	}
 
 	if resp.Name != "" {
@@ -180,7 +180,7 @@ func (c *BusinessProfileAccountsPatchCmd) Run(ctx context.Context, flags *RootFl
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"account": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"account": resp})
 	}
 
 	if resp.Name != "" {
@@ -219,7 +219,7 @@ func (c *BusinessProfileAccountsListCmd) Run(ctx context.Context, flags *RootFla
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"accounts":      resp.Accounts,
 			"nextPageToken": resp.NextPageToken,
 		})

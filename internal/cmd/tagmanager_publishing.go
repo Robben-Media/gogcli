@@ -89,7 +89,7 @@ func (c *TagManagerWorkspacesCreateVersionCmd) Run(ctx context.Context, flags *R
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"compilerError":    resp.CompilerError,
 			"containerVersion": resp.ContainerVersion,
 			"newWorkspacePath": resp.NewWorkspacePath,
@@ -150,7 +150,7 @@ func (c *TagManagerVersionsPublishCmd) Run(ctx context.Context, flags *RootFlags
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"compilerError":    resp.CompilerError,
 			"containerVersion": resp.ContainerVersion,
 			"path":             versionPath,

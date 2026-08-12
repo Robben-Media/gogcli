@@ -10,8 +10,9 @@ import (
 )
 
 type Mode struct {
-	JSON  bool
-	Plain bool
+	JSON          bool
+	Plain         bool
+	WrapUntrusted bool
 }
 
 type ParseError struct{ msg string }
@@ -26,10 +27,22 @@ func FromFlags(jsonOut bool, plainOut bool) (Mode, error) {
 	return Mode{JSON: jsonOut, Plain: plainOut}, nil
 }
 
+// FromFlagsFull builds Mode from all root output-related flags.
+func FromFlagsFull(jsonOut, plainOut, wrapUntrusted bool) (Mode, error) {
+	m, err := FromFlags(jsonOut, plainOut)
+	if err != nil {
+		return Mode{}, err
+	}
+	m.WrapUntrusted = m.JSON && wrapUntrusted
+
+	return m, nil
+}
+
 func FromEnv() Mode {
 	return Mode{
-		JSON:  envBool("GOG_JSON"),
-		Plain: envBool("GOG_PLAIN"),
+		JSON:          envBool("GOG_JSON"),
+		Plain:         envBool("GOG_PLAIN"),
+		WrapUntrusted: envBool("GOG_WRAP_UNTRUSTED"),
 	}
 }
 
@@ -49,10 +62,17 @@ func FromContext(ctx context.Context) Mode {
 	return Mode{}
 }
 
-func IsJSON(ctx context.Context) bool  { return FromContext(ctx).JSON }
-func IsPlain(ctx context.Context) bool { return FromContext(ctx).Plain }
+func IsJSON(ctx context.Context) bool          { return FromContext(ctx).JSON }
+func IsPlain(ctx context.Context) bool         { return FromContext(ctx).Plain }
+func IsWrapUntrusted(ctx context.Context) bool { return FromContext(ctx).WrapUntrusted }
 
-func WriteJSON(w io.Writer, v any) error {
+// WriteJSON encodes v as indented JSON to w. Wrapping is scoped to ctx, so
+// concurrent executions cannot affect one another.
+func WriteJSON(ctx context.Context, w io.Writer, v any) error {
+	if IsWrapUntrusted(ctx) {
+		v = WrapUntrustedValue(v)
+	}
+
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "  ")

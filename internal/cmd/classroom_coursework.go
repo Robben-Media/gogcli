@@ -85,7 +85,7 @@ func (c *ClassroomCourseworkListCmd) Run(ctx context.Context, flags *RootFlags) 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"coursework":    coursework,
 			"nextPageToken": nextPageToken,
 		})
@@ -148,7 +148,7 @@ func (c *ClassroomCourseworkGetCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"coursework": work})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"coursework": work})
 	}
 
 	u.Out().Printf("id\t%s", work.Id)
@@ -264,7 +264,7 @@ func (c *ClassroomCourseworkCreateCmd) Run(ctx context.Context, flags *RootFlags
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"coursework": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"coursework": created})
 	}
 	u.Out().Printf("id\t%s", created.Id)
 	u.Out().Printf("title\t%s", created.Title)
@@ -377,7 +377,7 @@ func (c *ClassroomCourseworkUpdateCmd) Run(ctx context.Context, flags *RootFlags
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"coursework": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"coursework": updated})
 	}
 	u.Out().Printf("id\t%s", updated.Id)
 	u.Out().Printf("title\t%s", updated.Title)
@@ -420,7 +420,7 @@ func (c *ClassroomCourseworkDeleteCmd) Run(ctx context.Context, flags *RootFlags
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"deleted":      true,
 			"courseId":     courseID,
 			"courseworkId": courseworkID,
@@ -478,7 +478,7 @@ func (c *ClassroomCourseworkAssigneesCmd) Run(ctx context.Context, flags *RootFl
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"coursework": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"coursework": updated})
 	}
 	u.Out().Printf("id\t%s", updated.Id)
 	u.Out().Printf("assignee_mode\t%s", updated.AssigneeMode)

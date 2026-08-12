@@ -50,7 +50,7 @@ func (c *CalendarTimeCmd) Run(ctx context.Context, flags *RootFlags) error {
 	formatted := now.Format("Monday, January 02, 2006 03:04 PM")
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"timezone":     tz,
 			"current_time": now.Format(time.RFC3339),
 			"formatted":    formatted,

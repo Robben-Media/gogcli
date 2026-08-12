@@ -104,7 +104,7 @@ func (c *AnalyticsPivotReportCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"pivotHeaders":     resp.PivotHeaders,
 			"dimensionHeaders": resp.DimensionHeaders,
 			"metricHeaders":    resp.MetricHeaders,
@@ -201,7 +201,7 @@ func (c *AnalyticsBatchReportsCmd) Run(ctx context.Context, flags *RootFlags) er
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"reports": resp.Reports,
 		})
 	}
@@ -333,7 +333,7 @@ func (c *AnalyticsBatchPivotReportsCmd) Run(ctx context.Context, flags *RootFlag
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"pivotReports": resp.PivotReports,
 		})
 	}
@@ -449,7 +449,7 @@ func (c *AnalyticsCheckCompatibilityCmd) Run(ctx context.Context, flags *RootFla
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"dimensionCompatibilities": resp.DimensionCompatibilities,
 			"metricCompatibilities":    resp.MetricCompatibilities,
 		})

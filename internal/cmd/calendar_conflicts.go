@@ -97,7 +97,7 @@ func (c *CalendarConflictsCmd) Run(ctx context.Context, flags *RootFlags) error 
 		if incomplete {
 			payload["errors"] = sourceErrors
 		}
-		if err := outfmt.WriteJSON(os.Stdout, payload); err != nil {
+		if err := outfmt.WriteJSON(ctx, os.Stdout, payload); err != nil {
 			return err
 		}
 		if incomplete {
