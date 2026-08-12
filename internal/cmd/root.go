@@ -75,6 +75,7 @@ type CLI struct {
 	Policy          PolicyCmd             `cmd:"" help:"Manage command safety policies"`
 	Update          UpdateCmd             `cmd:"" help:"Update gog binary and companion Google skills"`
 	Skills          SkillsCmd             `cmd:"" help:"Manage companion Google skill pack (pack skills only)"`
+	Schema          SchemaCmd             `cmd:"" help:"Print machine-readable CLI schema as JSON"`
 	VersionCmd      VersionCmd            `cmd:"" name:"version" help:"Print version"`
 	Completion      CompletionCmd         `cmd:"" help:"Generate shell completion scripts"`
 	Complete        CompletionInternalCmd `cmd:"" name:"__complete" hidden:"" help:"Internal completion helper"`
@@ -163,9 +164,9 @@ func Execute(args []string) (err error) {
 	kctx.Bind(&cli.RootFlags)
 
 	// Throttled non-fatal update notice for humans and agents (stderr only).
-	// Shell completion must stay fast/deterministic: never touch update cache
-	// or the release service for completion-script generation or __complete.
-	if !isCompletionCommand(kctx.Command()) {
+	// Local discovery and shell completion must stay deterministic: never touch
+	// the update cache or release service for schema, completion, or __complete.
+	if !skipsUpdateCheck(kctx.Command()) {
 		if notice := maybeNotifyUpdate(ctx, &selfupdate.Client{
 			Repo:  strings.TrimSpace(os.Getenv("GOG_UPDATE_REPO")),
 			Token: envOr("GITHUB_TOKEN", envOr("GH_TOKEN", "")),
@@ -205,15 +206,14 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-// isCompletionCommand reports whether the parsed kong command is shell-completion
-// related and must bypass background update checks.
-func isCompletionCommand(command string) bool {
+// skipsUpdateCheck reports whether a command must remain local and deterministic.
+func skipsUpdateCheck(command string) bool {
 	parts := strings.Fields(command)
 	if len(parts) == 0 {
 		return false
 	}
 	switch parts[0] {
-	case "completion", "__complete":
+	case "completion", "__complete", "schema":
 		return true
 	default:
 		return false

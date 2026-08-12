@@ -23,6 +23,9 @@ func enforceEnabledCommands(kctx *kong.Context, enabled string) error {
 		return nil
 	}
 	top := strings.ToLower(cmd[0])
+	if top == "schema" {
+		return nil
+	}
 	if !allow[top] {
 		return usagef("command %q is not enabled (set --enable-commands to allow it)", top)
 	}
