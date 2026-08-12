@@ -76,12 +76,12 @@ func (c *DrivePermissionsListCmd) Run(ctx context.Context, flags *RootFlags) err
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"fileId":          fileID,
 			"permissions":     resp.Permissions,
 			"permissionCount": len(resp.Permissions),
 			"nextPageToken":   resp.NextPageToken,
-		})
+		}, resp.Permissions))
 	}
 	if len(resp.Permissions) == 0 {
 		u.Err().Println("No permissions")
@@ -150,7 +150,7 @@ func (c *DrivePermissionsGetCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"permission": perm})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"permission": perm}, perm))
 	}
 
 	u.Out().Printf("id\t%s", perm.Id)
@@ -289,11 +289,11 @@ func (c *DrivePermissionsCreateCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"link":         link,
 			"permissionId": created.Id,
 			"permission":   created,
-		})
+		}, created))
 	}
 
 	u.Out().Printf("link\t%s", link)
@@ -375,7 +375,7 @@ func (c *DrivePermissionsUpdateCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"permission": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"permission": updated}, updated))
 	}
 
 	u.Out().Printf("id\t%s", updated.Id)
@@ -425,11 +425,11 @@ func (c *DrivePermissionsDeleteCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"removed":      true,
 			"fileId":       fileID,
 			"permissionId": permissionID,
-		})
+		}))
 	}
 
 	u.Out().Printf("removed\ttrue")

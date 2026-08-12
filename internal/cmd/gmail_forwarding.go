@@ -40,7 +40,7 @@ func (c *GmailForwardingListCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"forwardingAddresses": resp.ForwardingAddresses})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"forwardingAddresses": resp.ForwardingAddresses}, resp.ForwardingAddresses))
 	}
 
 	if len(resp.ForwardingAddresses) == 0 {
@@ -85,7 +85,7 @@ func (c *GmailForwardingGetCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"forwardingAddress": address})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"forwardingAddress": address}, address))
 	}
 
 	u.Out().Printf("forwarding_email\t%s", address.ForwardingEmail)
@@ -123,7 +123,7 @@ func (c *GmailForwardingCreateCmd) Run(ctx context.Context, flags *RootFlags) er
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"forwardingAddress": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"forwardingAddress": created}, created))
 	}
 
 	if outfmt.IsPlain(ctx) {
@@ -169,10 +169,10 @@ func (c *GmailForwardingDeleteCmd) Run(ctx context.Context, flags *RootFlags) er
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"success":         true,
 			"forwardingEmail": forwardingEmail,
-		})
+		}))
 	}
 
 	if outfmt.IsPlain(ctx) {

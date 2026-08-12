@@ -123,11 +123,11 @@ func (c *AuthCredentialsSetCmd) Run(ctx context.Context) error {
 		}
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"saved":  true,
 			"path":   outPath,
 			"client": client,
-		})
+		}))
 	}
 	u.Out().Printf("path\t%s", outPath)
 	u.Out().Printf("client\t%s", client)
@@ -195,14 +195,14 @@ func (c *AuthCredentialsListCmd) Run(ctx context.Context) error {
 
 	if len(entries) == 0 {
 		if outfmt.IsJSON(ctx) {
-			return outfmt.WriteJSON(os.Stdout, map[string]any{"clients": []entry{}})
+			return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"clients": []entry{}}, []entry{}))
 		}
 		u.Err().Println("No OAuth client credentials stored")
 		return nil
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"clients": entries})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"clients": entries}, entries))
 	}
 
 	w, done := tableWriter(ctx)
@@ -244,13 +244,13 @@ func (c *AuthTokensListCmd) Run(ctx context.Context) error {
 
 	if len(filtered) == 0 {
 		if outfmt.IsJSON(ctx) {
-			return outfmt.WriteJSON(os.Stdout, map[string]any{"keys": []string{}})
+			return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"keys": []string{}}, []string{}))
 		}
 		u.Err().Println("No tokens stored")
 		return nil
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"keys": filtered})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"keys": filtered}, filtered))
 	}
 	for _, k := range filtered {
 		u.Out().Println(k)
@@ -285,11 +285,11 @@ func (c *AuthTokensDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"deleted": true,
 			"email":   email,
 			"client":  client,
-		})
+		}))
 	}
 	u.Out().Printf("deleted\ttrue")
 	u.Out().Printf("email\t%s", email)
@@ -374,12 +374,12 @@ func (c *AuthTokensExportCmd) Run(ctx context.Context) error {
 
 	u.Err().Println("WARNING: exported file contains a refresh token (keep it safe and delete it when done)")
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"exported": true,
 			"email":    tok.Email,
 			"client":   client,
 			"path":     outPath,
-		})
+		}))
 	}
 	u.Out().Printf("exported\ttrue")
 	u.Out().Printf("email\t%s", tok.Email)
@@ -469,11 +469,11 @@ func (c *AuthTokensImportCmd) Run(ctx context.Context) error {
 
 	u.Err().Println("Imported refresh token into keyring")
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"imported": true,
 			"email":    ex.Email,
 			"client":   client,
-		})
+		}))
 	}
 	u.Out().Printf("imported\ttrue")
 	u.Out().Printf("email\t%s", ex.Email)
@@ -599,12 +599,12 @@ func (c *AuthAddCmd) Run(ctx context.Context) error {
 		}
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"stored":   true,
 			"email":    authorizedEmail,
 			"services": serviceNames,
 			"client":   client,
-		})
+		}))
 	}
 	u.Out().Printf("email\t%s", authorizedEmail)
 	u.Out().Printf("services\t%s", strings.Join(serviceNames, ","))
@@ -679,7 +679,7 @@ func (c *AuthStatusCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"config": map[string]any{
 				"path":   configPath,
 				"exists": configExists,
@@ -697,7 +697,7 @@ func (c *AuthStatusCmd) Run(ctx context.Context, flags *RootFlags) error {
 				"service_account_configured": serviceAccountConfigured,
 				"service_account_path":       serviceAccountPath,
 			},
-		})
+		}))
 	}
 	u.Out().Printf("config_path\t%s", configPath)
 	u.Out().Printf("config_exists\t%t", configExists)
@@ -854,7 +854,7 @@ func (c *AuthListCmd) Run(ctx context.Context) error {
 			}
 			out = append(out, it)
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"accounts": out})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"accounts": out}, out))
 	}
 	if len(entries) == 0 {
 		u.Err().Println("No tokens stored")
@@ -936,7 +936,7 @@ type AuthServicesCmd struct {
 func (c *AuthServicesCmd) Run(ctx context.Context) error {
 	infos := googleauth.ServicesInfo()
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"services": infos})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"services": infos}, infos))
 	}
 	if c.Markdown {
 		_, err := io.WriteString(os.Stdout, googleauth.ServicesMarkdown(infos))
@@ -987,11 +987,11 @@ func (c *AuthRemoveCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"deleted": true,
 			"email":   email,
 			"client":  client,
-		})
+		}))
 	}
 	u.Out().Printf("deleted\ttrue")
 	u.Out().Printf("email\t%s", email)
@@ -1068,12 +1068,12 @@ func (c *AuthKeepCmd) Run(ctx context.Context) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"stored": true,
 			"email":  email,
 			"path":   destPath,
 			"paths":  []string{destPath, genericPath},
-		})
+		}))
 	}
 	u.Out().Printf("email\t%s", email)
 	u.Out().Printf("path\t%s", destPath)

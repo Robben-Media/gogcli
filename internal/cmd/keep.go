@@ -62,10 +62,10 @@ func (c *KeepListCmd) Run(ctx context.Context, flags *RootFlags, keep *KeepCmd) 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"notes":         resp.Notes,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Notes))
 	}
 
 	if len(resp.Notes) == 0 {
@@ -152,11 +152,11 @@ func (c *KeepSearchCmd) Run(ctx context.Context, flags *RootFlags, keep *KeepCmd
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"notes": allNotes,
 			"query": c.Query,
 			"count": len(allNotes),
-		})
+		}, allNotes))
 	}
 
 	if len(allNotes) == 0 {
@@ -201,7 +201,7 @@ func (c *KeepGetCmd) Run(ctx context.Context, flags *RootFlags, keep *KeepCmd) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"note": note})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"note": note}, note))
 	}
 	if outfmt.IsPlain(ctx) {
 		return writeKeepGetPlain(ctx, note)
@@ -326,11 +326,11 @@ func (c *KeepAttachmentCmd) Run(ctx context.Context, flags *RootFlags, keep *Kee
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"downloaded": true,
 			"path":       outPath,
 			"bytes":      written,
-		})
+		}))
 	}
 
 	u.Out().Printf("path\t%s", outPath)

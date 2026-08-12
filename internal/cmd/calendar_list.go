@@ -63,7 +63,7 @@ func listCalendarEvents(ctx context.Context, svc *calendar.Service, calendarID, 
 	}
 	if outfmt.IsJSON(ctx) {
 		events := wrapEventsWithDays(resp.Items)
-		return outfmt.WriteJSON(os.Stdout, outfmt.PrimaryResult(map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"events":        events,
 			"nextPageToken": resp.NextPageToken,
 		}, events))
@@ -228,7 +228,7 @@ func listCalendarIDsEvents(ctx context.Context, svc *calendar.Service, calendarI
 	}
 
 	if outfmt.IsJSON(ctx) {
-		if err := outfmt.WriteJSON(os.Stdout, outfmt.PrimaryResult(map[string]any{
+		if err := outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"events":        all,
 			"errors":        failures,
 			"complete":      len(failures) == 0,

@@ -116,10 +116,10 @@ func (c *GmailThreadGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 				downloadedFiles = append(downloadedFiles, attachmentDownloadSummaries(downloads)...)
 			}
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"thread":     thread,
 			"downloaded": downloadedFiles,
-		})
+		}, thread))
 	}
 	if outfmt.IsPlain(ctx) {
 		return writeGmailThreadPlainTSV(ctx, os.Stdout, threadID, thread, c.Full, c.Download, attachDir, svc)
@@ -311,11 +311,11 @@ func (c *GmailThreadModifyCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"modified":      threadID,
 			"addedLabels":   addIDs,
 			"removedLabels": removeIDs,
-		})
+		}))
 	}
 	if outfmt.IsPlain(ctx) {
 		writePlainReceipt(ctx,
@@ -359,10 +359,10 @@ func (c *GmailThreadAttachmentsCmd) Run(ctx context.Context, flags *RootFlags) e
 
 	if thread == nil || len(thread.Messages) == 0 {
 		if outfmt.IsJSON(ctx) {
-			return outfmt.WriteJSON(os.Stdout, map[string]any{
+			return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 				"threadId":    threadID,
 				"attachments": []any{},
-			})
+			}, []any{}))
 		}
 		if outfmt.IsPlain(ctx) {
 			return writeGmailThreadAttachmentsPlainTSV(ctx, threadID, nil, false)
@@ -402,10 +402,10 @@ func (c *GmailThreadAttachmentsCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"threadId":    threadID,
 			"attachments": allAttachments,
-		})
+		}, allAttachments))
 	}
 	if outfmt.IsPlain(ctx) {
 		return writeGmailThreadAttachmentsPlainTSV(ctx, threadID, allAttachments, c.Download)
@@ -482,7 +482,7 @@ func (c *GmailURLCmd) Run(ctx context.Context, flags *RootFlags) error {
 				"url": fmt.Sprintf("https://mail.google.com/mail/?authuser=%s#all/%s", url.QueryEscape(account), id),
 			})
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"urls": urls})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"urls": urls}, urls))
 	}
 	for _, id := range c.ThreadIDs {
 		threadURL := fmt.Sprintf("https://mail.google.com/mail/?authuser=%s#all/%s", url.QueryEscape(account), id)

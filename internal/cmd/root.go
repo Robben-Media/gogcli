@@ -90,12 +90,11 @@ func Execute(args []string) (err error) {
 		if innerErr != nil {
 			return reportPreUIError(newUsageError(innerErr))
 		}
-		restoreJSON, innerErr := outfmt.ConfigureJSON(jsonConfig)
+		ctx := outfmt.WithMode(context.Background(), mode)
+		ctx, innerErr = outfmt.WithJSONConfig(ctx, jsonConfig)
 		if innerErr != nil {
 			return reportPreUIError(newUsageError(innerErr))
 		}
-		defer restoreJSON()
-		ctx := outfmt.WithMode(context.Background(), mode)
 		return (&VersionCmd{}).Run(ctx)
 	}
 
@@ -150,14 +149,12 @@ func Execute(args []string) (err error) {
 	if err != nil {
 		return reportPreUIError(newUsageError(err))
 	}
-	restoreJSON, err := outfmt.ConfigureJSON(jsonConfig)
+	ctx := context.Background()
+	ctx = outfmt.WithMode(ctx, mode)
+	ctx, err = outfmt.WithJSONConfig(ctx, jsonConfig)
 	if err != nil {
 		return reportPreUIError(newUsageError(err))
 	}
-	defer restoreJSON()
-
-	ctx := context.Background()
-	ctx = outfmt.WithMode(ctx, mode)
 	ctx = authclient.WithClient(ctx, cli.Client)
 
 	uiColor := cli.Color
@@ -360,7 +357,7 @@ func outputModeFromVersionArgs(args []string) (outfmt.Mode, outfmt.JSONConfig, e
 		case arg == "--results-only":
 			resultsOnly = true
 		case arg == "--select":
-			if i+1 >= len(args) {
+			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
 				return outfmt.Mode{}, outfmt.JSONConfig{}, errors.New("--select requires a value")
 			}
 			i++

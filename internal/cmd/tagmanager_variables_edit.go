@@ -166,7 +166,7 @@ func (c *TagManagerVariablesUpdateCmd) Run(ctx context.Context, kctx *kong.Conte
 
 func writeTagManagerVariable(ctx context.Context, action string, variable *tagmanager.Variable) error {
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"variable": variable})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"variable": variable}, variable))
 	}
 	if outfmt.IsPlain(ctx) {
 		w, flush := tableWriter(ctx)

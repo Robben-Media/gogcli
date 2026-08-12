@@ -50,9 +50,9 @@ func (c *BusinessProfileInfoGoogleLocationsCmd) Run(ctx context.Context, flags *
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"googleLocations": resp.GoogleLocations,
-		})
+		}, resp.GoogleLocations))
 	}
 
 	if len(resp.GoogleLocations) == 0 {
@@ -153,7 +153,7 @@ func (c *BusinessProfileInfoLocationsCreateCmd) Run(ctx context.Context, flags *
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"location": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"location": resp}, resp))
 	}
 
 	u.Out().Printf("name\t%s", resp.Name)
@@ -232,11 +232,11 @@ func (c *BusinessProfileInfoLocationsGetGoogleUpdatedCmd) Run(ctx context.Contex
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"location":    resp.Location,
 			"diffMask":    resp.DiffMask,
 			"pendingMask": resp.PendingMask,
-		})
+		}, resp.Location))
 	}
 
 	if resp.Location != nil {
@@ -334,7 +334,7 @@ func (c *BusinessProfileInfoLocationsPatchCmd) Run(ctx context.Context, flags *R
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"location": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"location": resp}, resp))
 	}
 
 	u.Out().Printf("name\t%s", resp.Name)

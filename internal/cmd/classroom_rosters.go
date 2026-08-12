@@ -47,10 +47,10 @@ func (c *ClassroomStudentsListCmd) Run(ctx context.Context, flags *RootFlags) er
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"students":      resp.Students,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Students))
 	}
 
 	if len(resp.Students) == 0 {
@@ -106,7 +106,7 @@ func (c *ClassroomStudentsGetCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"student": student})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"student": student}, student))
 	}
 
 	u.Out().Printf("user_id\t%s", student.UserId)
@@ -155,7 +155,7 @@ func (c *ClassroomStudentsAddCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"student": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"student": created}, created))
 	}
 	u.Out().Printf("user_id\t%s", created.UserId)
 	u.Out().Printf("email\t%s", profileEmail(created.Profile))
@@ -198,11 +198,11 @@ func (c *ClassroomStudentsRemoveCmd) Run(ctx context.Context, flags *RootFlags) 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"removed":  true,
 			"courseId": courseID,
 			"userId":   userID,
-		})
+		}))
 	}
 	u.Out().Printf("removed\ttrue")
 	u.Out().Printf("course_id\t%s", courseID)
@@ -245,10 +245,10 @@ func (c *ClassroomTeachersListCmd) Run(ctx context.Context, flags *RootFlags) er
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"teachers":      resp.Teachers,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Teachers))
 	}
 
 	if len(resp.Teachers) == 0 {
@@ -304,7 +304,7 @@ func (c *ClassroomTeachersGetCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"teacher": teacher})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"teacher": teacher}, teacher))
 	}
 
 	u.Out().Printf("user_id\t%s", teacher.UserId)
@@ -345,7 +345,7 @@ func (c *ClassroomTeachersAddCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"teacher": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"teacher": created}, created))
 	}
 	u.Out().Printf("user_id\t%s", created.UserId)
 	u.Out().Printf("email\t%s", profileEmail(created.Profile))
@@ -388,11 +388,11 @@ func (c *ClassroomTeachersRemoveCmd) Run(ctx context.Context, flags *RootFlags) 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"removed":  true,
 			"courseId": courseID,
 			"userId":   userID,
-		})
+		}))
 	}
 	u.Out().Printf("removed\ttrue")
 	u.Out().Printf("course_id\t%s", courseID)
@@ -453,7 +453,7 @@ func (c *ClassroomRosterCmd) Run(ctx context.Context, flags *RootFlags) error {
 			payload["teachers"] = teachersResp.Teachers
 			payload["teachersNextPageToken"] = teachersResp.NextPageToken
 		}
-		return outfmt.WriteJSON(os.Stdout, payload)
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(payload))
 	}
 
 	w, flush := tableWriter(ctx)

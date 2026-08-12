@@ -96,10 +96,10 @@ func (c *ContactsBatchCreateCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"createdContacts": resp.CreatedPeople,
 			"count":           len(resp.CreatedPeople),
-		})
+		}, resp.CreatedPeople))
 	}
 
 	if outfmt.IsPlain(ctx) {
@@ -252,10 +252,10 @@ func (c *ContactsBatchUpdateCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"updatedContacts": resp.UpdateResult,
 			"count":           len(contactsMap),
-		})
+		}, resp.UpdateResult))
 	}
 
 	if outfmt.IsPlain(ctx) {
@@ -331,9 +331,9 @@ func (c *ContactsBatchGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"responses": resp.Responses,
-		})
+		}, resp.Responses))
 	}
 
 	if len(resp.Responses) == 0 {

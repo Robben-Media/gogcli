@@ -37,7 +37,7 @@ func TestContextMode(t *testing.T) {
 
 func TestWriteJSON(t *testing.T) {
 	var buf bytes.Buffer
-	if err := WriteJSON(&buf, map[string]any{"ok": true}); err != nil {
+	if err := WriteJSON(context.Background(), &buf, map[string]any{"ok": true}); err != nil {
 		t.Fatalf("err: %v", err)
 	}
 
@@ -95,6 +95,19 @@ func TestWriteJSONWithConfig_ComposesResultsOnlyBeforeSelection(t *testing.T) {
 	}
 }
 
+func TestWriteJSONWithConfig_SelectionPreservesLargeIntegers(t *testing.T) {
+	var buf bytes.Buffer
+	value := map[string]any{"id": int64(9007199254740993), "name": "large"}
+
+	if err := WriteJSONWithConfig(&buf, value, JSONConfig{Select: []string{"id"}}); err != nil {
+		t.Fatalf("WriteJSONWithConfig: %v", err)
+	}
+
+	if got, want := buf.String(), "{\n  \"id\": 9007199254740993\n}\n"; got != want {
+		t.Fatalf("numeric fidelity mismatch: got %q want %q", got, want)
+	}
+}
+
 func TestWriteJSONWithConfig_RejectsNonProjectableTargets(t *testing.T) {
 	var buf bytes.Buffer
 
@@ -117,26 +130,50 @@ func TestWriteJSONWithConfig_ResultsOnlyRequiresExplicitContract(t *testing.T) {
 	}
 }
 
-func TestConfigureJSON_AppliesToWriteJSONAndRestoresPreviousConfig(t *testing.T) {
-	restore, err := ConfigureJSON(JSONConfig{Select: []string{"id"}})
+func TestWriteJSON_ConfigurationIsExecutionScoped(t *testing.T) {
+	idCtx, err := WithJSONConfig(context.Background(), JSONConfig{Select: []string{"id"}})
 	if err != nil {
-		t.Fatalf("ConfigureJSON: %v", err)
+		t.Fatalf("WithJSONConfig id: %v", err)
 	}
 
-	var selected bytes.Buffer
-	if err := WriteJSON(&selected, map[string]any{"id": "f1", "name": "Doc"}); err != nil {
-		t.Fatalf("WriteJSON configured: %v", err)
+	nameCtx, err := WithJSONConfig(context.Background(), JSONConfig{Select: []string{"name"}})
+	if err != nil {
+		t.Fatalf("WithJSONConfig name: %v", err)
 	}
 
-	restore()
+	start := make(chan struct{})
+	results := make(chan string, 2)
+
+	write := func(ctx context.Context) {
+		<-start
+
+		var buf bytes.Buffer
+		if err := WriteJSON(ctx, &buf, map[string]any{"id": "f1", "name": "Doc"}); err != nil {
+			results <- "error: " + err.Error()
+			return
+		}
+
+		results <- buf.String()
+	}
+
+	go write(idCtx)
+	go write(nameCtx)
+
+	close(start)
+
+	got := map[string]bool{<-results: true, <-results: true}
+	for _, want := range []string{
+		"{\n  \"id\": \"f1\"\n}\n",
+		"{\n  \"name\": \"Doc\"\n}\n",
+	} {
+		if !got[want] {
+			t.Fatalf("missing concurrent output %q; got %#v", want, got)
+		}
+	}
 
 	var ordinary bytes.Buffer
-	if err := WriteJSON(&ordinary, map[string]any{"id": "f1", "name": "Doc"}); err != nil {
-		t.Fatalf("WriteJSON restored: %v", err)
-	}
-
-	if got, want := selected.String(), "{\n  \"id\": \"f1\"\n}\n"; got != want {
-		t.Fatalf("selected output mismatch: got %q want %q", got, want)
+	if err := WriteJSON(context.Background(), &ordinary, map[string]any{"id": "f1", "name": "Doc"}); err != nil {
+		t.Fatalf("ordinary WriteJSON: %v", err)
 	}
 
 	if got, want := ordinary.String(), "{\n  \"id\": \"f1\",\n  \"name\": \"Doc\"\n}\n"; got != want {
@@ -144,9 +181,9 @@ func TestConfigureJSON_AppliesToWriteJSONAndRestoresPreviousConfig(t *testing.T)
 	}
 }
 
-func TestConfigureJSON_RejectsInvalidSelectionPaths(t *testing.T) {
+func TestWithJSONConfig_RejectsInvalidSelectionPaths(t *testing.T) {
 	for _, path := range []string{"", ".id", "sender.", "sender..email"} {
-		if _, err := ConfigureJSON(JSONConfig{Select: []string{path}}); err == nil {
+		if _, err := WithJSONConfig(context.Background(), JSONConfig{Select: []string{path}}); err == nil {
 			t.Fatalf("expected invalid path %q to fail", path)
 		}
 	}

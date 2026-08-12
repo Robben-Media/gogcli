@@ -260,13 +260,13 @@ func (c *AuthServiceAccountSetCmd) Run(ctx context.Context) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"stored":       true,
 			"email":        email,
 			"path":         destPath,
 			"client_email": info.ClientEmail,
 			"client_id":    info.ClientID,
-		})
+		}))
 	}
 	u.Out().Printf("email\t%s", email)
 	u.Out().Printf("path\t%s", destPath)
@@ -309,11 +309,11 @@ func (c *AuthServiceAccountUnsetCmd) Run(ctx context.Context, flags *RootFlags) 
 	if err := os.Remove(path); err != nil {
 		if os.IsNotExist(err) {
 			if outfmt.IsJSON(ctx) {
-				return outfmt.WriteJSON(os.Stdout, map[string]any{
+				return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 					"deleted": false,
 					"email":   email,
 					"path":    path,
-				})
+				}))
 			}
 			u.Out().Printf("deleted\tfalse")
 			u.Out().Printf("email\t%s", email)
@@ -324,11 +324,11 @@ func (c *AuthServiceAccountUnsetCmd) Run(ctx context.Context, flags *RootFlags) 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"deleted": true,
 			"email":   email,
 			"path":    path,
-		})
+		}))
 	}
 	u.Out().Printf("deleted\ttrue")
 	u.Out().Printf("email\t%s", email)
@@ -357,13 +357,13 @@ func (c *AuthServiceAccountStatusCmd) Run(ctx context.Context) error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			if outfmt.IsJSON(ctx) {
-				return outfmt.WriteJSON(os.Stdout, map[string]any{
+				return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 					"email":   email,
 					"path":    path,
 					"exists":  false,
 					"stored":  false,
 					"message": "no service account configured",
-				})
+				}))
 			}
 			u.Out().Printf("email\t%s", email)
 			u.Out().Printf("path\t%s", path)
@@ -379,14 +379,14 @@ func (c *AuthServiceAccountStatusCmd) Run(ctx context.Context) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"email":        email,
 			"path":         path,
 			"exists":       true,
 			"stored":       true,
 			"client_email": info.ClientEmail,
 			"client_id":    info.ClientID,
-		})
+		}))
 	}
 	u.Out().Printf("email\t%s", email)
 	u.Out().Printf("path\t%s", path)

@@ -94,10 +94,10 @@ func (c *SheetsFormatCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"range":  rangeSpec,
 			"fields": formatFields,
-		})
+		}))
 	}
 	if outfmt.IsPlain(ctx) {
 		sheetID := ""

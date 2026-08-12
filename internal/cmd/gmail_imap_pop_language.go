@@ -53,7 +53,7 @@ func (c *GmailImapGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"imap": imap})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"imap": imap}, imap))
 	}
 
 	u.Out().Printf("enabled\t%t", imap.Enabled)
@@ -148,7 +148,7 @@ func (c *GmailImapUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"imap": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"imap": updated}, updated))
 	}
 
 	if outfmt.IsPlain(ctx) {
@@ -190,7 +190,7 @@ func (c *GmailPopGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"pop": pop})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"pop": pop}, pop))
 	}
 
 	u.Out().Printf("access_window\t%s", pop.AccessWindow)
@@ -260,7 +260,7 @@ func (c *GmailPopUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"pop": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"pop": updated}, updated))
 	}
 
 	if outfmt.IsPlain(ctx) {
@@ -298,7 +298,7 @@ func (c *GmailLanguageGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"language": lang})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"language": lang}, lang))
 	}
 
 	u.Out().Printf("display_language\t%s", lang.DisplayLanguage)
@@ -335,7 +335,7 @@ func (c *GmailLanguageUpdateCmd) Run(ctx context.Context, kctx *kong.Context, fl
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"language": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"language": updated}, updated))
 	}
 
 	if outfmt.IsPlain(ctx) {

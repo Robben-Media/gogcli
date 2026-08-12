@@ -9,7 +9,6 @@ import (
 	"os"
 	"reflect"
 	"strings"
-	"sync"
 )
 
 type Mode struct {
@@ -31,12 +30,12 @@ var (
 	errInvalidSelectionPath = errors.New("invalid JSON selection path")
 	errPrimaryResultMissing = errors.New("JSON output does not declare a primary result")
 	errCannotSelectFields   = errors.New("cannot select fields from JSON")
-
-	jsonConfigState struct {
-		sync.RWMutex
-		config JSONConfig
-	}
 )
+
+// DirectResult declares the complete JSON value as the primary result.
+func DirectResult(output any) any {
+	return primaryResult{output: output, primary: output}
+}
 
 // PrimaryResult declares the primary value in a JSON response envelope while
 // preserving output unchanged when results-only mode is not requested.
@@ -65,53 +64,47 @@ func FromEnv() Mode {
 
 type ctxKey struct{}
 
+type contextConfig struct {
+	Mode Mode
+	JSON JSONConfig
+}
+
 func WithMode(ctx context.Context, mode Mode) context.Context {
-	return context.WithValue(ctx, ctxKey{}, mode)
+	config := fromContext(ctx)
+	config.Mode = mode
+
+	return context.WithValue(ctx, ctxKey{}, config)
 }
 
-func FromContext(ctx context.Context) Mode {
-	if v := ctx.Value(ctxKey{}); v != nil {
-		if m, ok := v.(Mode); ok {
-			return m
-		}
-	}
-
-	return Mode{}
-}
-
-func IsJSON(ctx context.Context) bool  { return FromContext(ctx).JSON }
-func IsPlain(ctx context.Context) bool { return FromContext(ctx).Plain }
-
-func ConfigureJSON(config JSONConfig) (func(), error) {
+func WithJSONConfig(ctx context.Context, config JSONConfig) (context.Context, error) {
 	config, err := validateJSONConfig(config)
 	if err != nil {
 		return nil, err
 	}
 
-	jsonConfigState.Lock()
-	previous := jsonConfigState.config
-	jsonConfigState.config = config
-	jsonConfigState.Unlock()
+	ctxConfig := fromContext(ctx)
+	ctxConfig.JSON = config
 
-	var once sync.Once
-
-	return func() {
-		once.Do(func() {
-			jsonConfigState.Lock()
-			jsonConfigState.config = previous
-			jsonConfigState.Unlock()
-		})
-	}, nil
+	return context.WithValue(ctx, ctxKey{}, ctxConfig), nil
 }
 
-func WriteJSON(w io.Writer, v any) error {
-	jsonConfigState.RLock()
-	config := jsonConfigState.config
-	config.Select = append([]string(nil), config.Select...)
+func fromContext(ctx context.Context) contextConfig {
+	if v := ctx.Value(ctxKey{}); v != nil {
+		if config, ok := v.(contextConfig); ok {
+			return config
+		}
+	}
 
-	jsonConfigState.RUnlock()
+	return contextConfig{}
+}
 
-	return WriteJSONWithConfig(w, v, config)
+func FromContext(ctx context.Context) Mode { return fromContext(ctx).Mode }
+
+func IsJSON(ctx context.Context) bool  { return FromContext(ctx).JSON }
+func IsPlain(ctx context.Context) bool { return FromContext(ctx).Plain }
+
+func WriteJSON(ctx context.Context, w io.Writer, v any) error {
+	return WriteJSONWithConfig(w, v, fromContext(ctx).JSON)
 }
 
 func WriteJSONWithConfig(w io.Writer, v any, config JSONConfig) error {
@@ -209,7 +202,10 @@ func normalizeJSON(value any) (any, error) {
 	}
 
 	var normalized any
-	if err := json.Unmarshal(data, &normalized); err != nil {
+	decoder := json.NewDecoder(strings.NewReader(string(data)))
+	decoder.UseNumber()
+
+	if err := decoder.Decode(&normalized); err != nil {
 		return nil, fmt.Errorf("decode JSON for selection: %w", err)
 	}
 

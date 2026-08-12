@@ -162,6 +162,24 @@ func TestExecute_VersionSelectsJSONFields(t *testing.T) {
 	}
 }
 
+func TestExecute_VersionSelectRequiresValueBeforeVersionFlag(t *testing.T) {
+	var execErr error
+	stdout := captureStdout(t, func() {
+		stderr := captureStderr(t, func() {
+			execErr = Execute([]string{"--json", "--select", "--version"})
+		})
+		if !strings.Contains(stderr, "--select requires a value") {
+			t.Fatalf("unexpected stderr: %q", stderr)
+		}
+	})
+	if execErr == nil || ExitCode(execErr) != 2 {
+		t.Fatalf("expected usage error, got %v", execErr)
+	}
+	if stdout != "" {
+		t.Fatalf("unexpected stdout: %q", stdout)
+	}
+}
+
 func TestExecute_VersionConflictingOutputModesReportsStderr(t *testing.T) {
 	errText := captureStderr(t, func() {
 		_ = captureStdout(t, func() {

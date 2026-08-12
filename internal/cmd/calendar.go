@@ -77,7 +77,7 @@ func (c *CalendarCalendarsListCmd) Run(ctx context.Context, flags *RootFlags) er
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, outfmt.PrimaryResult(map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"calendars":     resp.Items,
 			"nextPageToken": resp.NextPageToken,
 		}, resp.Items))
@@ -209,7 +209,7 @@ func (c *CalendarEventCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 	tz, loc, _ := getCalendarLocation(ctx, svc, calendarID)
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"event": wrapEventWithDaysWithTimezone(event, tz, loc)})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"event": wrapEventWithDaysWithTimezone(event, tz, loc)}, wrapEventWithDaysWithTimezone(event, tz, loc)))
 	}
 	printCalendarEventWithTimezone(u, event, tz, loc)
 	return nil

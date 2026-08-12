@@ -90,12 +90,12 @@ func (c *ContactGroupMembersModifyCmd) Run(ctx context.Context, kctx *kong.Conte
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"modifiedGroup":    existing,
 			"notFoundCount":    len(resp.NotFoundResourceNames),
 			"notFound":         resp.NotFoundResourceNames,
 			"cannotRemoveLast": resp.CanNotRemoveLastContactGroupResourceNames,
-		})
+		}))
 	}
 
 	// Human-friendly output

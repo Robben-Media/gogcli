@@ -54,11 +54,11 @@ func (c *DriveChannelsStopCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"stopped":    true,
 			"channelId":  channelID,
 			"resourceId": resourceID,
-		})
+		}))
 	}
 
 	u.Out().Printf("stopped\ttrue")
