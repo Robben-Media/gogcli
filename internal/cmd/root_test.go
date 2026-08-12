@@ -132,6 +132,41 @@ func TestExecute_InvalidJSONSelectionReportsUsageError(t *testing.T) {
 	}
 }
 
+func TestExecute_ExplicitEmptySelectReportsUsageError(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		args       []string
+		diagnostic string
+	}{
+		{name: "parser equals", args: []string{"--json", "--select=", "version"}, diagnostic: "--select requires a value"},
+		{name: "parser whitespace", args: []string{"--json", "--select", " ", "version"}, diagnostic: "--select requires a value"},
+		{name: "parser empty still requires json", args: []string{"--select=", "version"}, diagnostic: "require --json"},
+		{name: "parser whitespace still requires json", args: []string{"--select", " ", "version"}, diagnostic: "require --json"},
+		{name: "version equals", args: []string{"--version", "--json", "--select="}, diagnostic: "--select requires a value"},
+		{name: "version whitespace", args: []string{"--version", "--json", "--select", " "}, diagnostic: "--select requires a value"},
+		{name: "version empty still requires json", args: []string{"--version", "--select="}, diagnostic: "require --json"},
+		{name: "version whitespace still requires json", args: []string{"--version", "--select", " "}, diagnostic: "require --json"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var execErr error
+			stdout := captureStdout(t, func() {
+				stderr := captureStderr(t, func() {
+					execErr = Execute(tc.args)
+				})
+				if !strings.Contains(stderr, tc.diagnostic) {
+					t.Fatalf("expected %q diagnostic, got %q", tc.diagnostic, stderr)
+				}
+			})
+			if execErr == nil || ExitCode(execErr) != 2 {
+				t.Fatalf("expected usage error, got %v", execErr)
+			}
+			if stdout != "" {
+				t.Fatalf("unexpected partial output: %q", stdout)
+			}
+		})
+	}
+}
+
 func TestExecute_ConflictingOutputModesReportsStderr(t *testing.T) {
 	errText := captureStderr(t, func() {
 		_ = captureStdout(t, func() {
