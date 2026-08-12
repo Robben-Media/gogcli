@@ -11,7 +11,6 @@ type readOnlyTestTransport struct{ calls int }
 
 func (t *readOnlyTestTransport) RoundTrip(*http.Request) (*http.Response, error) {
 	t.calls++
-
 	return &http.Response{StatusCode: http.StatusNoContent, Body: http.NoBody}, nil
 }
 
@@ -58,9 +57,13 @@ func TestReadOnlyPOSTRegistryRejectsNearMatchesAndOverrides(t *testing.T) {
 	for _, raw := range []string{
 		"https://www.googleapis.com/calendar/v3/freeBusy",
 		"https://searchconsole.googleapis.com/webmasters/v3/sites/example/searchAnalytics/query",
+		"https://searchconsole.googleapis.com/v1/urlTestingTools/mobileFriendlyTest:run",
 		"https://sheets.googleapis.com/v4/spreadsheets/id/values:batchGetByDataFilter",
-		"https://analyticsadmin.googleapis.com/v1/properties/123:checkCompatibility",
+		"https://analyticsdata.googleapis.com/v1beta/properties/123:batchRunPivotReports",
+		"https://analyticsdata.googleapis.com/v1beta/properties/123:checkCompatibility",
 		"https://analyticsdata.googleapis.com/v1alpha/properties/123/audiences/456:query",
+		"https://bigquery.googleapis.com/bigquery/v2/projects/project/queries",
+		"https://mybusinessbusinessinformation.googleapis.com/v1/locations:search",
 	} {
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, raw, nil)
 		if err != nil {
@@ -97,63 +100,5 @@ func TestReadOnlyPOSTRegistryRejectsNearMatchesAndOverrides(t *testing.T) {
 
 	if ReadOnlyRequestAllowed(req) {
 		t.Fatal("request with method override unexpectedly allowed")
-	}
-}
-
-func TestReadOnlyWriteExceptionIsInvocationScoped(t *testing.T) {
-	base := &readOnlyTestTransport{}
-	ctx := WithReadOnlyWriteGrants(WithReadOnly(context.Background(), true), WriteGrant{Service: "gmail", Operation: "send"})
-	transport := readOnlyTransportFromContext(ctx, base)
-
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://www.googleapis.com/gmail/v1/users/me/messages/send", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	response, err := transport.RoundTrip(req)
-	if err != nil {
-		t.Fatalf("declared exception blocked: %v", err)
-	}
-	defer response.Body.Close()
-
-	if base.calls != 1 {
-		t.Fatalf("base calls = %d, want 1", base.calls)
-	}
-
-	blocked, err := http.NewRequestWithContext(context.Background(), http.MethodDelete, "https://www.googleapis.com/drive/v3/files/id", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	blockedResponse, blockedErr := transport.RoundTrip(blocked)
-	if blockedResponse != nil {
-		defer blockedResponse.Body.Close()
-	}
-
-	if !errors.Is(blockedErr, ErrReadOnly) {
-		t.Fatalf("unrelated mutation error = %v, want ErrReadOnly", blockedErr)
-	}
-}
-
-func TestReadOnlyTargetGrantRejectsDifferentTarget(t *testing.T) {
-	grant := []WriteGrant{{Service: "drive", Operation: "delete", Target: "file-a"}}
-
-	for _, tc := range []struct {
-		path  string
-		allow bool
-	}{
-		{"https://www.googleapis.com/drive/v3/files/file-a", true},
-		{"https://www.googleapis.com/drive/v3/files/file-ab", false},
-		{"https://www.googleapis.com/drive/v3/files/file-b", false},
-		{"https://example.test/drive/v3/files/file-a", false},
-	} {
-		req, err := http.NewRequestWithContext(context.Background(), http.MethodDelete, tc.path, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if got := ReadOnlyWriteGrantsAllow(grant, req); got != tc.allow {
-			t.Errorf("grant allowed %s = %t, want %t", tc.path, got, tc.allow)
-		}
 	}
 }

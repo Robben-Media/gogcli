@@ -98,6 +98,8 @@ func helpColorMode(args []string) string {
 	return colorAuto
 }
 
+const helpColorAlways = "always"
+
 func helpProfile(stdout io.Writer, mode string) termenv.Profile {
 	if termenv.EnvNoColor() {
 		return termenv.Ascii
@@ -109,7 +111,7 @@ func helpProfile(stdout io.Writer, mode string) termenv.Profile {
 	switch mode {
 	case colorNever:
 		return termenv.Ascii
-	case colorAlways:
+	case helpColorAlways:
 		return termenv.TrueColor
 	default:
 		o := termenv.NewOutput(stdout, termenv.WithProfile(termenv.EnvColorProfile()))

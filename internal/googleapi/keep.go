@@ -41,7 +41,6 @@ func NewKeepWithServiceAccount(ctx context.Context, serviceAccountPath, imperson
 	}
 
 	config.Subject = impersonateEmail
-
 	tokenSource := config.TokenSource(ctx)
 	httpClient := &http.Client{
 		Transport: readOnlyTransportFromContext(ctx, NewRetryTransport(&oauth2.Transport{

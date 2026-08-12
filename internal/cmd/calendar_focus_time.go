@@ -12,6 +12,8 @@ import (
 	"github.com/steipete/gogcli/internal/ui"
 )
 
+const autoDeclineAll = "all"
+
 type CalendarFocusTimeCmd struct {
 	CalendarID     string   `arg:"" name:"calendarId" help:"Calendar ID (default: primary)" default:"primary"`
 	Summary        string   `name:"summary" help:"Focus time title" default:"Focus Time"`
@@ -77,7 +79,7 @@ func validateAutoDeclineMode(s string) (string, error) {
 	switch s {
 	case "", "none":
 		return "declineNone", nil
-	case scopeAll:
+	case autoDeclineAll:
 		return "declineAllConflictingInvitations", nil
 	case "new":
 		return "declineOnlyNewConflictingInvitations", nil

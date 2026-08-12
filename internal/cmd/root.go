@@ -23,11 +23,10 @@ import (
 )
 
 const (
-	colorAuto   = "auto"
-	colorNever  = "never"
-	colorAlways = "always"
-	boolTrue    = "true"
-	boolFalse   = "false"
+	colorAuto  = "auto"
+	colorNever = "never"
+	boolTrue   = "true"
+	boolFalse  = "false"
 )
 
 var rootHelpDescription = helpDescription
@@ -46,8 +45,7 @@ type RootFlags struct {
 	Version        bool   `help:"Print version and exit"`
 	Force          bool   `help:"Skip confirmations for destructive commands"`
 	NoInput        bool   `help:"Never prompt; fail instead (useful for CI)"`
-	ReadOnly       bool   `name:"readonly" help:"Require explicit exceptions for mutations" default:"${readonly}"`
-	ReadOnlyExcept string `name:"readonly-except" help:"Comma-separated readonly service exemptions" default:"${readonly_except}"`
+	ReadOnly       bool   `name:"readonly" help:"Block mutating API requests at runtime" default:"${readonly}"`
 	Verbose        bool   `help:"Enable verbose logging"`
 }
 
@@ -146,12 +144,6 @@ func Execute(args []string) (err error) {
 
 	ctx := context.Background()
 	ctx = googleapi.WithReadOnly(ctx, cli.ReadOnly)
-	if grants, preflightErr := preflightDeclaredWrite(kctx, &cli.RootFlags); preflightErr != nil && cli.Auth.Add.DriveScope != strFile {
-		return reportPreUIError(preflightErr)
-	} else if len(grants) != 0 {
-		ctx = googleapi.WithReadOnlyWriteGrants(ctx, grants...)
-		ctx = withReadOnlyApproval(ctx)
-	}
 	ctx = outfmt.WithMode(ctx, mode)
 	ctx = authclient.WithClient(ctx, cli.Client)
 
@@ -252,7 +244,6 @@ func newParser(description string) (*kong.Kong, *CLI, error) {
 		"json":             boolString(envMode.JSON),
 		"plain":            boolString(envMode.Plain),
 		"readonly":         boolString(envOr("GOG_READONLY", "") == "1"),
-		"readonly_except":  envOr("GOG_READONLY_EXCEPT", ""),
 		"version":          VersionString(),
 	}
 

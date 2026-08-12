@@ -14,10 +14,6 @@ import (
 )
 
 func confirmDestructive(ctx context.Context, flags *RootFlags, action string) error {
-	if hasReadOnlyApproval(ctx) {
-		return nil
-	}
-
 	if flags.Force {
 		return nil
 	}

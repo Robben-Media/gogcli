@@ -10,79 +10,10 @@ import (
 )
 
 type PolicyCmd struct {
-	Create     PolicyCreateCmd     `cmd:"" help:"Create a persisted safety policy"`
-	Get        PolicyGetCmd        `cmd:"" help:"Show one policy"`
-	List       PolicyListCmd       `cmd:"" help:"List policies"`
-	Delete     PolicyDeleteCmd     `cmd:"" help:"Delete a policy"`
-	Exceptions PolicyExceptionsCmd `cmd:"" name:"exceptions" help:"Manage persisted readonly write exceptions"`
-}
-
-type PolicyExceptionsCmd struct {
-	Create PolicyExceptionCreateCmd `cmd:"" help:"Persist a scoped write exception"`
-	List   PolicyExceptionListCmd   `cmd:"" help:"List write exceptions"`
-	Revoke PolicyExceptionRevokeCmd `cmd:"" help:"Revoke a write exception"`
-}
-
-type PolicyExceptionCreateCmd struct {
-	Name      string `arg:"" help:"Exception name"`
-	Service   string `name:"service" help:"Service scope"`
-	Operation string `name:"operation" help:"Operation scope"`
-	Target    string `name:"target" help:"Target scope"`
-	Broad     bool   `name:"broad" help:"Allow a broad exception without account and client scope"`
-}
-
-func (c *PolicyExceptionCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
-	cfg, err := loadConfig()
-	if err != nil {
-		return err
-	}
-	exception := config.WriteException{Name: c.Name, Service: c.Service, Operation: c.Operation, Target: c.Target}
-	if !c.Broad {
-		account, accountErr := requireAccount(flags)
-		if accountErr != nil {
-			return accountErr
-		}
-		client, clientErr := resolveClientForEmail(account, flags)
-		if clientErr != nil {
-			return clientErr
-		}
-		exception.Account, exception.Client = account, client
-	}
-	if err := config.UpsertWriteException(&cfg, exception, flags != nil && flags.Force); err != nil {
-		return usage(err.Error())
-	}
-	if err := config.WriteConfig(cfg); err != nil {
-		return err
-	}
-	return outfmt.WriteJSON(os.Stdout, map[string]any{"created": true, "exception": exception})
-}
-
-type PolicyExceptionListCmd struct{}
-
-func (c *PolicyExceptionListCmd) Run(ctx context.Context) error {
-	cfg, err := loadConfig()
-	if err != nil {
-		return err
-	}
-	return outfmt.WriteJSON(os.Stdout, map[string]any{"exceptions": cfg.WriteExceptions})
-}
-
-type PolicyExceptionRevokeCmd struct {
-	Name string `arg:"" help:"Exception name"`
-}
-
-func (c *PolicyExceptionRevokeCmd) Run(ctx context.Context) error {
-	cfg, err := loadConfig()
-	if err != nil {
-		return err
-	}
-	if err := config.DeleteWriteException(&cfg, c.Name); err != nil {
-		return usage(err.Error())
-	}
-	if err := config.WriteConfig(cfg); err != nil {
-		return err
-	}
-	return outfmt.WriteJSON(os.Stdout, map[string]any{"revoked": true, "name": c.Name})
+	Create PolicyCreateCmd `cmd:"" help:"Create a persisted safety policy"`
+	Get    PolicyGetCmd    `cmd:"" help:"Show one policy"`
+	List   PolicyListCmd   `cmd:"" help:"List policies"`
+	Delete PolicyDeleteCmd `cmd:"" help:"Delete a policy"`
 }
 
 type PolicyCreateCmd struct {
