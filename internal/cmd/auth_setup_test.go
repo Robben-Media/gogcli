@@ -11,6 +11,9 @@ import (
 
 	"github.com/steipete/gogcli/internal/config"
 	"github.com/steipete/gogcli/internal/gcloud"
+	"github.com/steipete/gogcli/internal/googleauth"
+	"github.com/steipete/gogcli/internal/secrets"
+	"github.com/steipete/gogcli/internal/ui"
 )
 
 var (
@@ -77,12 +80,15 @@ func TestAuthSetup_Discover_JSON_MissingGCloud(t *testing.T) {
 			exit = Execute([]string{"--json", "--no-input", "auth", "setup", "--discover"})
 		})
 	})
-	if ExitCode(exit) != 0 {
-		t.Fatalf("discover should exit 0, got %v code=%d out=%s", exit, ExitCode(exit), out)
+	if ExitCode(exit) != 1 {
+		t.Fatalf("failed discovery should exit 1 after its report, got %v code=%d out=%s", exit, ExitCode(exit), out)
 	}
 	var report SetupReport
 	if err := json.Unmarshal([]byte(out), &report); err != nil {
 		t.Fatalf("json: %v\nout=%s", err, out)
+	}
+	if report.Complete {
+		t.Fatalf("failed discovery must be incomplete: %#v", report)
 	}
 	if report.Client != "default" {
 		t.Fatalf("client=%q", report.Client)
@@ -145,6 +151,9 @@ func TestAuthSetup_Discover_ProjectAndAPIs(t *testing.T) {
 	}
 	if report.GCloudAccount != "dev@example.com" {
 		t.Fatalf("account=%q", report.GCloudAccount)
+	}
+	if len(report.Projects) != 1 || report.Projects[0].ProjectID != "demo-proj" || report.Projects[0].Name != "Demo" {
+		t.Fatalf("projects=%#v", report.Projects)
 	}
 	// drive should be missing
 	foundMissing := false
@@ -430,6 +439,138 @@ func TestAuthSetup_HelpRegistered(t *testing.T) {
 		// kong help may return nil
 		t.Logf("help err: %v", err)
 	}
+}
+
+func TestAuthSetup_ProjectPickerCreate_UsesEnteredIDWithoutChangingGCloudConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg-config"))
+
+	r := &setupFakeRunner{byArgs: map[string]struct {
+		stdout, stderr string
+		code           int
+		err            error
+	}{
+		"projects list --format=json":               {stdout: `[]`},
+		"projects create new-project --format=json": {stdout: `{"projectId":"new-project"}`},
+	}}
+	u, err := ui.New(ui.Options{Color: "never"})
+	if err != nil {
+		t.Fatalf("ui: %v", err)
+	}
+	origPrompt := setupPromptLine
+	responses := []string{"1", "new-project"}
+	setupPromptLine = func(context.Context, string) (string, error) {
+		response := responses[0]
+		responses = responses[1:]
+		return response, nil
+	}
+	t.Cleanup(func() { setupPromptLine = origPrompt })
+
+	rt := &setupRuntime{
+		cmd:         &AuthSetupCmd{},
+		flags:       &RootFlags{Force: true},
+		u:           u,
+		gc:          gcloud.New(r),
+		client:      config.DefaultClientName,
+		interactive: true,
+		force:       true,
+		report:      SetupReport{Client: config.DefaultClientName},
+	}
+
+	stop, runErr := rt.runProject(context.Background())
+	if stop || runErr != nil {
+		t.Fatalf("run project: stop=%t err=%v", stop, runErr)
+	}
+	if rt.report.ProjectID != "new-project" {
+		t.Fatalf("selected project=%q", rt.report.ProjectID)
+	}
+	var created bool
+	for _, call := range r.calls {
+		joined := strings.Join(call, " ")
+		if strings.Contains(joined, "config set") || strings.Contains(joined, "--set-as-default") {
+			t.Fatalf("gcloud config was mutated: %s", joined)
+		}
+		if strings.Contains(joined, "projects create new-project") {
+			created = true
+		}
+	}
+	if !created {
+		t.Fatalf("creation was not reached: %#v", r.calls)
+	}
+}
+
+func TestAuthSetup_AccountTokenSufficiency(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg-config"))
+	u, err := ui.New(ui.Options{Color: "never"})
+	if err != nil {
+		t.Fatalf("ui: %v", err)
+	}
+	if err := config.WriteClientCredentialsFor("work", config.ClientCredentials{ClientID: "id", ClientSecret: "secret"}); err != nil {
+		t.Fatalf("credentials: %v", err)
+	}
+
+	origOpen := authSetupOpen
+	t.Cleanup(func() { authSetupOpen = origOpen })
+
+	gmailScopes := accountScopes(parseSetupServices(t, "gmail"))
+	store := newMemSecretsStore()
+	if err := store.SetToken("work", "person@example.com", secrets.Token{
+		Services:     []string{"gmail"},
+		Scopes:       gmailScopes,
+		RefreshToken: "test-token",
+	}); err != nil {
+		t.Fatalf("set token: %v", err)
+	}
+	authSetupOpen = func() (secrets.Store, error) { return store, nil }
+
+	tests := []struct {
+		name     string
+		client   string
+		email    string
+		services string
+		want     bool
+	}{
+		{name: "exact client email services and scopes", client: "work", email: "person@example.com", services: "gmail", want: true},
+		{name: "different email", client: "work", email: "other@example.com", services: "gmail", want: false},
+		{name: "different client", client: "other", email: "person@example.com", services: "gmail", want: false},
+		{name: "missing requested service and scope", client: "work", email: "person@example.com", services: "drive", want: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			services := parseSetupServices(t, tc.services)
+			if got := accountTokenSatisfies(tc.client, tc.email, authServiceNames(services), accountScopes(services)); got != tc.want {
+				t.Fatalf("accountTokenSatisfies()=%t, want %t", got, tc.want)
+			}
+		})
+	}
+
+	rt := &setupRuntime{cmd: &AuthSetupCmd{AccountEmail: "person@example.com"}, flags: &RootFlags{NoInput: true}, u: u, client: "work", services: parseSetupServices(t, "gmail")}
+	if stop, runErr := rt.runAccount(context.Background()); stop || runErr != nil {
+		t.Fatalf("sufficient existing token should skip OAuth: stop=%t err=%v", stop, runErr)
+	}
+	if got := rt.report.Stages[0].Status; got != stageStatusOK {
+		t.Fatalf("sufficient token stage=%s", got)
+	}
+
+	rt = &setupRuntime{cmd: &AuthSetupCmd{AccountEmail: "person@example.com"}, flags: &RootFlags{NoInput: true}, u: u, client: "work", services: parseSetupServices(t, "drive")}
+	if stop, runErr := rt.runAccount(context.Background()); stop || runErr != nil {
+		t.Fatalf("insufficient token should defer authorization: stop=%t err=%v", stop, runErr)
+	}
+	if got := rt.report.Stages[0].Status; got != stageStatusManual {
+		t.Fatalf("insufficient token stage=%s, want manual authorization", got)
+	}
+}
+
+func parseSetupServices(t *testing.T, csv string) []googleauth.Service {
+	t.Helper()
+	services, err := parseAuthServices(csv)
+	if err != nil {
+		t.Fatalf("parse services %q: %v", csv, err)
+	}
+	return services
 }
 
 func TestSetupComplete_RequiresAcksAndCreds(t *testing.T) {

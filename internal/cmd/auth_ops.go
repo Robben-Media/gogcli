@@ -49,6 +49,11 @@ type InstallCredentialsOptions struct {
 	Domains string
 	// ExpectedProjectID, when set, rejects credentials whose project_id differs.
 	ExpectedProjectID string
+	// RequireInstalledClient rejects Web OAuth clients for guided setup.
+	RequireInstalledClient bool
+	// RequireProjectIDConfirmation requires an explicit confirmation or --force
+	// before accepting credentials that omit project_id.
+	RequireProjectIDConfirmation bool
 	// RequireForceToReplace requires Force when replacing non-identical credentials.
 	RequireForceToReplace bool
 	// Force allows replacing different credentials when RequireForceToReplace is set.
@@ -88,9 +93,21 @@ func InstallClientCredentials(opts InstallCredentialsOptions) (InstallCredential
 		return InstallCredentialsResult{}, usage("credentials path required")
 	}
 
-	creds, err := config.ParseGoogleOAuthClientJSON(b)
+	parseCredentials := config.ParseGoogleOAuthClientJSON
+	if opts.RequireInstalledClient {
+		parseCredentials = config.ParseGoogleInstalledOAuthClientJSON
+	}
+	creds, err := parseCredentials(b)
 	if err != nil {
 		return InstallCredentialsResult{}, err
+	}
+	if opts.ExpectedProjectID != "" && creds.ProjectID == "" && opts.RequireProjectIDConfirmation && !opts.Force {
+		if opts.Confirm == nil {
+			return InstallCredentialsResult{}, usage("credentials omit project_id; re-run with --force or confirm interactively")
+		}
+		if confirmErr := opts.Confirm(fmt.Sprintf("associate OAuth credentials without project_id with project %q", opts.ExpectedProjectID)); confirmErr != nil {
+			return InstallCredentialsResult{}, confirmErr
+		}
 	}
 
 	if opts.ExpectedProjectID != "" && creds.ProjectID != "" &&

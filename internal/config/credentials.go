@@ -34,6 +34,17 @@ type googleCredentialsFile struct {
 }
 
 func ParseGoogleOAuthClientJSON(b []byte) (ClientCredentials, error) {
+	return parseGoogleOAuthClientJSON(b, false)
+}
+
+// ParseGoogleInstalledOAuthClientJSON accepts only a Desktop/installed OAuth
+// client. Guided setup requires this redirect-capable client type; standalone
+// credential installation retains historical web-client compatibility.
+func ParseGoogleInstalledOAuthClientJSON(b []byte) (ClientCredentials, error) {
+	return parseGoogleOAuthClientJSON(b, true)
+}
+
+func parseGoogleOAuthClientJSON(b []byte, requireInstalled bool) (ClientCredentials, error) {
 	var f googleCredentialsFile
 	if err := json.Unmarshal(b, &f); err != nil {
 		return ClientCredentials{}, fmt.Errorf("decode credentials json: %w", err)
@@ -42,7 +53,7 @@ func ParseGoogleOAuthClientJSON(b []byte) (ClientCredentials, error) {
 	var clientID, clientSecret, projectID string
 	if f.Installed != nil {
 		clientID, clientSecret, projectID = f.Installed.ClientID, f.Installed.ClientSecret, f.Installed.ProjectID
-	} else if f.Web != nil {
+	} else if !requireInstalled && f.Web != nil {
 		clientID, clientSecret, projectID = f.Web.ClientID, f.Web.ClientSecret, f.Web.ProjectID
 	}
 
@@ -50,11 +61,7 @@ func ParseGoogleOAuthClientJSON(b []byte) (ClientCredentials, error) {
 		return ClientCredentials{}, errInvalidCredentials
 	}
 
-	return ClientCredentials{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		ProjectID:    projectID,
-	}, nil
+	return ClientCredentials{ClientID: clientID, ClientSecret: clientSecret, ProjectID: projectID}, nil
 }
 
 func WriteClientCredentials(c ClientCredentials) error {
