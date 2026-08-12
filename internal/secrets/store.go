@@ -63,6 +63,7 @@ var (
 	errInvalidKeyringBackend = errors.New("invalid keyring backend")
 	errKeyringTimeout        = errors.New("keyring connection timed out")
 	errReadOnlyFileKeyring   = errors.New("file keyring directory does not exist; refusing to create it during read-only inspection")
+	errNoInputFilePassword   = errors.New("file keyring requires GOG_KEYRING_PASSWORD under --no-input")
 	openKeyringFunc          = openKeyring
 	keyringOpenFunc          = keyring.Open
 )
@@ -296,6 +297,18 @@ func openKeyringWithTimeout(cfg keyring.Config, timeout time.Duration) (keyring.
 			"set GOG_KEYRING_BACKEND=file and GOG_KEYRING_PASSWORD=<password> to use encrypted file storage instead",
 			errKeyringTimeout, timeout)
 	}
+}
+
+// OpenDefaultNoInput opens the token store without permitting a file-backend
+// password prompt. It is appropriate for inspection paths controlled by --no-input.
+func OpenDefaultNoInput() (Store, error) {
+	if info, err := ResolveKeyringBackendInfo(); err != nil {
+		return nil, err
+	} else if info.Value == "file" && os.Getenv(keyringPasswordEnv) == "" {
+		return nil, errNoInputFilePassword
+	}
+
+	return OpenDefault()
 }
 
 func OpenDefault() (Store, error) {

@@ -32,6 +32,9 @@ type ClientSetup struct {
 	AcknowledgedBranding   bool `json:"acknowledged_branding,omitempty"`
 	AcknowledgedAudience   bool `json:"acknowledged_audience,omitempty"`
 	AcknowledgedDataAccess bool `json:"acknowledged_data_access,omitempty"`
+	// CredentialsProjectAssociated records explicit confirmation that credentials
+	// without project_id belong to ProjectID. It is not implied by pairing a target.
+	CredentialsProjectAssociated bool `json:"credentials_project_associated,omitempty"`
 }
 
 // GetClientSetup returns the setup record for client, or a zero value.
@@ -71,6 +74,7 @@ func SetClientSetupProject(cfg *File, client, projectID string) error {
 		cur.AcknowledgedBranding = false
 		cur.AcknowledgedAudience = false
 		cur.AcknowledgedDataAccess = false
+		cur.CredentialsProjectAssociated = false
 	}
 
 	cur.ProjectID = projectID
@@ -79,8 +83,32 @@ func SetClientSetupProject(cfg *File, client, projectID string) error {
 	return nil
 }
 
+// SetClientSetupCredentialsProjectAssociated records explicit association of
+// project-less OAuth credentials with the current selected project.
+func SetClientSetupCredentialsProjectAssociated(cfg *File, client string, associated bool) error {
+	if cfg == nil {
+		return errNilConfig
+	}
+
+	normalized, err := NormalizeClientNameOrDefault(client)
+	if err != nil {
+		return err
+	}
+
+	if cfg.ClientSetup == nil {
+		cfg.ClientSetup = make(map[string]ClientSetup)
+	}
+
+	cur := cfg.ClientSetup[normalized]
+	cur.CredentialsProjectAssociated = associated
+	cfg.ClientSetup[normalized] = cur
+
+	return nil
+}
+
 // SetClientSetupAcknowledgments records explicit user acknowledgments for
 // Console-only stages on the client's current project pairing.
+
 func SetClientSetupAcknowledgments(cfg *File, client string, branding, audience, dataAccess bool) error {
 	if cfg == nil {
 		return errNilConfig

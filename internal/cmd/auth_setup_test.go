@@ -132,7 +132,7 @@ func TestAuthSetup_Discover_ProjectAndAPIs(t *testing.T) {
 			stdout: `[{"account":"dev@example.com","status":"ACTIVE"}]`, code: 0,
 		},
 		"projects list --format=json --limit 100": {
-			stdout: `[{"projectId":"demo-proj","name":"Demo"}]`, code: 0,
+			stdout: `[{"projectId":"demo-proj","name":"Demo","lifecycleState":"ACTIVE"}]`, code: 0,
 		},
 		"services list --enabled --project demo-proj --format=json": {
 			stdout: `[{"name":"gmail.googleapis.com","state":"ENABLED"}]`, code: 0,
@@ -524,8 +524,8 @@ func TestAuthSetup_AccountTokenSufficiency(t *testing.T) {
 		t.Fatalf("credentials: %v", err)
 	}
 
-	origOpen := authSetupOpen
-	t.Cleanup(func() { authSetupOpen = origOpen })
+	origOpen, origOpenNoInput := authSetupOpen, authSetupOpenNoInput
+	t.Cleanup(func() { authSetupOpen, authSetupOpenNoInput = origOpen, origOpenNoInput })
 
 	gmailScopes := accountScopes(parseSetupServices(t, "gmail"))
 	store := newMemSecretsStore()
@@ -537,6 +537,7 @@ func TestAuthSetup_AccountTokenSufficiency(t *testing.T) {
 		t.Fatalf("set token: %v", err)
 	}
 	authSetupOpen = func() (secrets.Store, error) { return store, nil }
+	authSetupOpenNoInput = authSetupOpen
 
 	tests := []struct {
 		name     string
@@ -724,7 +725,7 @@ func TestAuthSetup_ProjectPickerLabelsCurrentPairedTarget(t *testing.T) {
 func TestContinueSetupCmdPreservesRetryInputs(t *testing.T) {
 	cmd := &AuthSetupCmd{CreateProject: true, ProjectName: "Demo", ProjectParent: "folders/42", ServicesCSV: "gmail,drive", EnableAPIs: true, CredentialsPath: "/tmp/client.json", AccountEmail: "person@example.com", ManualOAuth: true, AckBranding: true, AckAudience: true, AckDataAccess: true}
 	got := continueSetupCmd("work", cmd, "demo", true)
-	for _, want := range []string{"--client work", "--force", "--project demo", "--create-project", "--project-name Demo", "--project-parent folders/42", "--services gmail,drive", "--enable-apis", "--credentials /tmp/client.json", "--email person@example.com", "--manual", "--ack-branding", "--ack-audience", "--ack-data-access"} {
+	for _, want := range []string{"'--client' 'work'", "'--force'", "'--project' 'demo'", "'--create-project'", "'--project-name' 'Demo'", "'--project-parent' 'folders/42'", "'--services' 'gmail,drive'", "'--enable-apis'", "'--credentials' '/tmp/client.json'", "'--email' 'person@example.com'", "'--manual'", "'--ack-branding'", "'--ack-audience'", "'--ack-data-access'"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("continuation missing %q: %s", want, got)
 		}
