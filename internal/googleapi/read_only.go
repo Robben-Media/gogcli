@@ -12,9 +12,17 @@ import (
 var ErrReadOnly = errors.New("request blocked by --readonly")
 
 type (
-	readOnlyContextKey               struct{}
-	readOnlyWriteExceptionContextKey struct{}
+	readOnlyContextKey       struct{}
+	readOnlyGrantsContextKey struct{}
 )
+
+// WriteGrant identifies a reviewed readonly-mode exception. Empty fields widen
+// only the corresponding scope; callers should use the narrowest known scope.
+type WriteGrant struct {
+	Service   string
+	Operation string
+	Target    string
+}
 
 // WithReadOnly enables fail-closed outbound mutation protection for ctx.
 func WithReadOnly(ctx context.Context, enabled bool) context.Context {
@@ -25,15 +33,12 @@ func WithReadOnly(ctx context.Context, enabled bool) context.Context {
 	return context.WithValue(ctx, readOnlyContextKey{}, true)
 }
 
-// WithReadOnlyWriteException grants a single declared command write for this invocation.
-// Callers must establish the grant before creating Google API clients.
-func WithReadOnlyWriteException(ctx context.Context, action string) context.Context {
-	return context.WithValue(ctx, readOnlyWriteExceptionContextKey{}, action)
-}
+// WithReadOnlyWriteGrants appends invocation/process lifetime grants to ctx.
+func WithReadOnlyWriteGrants(ctx context.Context, grants ...WriteGrant) context.Context {
+	existing, _ := ctx.Value(readOnlyGrantsContextKey{}).([]WriteGrant)
+	copyOf := append(append([]WriteGrant{}, existing...), grants...)
 
-func readOnlyWriteException(ctx context.Context) string {
-	action, _ := ctx.Value(readOnlyWriteExceptionContextKey{}).(string)
-	return action
+	return context.WithValue(ctx, readOnlyGrantsContextKey{}, copyOf)
 }
 
 // ReadOnly reports whether runtime read-only protection is enabled.
@@ -44,8 +49,8 @@ func ReadOnly(ctx context.Context) bool {
 }
 
 type readOnlyTransport struct {
-	base           http.RoundTripper
-	writeException string
+	base   http.RoundTripper
+	grants []WriteGrant
 }
 
 func readOnlyTransportFromContext(ctx context.Context, base http.RoundTripper) http.RoundTripper {
@@ -57,11 +62,13 @@ func readOnlyTransportFromContext(ctx context.Context, base http.RoundTripper) h
 		base = http.DefaultTransport
 	}
 
-	return readOnlyTransport{base: base, writeException: readOnlyWriteException(ctx)}
+	grants, _ := ctx.Value(readOnlyGrantsContextKey{}).([]WriteGrant)
+
+	return readOnlyTransport{base: base, grants: grants}
 }
 
 func (t readOnlyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if !ReadOnlyRequestAllowed(req) && !ReadOnlyWriteExceptionAllows(t.writeException, req) {
+	if !ReadOnlyRequestAllowed(req) && !ReadOnlyWriteGrantsAllow(t.grants, req) {
 		method, path := "", ""
 		if req != nil {
 			method = req.Method
@@ -81,9 +88,10 @@ func (t readOnlyTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	return response, nil
 }
 
-// ReadOnlyWriteExceptionAllows narrows an invocation grant to its reviewed API operation.
-func ReadOnlyWriteExceptionAllows(action string, req *http.Request) bool {
-	if req == nil || req.URL == nil || req.URL.Scheme != "https" || req.Method != http.MethodPost {
+// ReadOnlyWriteGrantsAllow permits only mutations on a service's exact owned
+// hosts. Target scopes additionally require the target to be present in URL.
+func ReadOnlyWriteGrantsAllow(grants []WriteGrant, req *http.Request) bool {
+	if req == nil || req.URL == nil || req.URL.Scheme != "https" || req.Method == http.MethodGet || req.Method == http.MethodHead || req.Method == http.MethodOptions {
 		return false
 	}
 
@@ -92,13 +100,103 @@ func ReadOnlyWriteExceptionAllows(action string, req *http.Request) bool {
 	}
 
 	host := strings.ToLower(strings.TrimSuffix(req.URL.Hostname(), "."))
+	for _, grant := range grants {
+		if !serviceOwnsHost(grant.Service, host) {
+			continue
+		}
 
-	switch action {
-	case "gmail:send":
-		return (host == "gmail.googleapis.com" || host == "gmail.mtls.googleapis.com" || host == "www.googleapis.com" || host == "www.mtls.googleapis.com") && strings.HasSuffix(req.URL.Path, "/messages/send")
-	default:
-		return false
+		if (host == "www.googleapis.com" || host == "www.mtls.googleapis.com") && !sharedHostPathMatchesService(grant.Service, req.URL.Path) {
+			continue
+		}
+
+		if grant.Target != "" && !strings.Contains(req.URL.Path, grant.Target) {
+			continue
+		}
+
+		if !operationMatchesRequest(grant.Operation, req) {
+			continue
+		}
+
+		return true
 	}
+
+	return false
+}
+
+func operationMatchesRequest(operation string, req *http.Request) bool {
+	if operation == "" {
+		return true
+	}
+
+	last := operation
+	if index := strings.LastIndex(last, "."); index >= 0 {
+		last = last[index+1:]
+	}
+
+	if last == "send" {
+		return req.Method == http.MethodPost && strings.HasSuffix(req.URL.Path, "/send")
+	}
+
+	if last == "delete" || last == "remove" || last == "unshare" {
+		return req.Method == http.MethodDelete
+	}
+
+	if last == "update" || last == "patch" || last == "modify" || last == "rename" || last == "respond" || last == "write" || last == "format" || last == "clear" {
+		return req.Method == http.MethodPatch || req.Method == http.MethodPut || req.Method == http.MethodPost
+	}
+
+	return true
+}
+
+func sharedHostPathMatchesService(service, path string) bool {
+	prefixes := map[string][]string{
+		"calendar": {"/calendar/"},
+		"drive":    {"/drive/", "/upload/drive/"},
+		"gmail":    {"/gmail/"},
+		"sheets":   {"/v4/spreadsheets/"},
+		"tasks":    {"/tasks/"},
+		"youtube":  {"/youtube/"},
+	}
+	for _, prefix := range prefixes[service] {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func serviceOwnsHost(service, host string) bool {
+	service = strings.ToLower(strings.TrimSpace(service))
+	for _, owned := range serviceHosts[service] {
+		if host == owned || host == strings.Replace(owned, ".googleapis.com", ".mtls.googleapis.com", 1) {
+			return true
+		}
+	}
+
+	return false
+}
+
+var serviceHosts = map[string][]string{
+	"analytics":       {"analyticsadmin.googleapis.com", "analyticsdata.googleapis.com"},
+	"bigquery":        {"bigquery.googleapis.com"},
+	"businessprofile": {"mybusinessaccountmanagement.googleapis.com", "mybusinessbusinessinformation.googleapis.com", "mybusiness.googleapis.com"},
+	"calendar":        {"www.googleapis.com", "calendar-json.googleapis.com"},
+	"chat":            {"chat.googleapis.com"},
+	"classroom":       {"classroom.googleapis.com"},
+	"contacts":        {"people.googleapis.com"},
+	"docs":            {"docs.googleapis.com", "www.googleapis.com"},
+	"drive":           {"www.googleapis.com", "drive.googleapis.com"},
+	"gmail":           {"gmail.googleapis.com", "www.googleapis.com"},
+	"groups":          {"admin.googleapis.com", "www.googleapis.com"},
+	"keep":            {"keep.googleapis.com"},
+	"people":          {"people.googleapis.com"},
+	"searchconsole":   {"searchconsole.googleapis.com", "www.googleapis.com"},
+	"sheets":          {"sheets.googleapis.com", "www.googleapis.com"},
+	"slides":          {"slides.googleapis.com", "www.googleapis.com"},
+	"tagmanager":      {"tagmanager.googleapis.com"},
+	"tasks":           {"tasks.googleapis.com", "www.googleapis.com"},
+	"youtube":         {"youtube.googleapis.com", "www.googleapis.com"},
 }
 
 // ReadOnlyRequestAllowed identifies requests that cannot mutate remote state.

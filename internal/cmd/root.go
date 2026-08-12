@@ -27,6 +27,7 @@ const (
 	colorNever = "never"
 	boolTrue   = "true"
 	boolFalse  = "false"
+	always     = "always"
 )
 
 var rootHelpDescription = helpDescription
@@ -45,7 +46,8 @@ type RootFlags struct {
 	Version        bool   `help:"Print version and exit"`
 	Force          bool   `help:"Skip confirmations for destructive commands"`
 	NoInput        bool   `help:"Never prompt; fail instead (useful for CI)"`
-	ReadOnly       bool   `name:"readonly" help:"Block mutating API requests at runtime" default:"${readonly}"`
+	ReadOnly       bool   `name:"readonly" help:"Require explicit exceptions for mutations" default:"${readonly}"`
+	ReadOnlyExcept string `name:"readonly-except" help:"Comma-separated readonly service exemptions" default:"${readonly_except}"`
 	Verbose        bool   `help:"Enable verbose logging"`
 }
 
@@ -144,10 +146,11 @@ func Execute(args []string) (err error) {
 
 	ctx := context.Background()
 	ctx = googleapi.WithReadOnly(ctx, cli.ReadOnly)
-	if action, preflightErr := preflightDeclaredWrite(kctx, &cli.RootFlags); preflightErr != nil {
+	if grants, preflightErr := preflightDeclaredWrite(kctx, &cli.RootFlags); preflightErr != nil && !isAuthAddLocalReadonly(args) && cli.Auth.Add.DriveScope != strFile {
 		return reportPreUIError(preflightErr)
-	} else if action != "" {
-		ctx = googleapi.WithReadOnlyWriteException(ctx, action)
+	} else if len(grants) != 0 {
+		ctx = googleapi.WithReadOnlyWriteGrants(ctx, grants...)
+		ctx = withReadOnlyApproval(ctx)
 	}
 	ctx = outfmt.WithMode(ctx, mode)
 	ctx = authclient.WithClient(ctx, cli.Client)
@@ -249,6 +252,7 @@ func newParser(description string) (*kong.Kong, *CLI, error) {
 		"json":             boolString(envMode.JSON),
 		"plain":            boolString(envMode.Plain),
 		"readonly":         boolString(envOr("GOG_READONLY", "") == "1"),
+		"readonly_except":  envOr("GOG_READONLY_EXCEPT", ""),
 		"version":          VersionString(),
 	}
 
@@ -309,6 +313,27 @@ func reportPreUIError(err error) error {
 	}
 	_, _ = fmt.Fprintln(os.Stderr, errfmt.Format(err))
 	return err
+}
+
+// isAuthAddLocalReadonly preserves the established `auth add ... --readonly`
+// scope-selection syntax. A global flag appears before the command path.
+func isAuthAddLocalReadonly(args []string) bool {
+	addAt := -1
+	for i, arg := range args {
+		if arg == "add" && i > 0 && args[i-1] == "auth" {
+			addAt = i
+			break
+		}
+	}
+	if addAt < 0 {
+		return false
+	}
+	for _, arg := range args[addAt+1:] {
+		if arg == "--readonly" || strings.HasPrefix(arg, "--readonly=") {
+			return true
+		}
+	}
+	return false
 }
 
 func hasVersionFlag(args []string) bool {

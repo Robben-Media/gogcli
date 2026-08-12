@@ -100,7 +100,7 @@ func TestReadOnlyPOSTRegistryRejectsNearMatchesAndOverrides(t *testing.T) {
 
 func TestReadOnlyWriteExceptionIsInvocationScoped(t *testing.T) {
 	base := &readOnlyTestTransport{}
-	ctx := WithReadOnlyWriteException(WithReadOnly(context.Background(), true), "gmail:send")
+	ctx := WithReadOnlyWriteGrants(WithReadOnly(context.Background(), true), WriteGrant{Service: "gmail", Operation: "send"})
 	transport := readOnlyTransportFromContext(ctx, base)
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://www.googleapis.com/gmail/v1/users/me/messages/send", nil)
@@ -130,5 +130,27 @@ func TestReadOnlyWriteExceptionIsInvocationScoped(t *testing.T) {
 
 	if !errors.Is(blockedErr, ErrReadOnly) {
 		t.Fatalf("unrelated mutation error = %v, want ErrReadOnly", blockedErr)
+	}
+}
+
+func TestReadOnlyTargetGrantRejectsDifferentTarget(t *testing.T) {
+	grant := []WriteGrant{{Service: "drive", Operation: "delete", Target: "file-a"}}
+
+	for _, tc := range []struct {
+		path  string
+		allow bool
+	}{
+		{"https://www.googleapis.com/drive/v3/files/file-a", true},
+		{"https://www.googleapis.com/drive/v3/files/file-b", false},
+		{"https://example.test/drive/v3/files/file-a", false},
+	} {
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodDelete, tc.path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got := ReadOnlyWriteGrantsAllow(grant, req); got != tc.allow {
+			t.Errorf("grant allowed %s = %t, want %t", tc.path, got, tc.allow)
+		}
 	}
 }
