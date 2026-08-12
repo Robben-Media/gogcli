@@ -36,6 +36,7 @@ type ManageServerOptions struct {
 	Timeout      time.Duration
 	Services     []Service
 	ForceConsent bool
+	Readonly     bool
 	Client       string
 }
 
@@ -240,7 +241,7 @@ func (ms *ManageServer) handleAuthStart(w http.ResponseWriter, r *http.Request) 
 
 	services := manageServices(ms.opts.Services)
 
-	scopes, err := ScopesForManage(services)
+	scopes, err := ScopesForManageWithOptions(services, ScopeOptions{Readonly: ms.opts.Readonly})
 	if err != nil {
 		http.Error(w, "Failed to get scopes", http.StatusInternalServerError)
 		return
@@ -257,7 +258,7 @@ func (ms *ManageServer) handleAuthStart(w http.ResponseWriter, r *http.Request) 
 		Scopes:       scopes,
 	}
 
-	authURL := cfg.AuthCodeURL(state, authURLParams(ms.opts.ForceConsent, !ms.opts.ForceConsent)...)
+	authURL := cfg.AuthCodeURL(state, authURLParams(ms.opts.ForceConsent, !ms.opts.ForceConsent && !ms.opts.Readonly)...)
 	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
@@ -345,7 +346,7 @@ func (ms *ManageServer) handleOAuthCallback(w http.ResponseWriter, r *http.Reque
 
 	services := manageServices(ms.opts.Services)
 
-	scopes, err := ScopesForManage(services)
+	scopes, err := ScopesForManageWithOptions(services, ScopeOptions{Readonly: ms.opts.Readonly})
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		renderErrorPage(w, "Failed to get scopes: "+err.Error())
@@ -448,7 +449,7 @@ func (ms *ManageServer) handleOAuthCallback(w http.ResponseWriter, r *http.Reque
 func (ms *ManageServer) authGrant(email string) ([]Service, []string, error) {
 	services := manageServices(ms.opts.Services)
 
-	scopes, err := ScopesForManage(services)
+	scopes, err := ScopesForManageWithOptions(services, ScopeOptions{Readonly: ms.opts.Readonly})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -462,7 +463,9 @@ func (ms *ManageServer) authGrant(email string) ([]Service, []string, error) {
 		return nil, nil, fmt.Errorf("read existing token: %w", err)
 	}
 
-	services, scopes = MergeAuthGrant(services, scopes, existing.Services, existing.Scopes)
+	if !ms.opts.Readonly {
+		services, scopes = MergeAuthGrant(services, scopes, existing.Services, existing.Scopes)
+	}
 
 	return services, scopes, nil
 }

@@ -212,6 +212,73 @@ func TestAuthSetup_NonInteractive_CreateProjectRequiresForce(t *testing.T) {
 	}
 }
 
+func TestAuthSetup_ReadonlyBlocksGCloudMutationsBeforeSubprocess(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		args []string
+	}{
+		{
+			name: "create project",
+			args: []string{"--readonly", "--no-input", "--force", "auth", "setup", "--create-project", "--project", "new-proj"},
+		},
+		{
+			name: "enable APIs",
+			args: []string{"--readonly", "--no-input", "--force", "auth", "setup", "--enable-apis", "--project", "demo-proj"},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			r := &setupFakeRunner{}
+			withSetupGCloud(t, r)
+
+			err := Execute(test.args)
+			if ExitCode(err) != 2 {
+				t.Fatalf("expected readonly usage error, got %v code=%d", err, ExitCode(err))
+			}
+			if len(r.calls) != 0 {
+				t.Fatalf("readonly must reject before gcloud subprocess calls: %#v", r.calls)
+			}
+		})
+	}
+}
+
+func TestAuthSetup_ReadonlyDryRunDisplaysPlanWithoutSubprocess(t *testing.T) {
+	r := &setupFakeRunner{}
+	withSetupGCloud(t, r)
+
+	out := captureStdout(t, func() {
+		if err := Execute([]string{"--readonly", "--no-input", "auth", "setup", "--create-project", "--project", "new-proj", "--enable-apis", "--dry-run"}); err != nil {
+			t.Fatalf("readonly dry run: %v", err)
+		}
+	})
+	for _, want := range []string{"create Google Cloud project new-proj", "enable selected APIs on project new-proj"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("dry-run output missing %q: %s", want, out)
+		}
+	}
+	if len(r.calls) != 0 {
+		t.Fatalf("readonly dry run must not run gcloud: %#v", r.calls)
+	}
+}
+
+func TestAuthSetup_GCloudLogin_ReadonlyBlocksBeforeSubprocess(t *testing.T) {
+	r := &setupFakeRunner{}
+	rt := &setupRuntime{
+		cmd:         &AuthSetupCmd{GCloudLogin: true},
+		u:           mustSetupUI(t),
+		gc:          gcloud.New(r),
+		interactive: true,
+		readOnly:    true,
+	}
+
+	stop, err := rt.handleMissingGCloudAccount(context.Background())
+	if !stop || ExitCode(err) != 2 {
+		t.Fatalf("expected readonly usage stop, got stop=%t err=%v code=%d", stop, err, ExitCode(err))
+	}
+	if len(r.calls) != 0 {
+		t.Fatalf("readonly gcloud login must not run a subprocess: %#v", r.calls)
+	}
+}
+
 func TestAuthSetup_EnableAPIs_WithForce(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -559,6 +626,47 @@ func TestAuthSetup_HelpRegistered(t *testing.T) {
 	if err != nil && ExitCode(err) != 0 {
 		// kong help may return nil
 		t.Logf("help err: %v", err)
+	}
+}
+
+func TestAuthSetup_ProjectPickerCreate_ReadonlyBlocksBeforeCreateSubprocess(t *testing.T) {
+	r := &setupFakeRunner{byArgs: map[string]struct {
+		stdout, stderr string
+		code           int
+		err            error
+	}{
+		"projects list --format=json --filter=lifecycleState:ACTIVE --limit 100": {stdout: `[]`},
+	}}
+	u := mustSetupUI(t)
+	origPrompt := setupPromptLine
+	responses := []string{"1", "new-project"}
+	setupPromptLine = func(context.Context, string) (string, error) {
+		response := responses[0]
+		responses = responses[1:]
+		return response, nil
+	}
+	t.Cleanup(func() { setupPromptLine = origPrompt })
+
+	rt := &setupRuntime{
+		cmd:         &AuthSetupCmd{ProjectLimit: 100},
+		flags:       &RootFlags{Force: true},
+		u:           u,
+		gc:          gcloud.New(r),
+		client:      config.DefaultClientName,
+		interactive: true,
+		force:       true,
+		readOnly:    true,
+		report:      SetupReport{Client: config.DefaultClientName},
+	}
+
+	_, err := rt.runProject(context.Background())
+	if ExitCode(err) != 2 {
+		t.Fatalf("expected readonly usage error, got %v code=%d", err, ExitCode(err))
+	}
+	for _, call := range r.calls {
+		if strings.Contains(strings.Join(call, " "), "projects create") {
+			t.Fatalf("readonly interactive create must not run gcloud create: %#v", r.calls)
+		}
 	}
 }
 

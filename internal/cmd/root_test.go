@@ -269,3 +269,28 @@ func TestNewUsageError(t *testing.T) {
 		t.Fatalf("unexpected wrapped error: %#v", wrapped)
 	}
 }
+
+func TestNewParser_ReadOnlyFlagAndEnvironment(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		env  string
+	}{
+		{name: "flag", args: []string{"--readonly", "version"}},
+		{name: "environment", args: []string{"version"}, env: "1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GOG_READONLY", tc.env)
+			parser, cli, err := newParser("test")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := parser.Parse(tc.args); err != nil {
+				t.Fatal(err)
+			}
+			if !cli.ReadOnly {
+				t.Fatal("ReadOnly = false, want true")
+			}
+		})
+	}
+}

@@ -37,6 +37,7 @@ type decodedSchemaAutomation struct {
 	WrapUntrusted       bool                `json:"wrap_untrusted"`
 	NoInput             bool                `json:"no_input"`
 	Force               bool                `json:"force"`
+	ReadOnly            bool                `json:"readonly"`
 	AccountInput        string              `json:"account_input"`
 	ClientInput         string              `json:"client_input"`
 	Account             string              `json:"account"`
@@ -273,6 +274,7 @@ func TestExecuteSchemaUsesEffectiveEnvironmentDefaults(t *testing.T) {
 	t.Setenv("GOG_CLIENT", "env-client")
 	t.Setenv("GOG_ACCOUNT", "env@example.com")
 	t.Setenv("GOG_ENABLE_COMMANDS", "calendar,gmail")
+	t.Setenv("GOG_READONLY", "1")
 
 	document, _ := executeSchema(t, "schema")
 	wantDefaults := map[string]string{
@@ -282,13 +284,14 @@ func TestExecuteSchemaUsesEffectiveEnvironmentDefaults(t *testing.T) {
 		"enable-commands": "calendar,gmail",
 		"json":            "true",
 		"plain":           "false",
+		"readonly":        "true",
 	}
 	for name, want := range wantDefaults {
 		if got := findSchemaValue(t, document.GlobalFlags, name).Default; got != want {
 			t.Fatalf("global %s default = %q, want %q", name, got, want)
 		}
 	}
-	if !document.Automation.JSON || document.Automation.ClientInput != "env-client" || document.Automation.AccountInput != "env@example.com" {
+	if !document.Automation.JSON || !document.Automation.ReadOnly || document.Automation.ClientInput != "env-client" || document.Automation.AccountInput != "env@example.com" {
 		t.Fatalf("environment automation defaults = %+v", document.Automation)
 	}
 }
@@ -517,7 +520,7 @@ func TestSchemaV1ContractFingerprint(t *testing.T) {
 		t.Fatalf("marshal canonical schema: %v", err)
 	}
 	got := fmt.Sprintf("%x", sha256.Sum256(canonical))
-	const want = "7ca0719c4142b6b7c09962f510dcf09b486462a81d115fc14f7aaa670c3025d1"
+	const want = "266853dd8283b67e697c39473dae081898d0d17aba8dbcdfbd354b026705e28c"
 	if got != want {
 		t.Fatalf("schema v1 contract fingerprint = %s, want %s; review the contract change and schema version", got, want)
 	}
@@ -536,6 +539,7 @@ func normalizeSchemaEnvironment(t *testing.T) {
 		"GOG_JSON",
 		"GOG_KEYRING_PASSWORD",
 		"GOG_PLAIN",
+		"GOG_READONLY",
 		"GOG_SKIP_UPDATE_CHECK",
 		"GOG_UPDATE_REPO",
 		"GITHUB_TOKEN",

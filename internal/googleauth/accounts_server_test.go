@@ -503,6 +503,58 @@ func TestManageServer_HandleAuthStart(t *testing.T) {
 	}
 }
 
+func TestManageServer_HandleAuthStart_ReadonlyDisablesGrantedScopes(t *testing.T) {
+	origRead := readClientCredentials
+	origState := randomStateFn
+	origEndpoint := oauthEndpoint
+
+	t.Cleanup(func() {
+		readClientCredentials = origRead
+		randomStateFn = origState
+		oauthEndpoint = origEndpoint
+	})
+
+	readClientCredentials = func(string) (config.ClientCredentials, error) {
+		return config.ClientCredentials{ClientID: "id", ClientSecret: "secret"}, nil
+	}
+	randomStateFn = func() (string, error) { return "state123", nil }
+	oauthEndpoint = oauth2.Endpoint{AuthURL: "http://example.com/auth", TokenURL: "http://example.com/token"}
+
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+
+	t.Cleanup(func() { _ = ln.Close() })
+
+	ms := &ManageServer{listener: ln, opts: ManageServerOptions{Readonly: true, Services: []Service{ServiceGmail, ServiceDrive}}}
+	rr := httptest.NewRecorder()
+	ms.handleAuthStart(rr, httptest.NewRequest(http.MethodGet, "/auth/start", nil))
+
+	if rr.Code != http.StatusFound {
+		t.Fatalf("status: %d", rr.Code)
+	}
+
+	parsed, err := url.Parse(rr.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse redirect: %v", err)
+	}
+
+	if got := parsed.Query().Get("include_granted_scopes"); got != "" {
+		t.Fatalf("readonly auth must request exact scopes, got include_granted_scopes=%q", got)
+	}
+
+	if got := parsed.Query().Get("prompt"); got != "" {
+		t.Fatalf("readonly auth without force consent prompt=%q, want empty", got)
+	}
+
+	for _, want := range []string{"https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/drive.readonly"} {
+		if !strings.Contains(parsed.Query().Get("scope"), want) {
+			t.Fatalf("readonly scope missing %q: %q", want, parsed.Query().Get("scope"))
+		}
+	}
+}
+
 func TestManageServer_HandleAuthStart_CredentialsError(t *testing.T) {
 	origRead := readClientCredentials
 
@@ -1009,6 +1061,66 @@ func TestManageServer_HandleAuthUpgrade(t *testing.T) {
 
 	if includeScopes := parsed.Query().Get("include_granted_scopes"); includeScopes != "" {
 		t.Fatalf("expected exact scopes for upgrade, got include_granted_scopes=%q", includeScopes)
+	}
+}
+
+func TestManageServer_HandleAuthUpgrade_ReadonlyDropsExistingWriteScopes(t *testing.T) {
+	origRead := readClientCredentials
+	origState := randomStateFn
+	origEndpoint := oauthEndpoint
+
+	t.Cleanup(func() {
+		readClientCredentials = origRead
+		randomStateFn = origState
+		oauthEndpoint = origEndpoint
+	})
+
+	readClientCredentials = func(string) (config.ClientCredentials, error) {
+		return config.ClientCredentials{ClientID: "id", ClientSecret: "secret"}, nil
+	}
+	randomStateFn = func() (string, error) { return "state-readonly", nil }
+	oauthEndpoint = oauth2.Endpoint{AuthURL: "http://example.com/auth", TokenURL: "http://example.com/token"}
+
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+
+	t.Cleanup(func() { _ = ln.Close() })
+
+	store := &fakeStore{tokens: []secrets.Token{{
+		Email:    "test@example.com",
+		Services: []string{"drive"},
+		Scopes:   []string{"https://www.googleapis.com/auth/drive"},
+	}}}
+	ms := &ManageServer{
+		listener: ln,
+		opts: ManageServerOptions{
+			Services: []Service{ServiceGmail},
+			Readonly: true,
+		},
+		store: store,
+	}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/auth/upgrade?email=test@example.com", nil)
+	ms.handleAuthUpgrade(rr, req)
+
+	if rr.Code != http.StatusFound {
+		t.Fatalf("status: %d", rr.Code)
+	}
+
+	parsed, err := url.Parse(rr.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse location: %v", err)
+	}
+
+	scope := parsed.Query().Get("scope")
+	if !strings.Contains(scope, "https://www.googleapis.com/auth/gmail.readonly") {
+		t.Fatalf("missing gmail.readonly in %q", scope)
+	}
+
+	if strings.Contains(scope, "https://www.googleapis.com/auth/drive") {
+		t.Fatalf("existing write-capable Drive scope retained in %q", scope)
 	}
 }
 

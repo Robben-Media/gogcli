@@ -13,6 +13,7 @@ import (
 	"github.com/steipete/gogcli/internal/authclient"
 	"github.com/steipete/gogcli/internal/config"
 	"github.com/steipete/gogcli/internal/gcloud"
+	"github.com/steipete/gogcli/internal/googleapi"
 	"github.com/steipete/gogcli/internal/googleauth"
 	"github.com/steipete/gogcli/internal/input"
 	"github.com/steipete/gogcli/internal/outfmt"
@@ -48,6 +49,7 @@ type AuthSetupCmd struct {
 	// APIs / services
 	ServicesCSV string `name:"services" help:"Services to enable APIs for: user|all or comma-separated ${auth_services}" default:"user"`
 	EnableAPIs  bool   `name:"enable-apis" help:"Enable missing APIs on the selected project (requires --force when non-interactive)"`
+	DryRun      bool   `name:"dry-run" help:"Display the requested Cloud mutations without running setup"`
 	GCloudLogin bool   `name:"gcloud-login" help:"Run gcloud auth login when no active account (interactive only; ignored under --no-input)"`
 
 	// Manual Auth Platform stages
@@ -135,6 +137,7 @@ type setupRuntime struct {
 	priorProjectID string
 	interactive    bool
 	force          bool
+	readOnly       bool
 	discover       bool
 	services       []googleauth.Service
 	usageIDs       []string
@@ -145,6 +148,13 @@ type setupRuntime struct {
 }
 
 func (c *AuthSetupCmd) Run(ctx context.Context, flags *RootFlags) error {
+	if googleapi.ReadOnly(ctx) && (c.CreateProject || c.EnableAPIs) {
+		if !c.DryRun {
+			return usage("--readonly cannot be combined with --create-project or --enable-apis (use --dry-run to display the plan)")
+		}
+		return c.emitDryRun(ctx)
+	}
+
 	rt, err := c.newSetupRuntime(ctx, flags)
 	if err != nil {
 		return err
@@ -172,6 +182,24 @@ func (c *AuthSetupCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	return rt.emit(ctx)
+}
+
+func (c *AuthSetupCmd) emitDryRun(ctx context.Context) error {
+	u := ui.FromContext(ctx)
+	var actions []string
+	if c.CreateProject {
+		actions = append(actions, "create Google Cloud project "+c.Project)
+	}
+	if c.EnableAPIs {
+		actions = append(actions, "enable selected APIs on project "+c.Project)
+	}
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{"dry_run": true, "actions": actions}))
+	}
+	for _, action := range actions {
+		u.Out().Printf("dry_run\t%s", action)
+	}
+	return nil
 }
 
 func (c *AuthSetupCmd) newSetupRuntime(ctx context.Context, flags *RootFlags) (*setupRuntime, error) {
@@ -233,6 +261,7 @@ func (c *AuthSetupCmd) newSetupRuntime(ctx context.Context, flags *RootFlags) (*
 		priorProjectID: setupRec.ProjectID,
 		interactive:    interactive,
 		force:          force,
+		readOnly:       googleapi.ReadOnly(ctx),
 		discover:       discover,
 		services:       services,
 		usageIDs:       usageIDs,
@@ -392,6 +421,10 @@ func (rt *setupRuntime) handleMissingGCloudAccount(ctx context.Context) (stop bo
 		return stopSetup()
 	}
 
+	if rt.readOnly {
+		return true, usage("--readonly cannot be combined with --gcloud-login")
+	}
+
 	rt.u.Err().Println("Running gcloud auth login (does not change gcloud default project/config beyond auth)…")
 	loginRes := rt.gc.Login(ctx)
 	if loginRes.ExitCode != 0 {
@@ -549,6 +582,9 @@ func filterActiveProjects(projects []gcloud.Project) []gcloud.Project {
 func (rt *setupRuntime) createProject(ctx context.Context) (projectID string, created bool, err error) {
 	if strings.TrimSpace(rt.cmd.Project) == "" {
 		return "", false, usage("--create-project requires --project <id>")
+	}
+	if rt.readOnly {
+		return "", false, usage("--readonly cannot be combined with --create-project (use --dry-run to display the plan)")
 	}
 	if !rt.force && rt.interactive {
 		if confErr := confirmDestructive(ctx, rt.flags, fmt.Sprintf("create Google Cloud project %q", rt.cmd.Project)); confErr != nil {
@@ -1083,6 +1119,15 @@ func (rt *setupRuntime) repairExplicitAccountMapping(ctx context.Context, email 
 	return true
 }
 
+func (rt *setupRuntime) authAddCommand(email string) string {
+	parts := []string{"gog", "--client", rt.client}
+	if rt.readOnly {
+		parts = append(parts, "--readonly")
+	}
+	parts = append(parts, "auth", "add", email, "--services", rt.serviceCSV)
+	return strings.Join(parts, " ")
+}
+
 func (rt *setupRuntime) authorizeAccount(ctx context.Context, email string) (stop bool, err error) {
 	credsExist, credsErr := config.ClientCredentialsExists(rt.client)
 	if credsErr != nil {
@@ -1122,7 +1167,7 @@ func (rt *setupRuntime) authorizeAccount(ctx context.Context, email string) (sto
 			Summary:    summary,
 			Blocker:    blocker,
 			Resumable:  true,
-			Command:    fmt.Sprintf("gog --client %s auth add %s --services %s", rt.client, email, rt.serviceCSV),
+			Command:    rt.authAddCommand(email),
 		})
 
 		return false, nil
@@ -1133,6 +1178,7 @@ func (rt *setupRuntime) authorizeAccount(ctx context.Context, email string) (sto
 		Email:                 email,
 		Client:                rt.client,
 		ServicesCSV:           rt.serviceCSV,
+		Readonly:              rt.readOnly,
 		Manual:                rt.cmd.ManualOAuth,
 		SuppressClientMapping: rt.clientOverride == "",
 	})
@@ -1144,7 +1190,7 @@ func (rt *setupRuntime) authorizeAccount(ctx context.Context, email string) (sto
 			Summary:    "account authorization failed",
 			Blocker:    authErr.Error(),
 			Resumable:  true,
-			Command:    fmt.Sprintf("gog --client %s auth add %s --services %s", rt.client, email, rt.serviceCSV),
+			Command:    rt.authAddCommand(email),
 		})
 
 		return stopSetup()

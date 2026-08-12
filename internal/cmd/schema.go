@@ -39,6 +39,7 @@ type schemaAutomation struct {
 	WrapUntrusted       bool               `json:"wrap_untrusted"`
 	NoInput             bool               `json:"no_input"`
 	Force               bool               `json:"force"`
+	ReadOnly            bool               `json:"readonly"`
 	AccountInput        string             `json:"account_input"`
 	ClientInput         string             `json:"client_input"`
 	Account             string             `json:"account"`
@@ -133,6 +134,7 @@ func buildSchemaAutomation(root *kong.Node, flags *RootFlags) schemaAutomation {
 		WrapUntrusted:       flags.WrapUntrusted,
 		NoInput:             flags.NoInput,
 		Force:               flags.Force,
+		ReadOnly:            flags.ReadOnly,
 		AccountInput:        account,
 		ClientInput:         client,
 		Account:             resolvedAccount,

@@ -14,6 +14,7 @@ import (
 	"github.com/steipete/gogcli/internal/authclient"
 	"github.com/steipete/gogcli/internal/config"
 	"github.com/steipete/gogcli/internal/errfmt"
+	"github.com/steipete/gogcli/internal/googleapi"
 	"github.com/steipete/gogcli/internal/googleauth"
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/secrets"
@@ -45,6 +46,7 @@ type RootFlags struct {
 	ResultsOnly        bool   `name:"results-only" help:"Output only the declared primary result (requires --json)"`
 	Select             string `name:"select" help:"Comma-separated fields to select from JSON output (requires --json)"`
 	WrapUntrusted      bool   `name:"wrap-untrusted" help:"Wrap free-text Workspace fields in JSON with untrusted-content fences (agents; requires --json / GOG_JSON; no-op otherwise)" default:"${wrap_untrusted}"`
+	ReadOnly           bool   `name:"readonly" help:"Block mutating API requests at runtime" default:"${readonly}"`
 	Version            bool   `help:"Print version and exit"`
 	Force              bool   `help:"Skip confirmations for destructive commands"`
 	NoInput            bool   `help:"Never prompt; fail instead (useful for CI)"`
@@ -153,6 +155,7 @@ func Execute(args []string) (err error) {
 		return reportPreUIError(newUsageError(err))
 	}
 	ctx := context.Background()
+	ctx = googleapi.WithReadOnly(ctx, cli.ReadOnly)
 	ctx = outfmt.WithMode(ctx, mode)
 	ctx, err = outfmt.WithJSONConfig(ctx, jsonConfig)
 	if err != nil {
@@ -193,6 +196,9 @@ func Execute(args []string) (err error) {
 	err = kctx.Run()
 	if err == nil {
 		return nil
+	}
+	if errors.Is(err, googleapi.ErrReadOnly) {
+		err = &ExitError{Code: 2, Err: err}
 	}
 
 	if u := ui.FromContext(ctx); u != nil {
@@ -275,6 +281,7 @@ func newParser(description string) (*kong.Kong, *CLI, error) {
 		"json":                  boolString(envMode.JSON),
 		"plain":                 boolString(envMode.Plain),
 		"wrap_untrusted":        boolString(envMode.WrapUntrusted),
+		"readonly":              boolString(envOr("GOG_READONLY", "") == "1"),
 		"version":               VersionString(),
 	}
 

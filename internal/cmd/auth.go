@@ -13,6 +13,7 @@ import (
 
 	"github.com/steipete/gogcli/internal/authclient"
 	"github.com/steipete/gogcli/internal/config"
+	"github.com/steipete/gogcli/internal/googleapi"
 	"github.com/steipete/gogcli/internal/googleauth"
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/secrets"
@@ -462,7 +463,6 @@ type AuthAddCmd struct {
 	ForceConsent  bool   `name:"force-consent" help:"Force consent screen to obtain a refresh token"`
 	ReplaceScopes bool   `name:"replace-scopes" help:"Replace an existing grant with exactly --services scopes (implies --force-consent)"`
 	ServicesCSV   string `name:"services" help:"Services to authorize: user|all or comma-separated ${auth_services} (Keep uses service account: gog auth service-account set)" default:"user"`
-	Readonly      bool   `name:"readonly" help:"Use read-only scopes where available (still includes OIDC identity scopes)"`
 	DriveScope    string `name:"drive-scope" help:"Drive scope mode: full|readonly|file" enum:"full,readonly,file" default:"full"`
 	GmailScope    string `name:"gmail-scope" help:"Gmail scope mode: full|readonly" enum:"full,readonly" default:"full"`
 }
@@ -479,7 +479,7 @@ func (c *AuthAddCmd) Run(ctx context.Context) error {
 		Manual:        c.Manual,
 		ForceConsent:  c.ForceConsent,
 		ReplaceScopes: c.ReplaceScopes,
-		Readonly:      c.Readonly,
+		Readonly:      googleapi.ReadOnly(ctx),
 		DriveScope:    c.DriveScope,
 		GmailScope:    c.GmailScope,
 	})
@@ -903,6 +903,7 @@ func (c *AuthManageCmd) Run(ctx context.Context) error {
 		Timeout:      c.Timeout,
 		Services:     services,
 		ForceConsent: c.ForceConsent,
+		Readonly:     googleapi.ReadOnly(ctx),
 		Client:       authclient.ClientOverrideFromContext(ctx),
 	})
 }

@@ -315,7 +315,7 @@ func AuthorizeAndStoreAccount(ctx context.Context, opts AuthorizeAccountOptions)
 		return AuthorizeAccountResult{}, fmt.Errorf("read existing token: %w", existingErr)
 	}
 
-	if hasExisting && !opts.ReplaceScopes {
+	if hasExisting && !opts.ReplaceScopes && !opts.Readonly {
 		services, scopes = googleauth.MergeAuthGrant(services, scopes, existing.Services, existing.Scopes)
 	}
 
