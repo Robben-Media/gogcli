@@ -31,6 +31,9 @@ func TestExecute_Help(t *testing.T) {
 	if !strings.Contains(out, "config.json") || !strings.Contains(out, "keyring backend") {
 		t.Fatalf("expected config info in help output: %q", out)
 	}
+	if !strings.Contains(out, "--wrap-untrusted") {
+		t.Fatalf("expected --wrap-untrusted in root help, got: %q", out)
+	}
 	if strings.Contains(out, "gmail (mail,email) thread get") {
 		t.Fatalf("expected collapsed help (no expanded subcommands), got: %q", out)
 	}
@@ -129,6 +132,12 @@ func TestExecute_InvalidJSONSelectionReportsUsageError(t *testing.T) {
 	}
 	if stdout != "" {
 		t.Fatalf("unexpected partial output: %q", stdout)
+	}
+}
+
+func TestHasSelectFlagRetainsMatchBeforeDoubleDash(t *testing.T) {
+	if !hasSelectFlag([]string{"--select", "id", "--", "version"}) {
+		t.Fatal("expected --select before -- to be retained")
 	}
 }
 

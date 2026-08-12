@@ -12,8 +12,9 @@ import (
 )
 
 type Mode struct {
-	JSON  bool
-	Plain bool
+	JSON          bool
+	Plain         bool
+	WrapUntrusted bool
 }
 
 type JSONConfig struct {
@@ -55,10 +56,22 @@ func FromFlags(jsonOut bool, plainOut bool) (Mode, error) {
 	return Mode{JSON: jsonOut, Plain: plainOut}, nil
 }
 
+// FromFlagsFull builds Mode from all root output-related flags.
+func FromFlagsFull(jsonOut, plainOut, wrapUntrusted bool) (Mode, error) {
+	mode, err := FromFlags(jsonOut, plainOut)
+	if err != nil {
+		return Mode{}, err
+	}
+	mode.WrapUntrusted = mode.JSON && wrapUntrusted
+
+	return mode, nil
+}
+
 func FromEnv() Mode {
 	return Mode{
-		JSON:  envBool("GOG_JSON"),
-		Plain: envBool("GOG_PLAIN"),
+		JSON:          envBool("GOG_JSON"),
+		Plain:         envBool("GOG_PLAIN"),
+		WrapUntrusted: envBool("GOG_WRAP_UNTRUSTED"),
 	}
 }
 
@@ -100,14 +113,21 @@ func fromContext(ctx context.Context) contextConfig {
 
 func FromContext(ctx context.Context) Mode { return fromContext(ctx).Mode }
 
-func IsJSON(ctx context.Context) bool  { return FromContext(ctx).JSON }
-func IsPlain(ctx context.Context) bool { return FromContext(ctx).Plain }
+func IsJSON(ctx context.Context) bool          { return FromContext(ctx).JSON }
+func IsPlain(ctx context.Context) bool         { return FromContext(ctx).Plain }
+func IsWrapUntrusted(ctx context.Context) bool { return FromContext(ctx).WrapUntrusted }
 
+// WriteJSON applies execution-scoped JSON transformations, then optional
+// untrusted-content wrapping, before encoding the result.
 func WriteJSON(ctx context.Context, w io.Writer, v any) error {
-	return WriteJSONWithConfig(w, v, fromContext(ctx).JSON)
+	return writeJSON(ctx, w, v, fromContext(ctx).JSON)
 }
 
 func WriteJSONWithConfig(w io.Writer, v any, config JSONConfig) error {
+	return writeJSON(context.Background(), w, v, config)
+}
+
+func writeJSON(ctx context.Context, w io.Writer, v any, config JSONConfig) error {
 	config, err := validateJSONConfig(config)
 	if err != nil {
 		return err
@@ -116,6 +136,10 @@ func WriteJSONWithConfig(w io.Writer, v any, config JSONConfig) error {
 	value, err := transformJSON(v, config)
 	if err != nil {
 		return err
+	}
+
+	if IsWrapUntrusted(ctx) {
+		value = WrapUntrustedValue(value)
 	}
 
 	enc := json.NewEncoder(w)

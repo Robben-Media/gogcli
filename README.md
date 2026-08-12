@@ -22,7 +22,7 @@ Fast, script-friendly CLI for Gmail, Calendar, Chat, Classroom, Drive, Docs, Sli
 - **Groups** - list groups you belong to, view group members (Google Workspace)
 - **Local time** - quick local/UTC time display for scripts and agents
 - **Multiple accounts** - manage multiple Google accounts simultaneously (with aliases)
-- **Command allowlist** - restrict top-level commands for sandboxed/agent runs
+- **Command allowlist** - restrict top-level services and/or exact command paths for sandboxed/agent runs
 - **Secure credential storage** using OS keyring or encrypted on-disk keyring (configurable)
 - **Auto-refreshing tokens** - authenticate once, use indefinitely
 - **Least-privilege auth** - `--readonly` and `--drive-scope` to request fewer scopes
@@ -161,6 +161,13 @@ Show current auth state/services for the active account:
 gog auth status
 ```
 
+Run a read-only auth health check (config, keyring, credentials, accounts, token usability):
+
+```bash
+gog auth doctor
+gog --json auth doctor
+```
+
 ### Multiple OAuth clients
 
 Use `--client` (or `GOG_CLIENT`) to select a named OAuth client:
@@ -280,8 +287,11 @@ gog auth list
 - `--results-only`: with `--json`, emit only the command's declared primary result instead of its response envelope.
 - `--select <paths>`: with `--json`, project comma-separated fields such as `id,name` or `sender.email`; dotted paths preserve nested shape and missing fields are omitted.
 - When combined, `--results-only` runs before `--select`.
+- `--wrap-untrusted` / `GOG_WRAP_UNTRUSTED`: when combined with JSON mode, free-text fields from Workspace (mail bodies/subjects, doc/sheet text, names, summaries, etc.) are wrapped in machine-readable untrusted-content fences so agents can treat them as data, not instructions. Default **off**. No effect on `--plain` or human table output; no-op without JSON mode.
 - Human-facing hints/progress go to stderr.
 - Colors are enabled only in rich TTY output and are disabled automatically for `--json` and `--plain`.
+
+Agent tip: prefer `gog --json --wrap-untrusted …` (or `GOG_JSON=1 GOG_WRAP_UNTRUSTED=1`) when reading Gmail/Docs/Sheets/Drive/Calendar text into a model context.
 
 ### Service Scopes
 
@@ -421,6 +431,7 @@ gog keep get <noteId> --account you@yourdomain.com
 - `GOG_COLOR` - Color mode: `auto` (default), `always`, or `never`
 - `GOG_TIMEZONE` - Default output timezone for Calendar/Gmail (IANA name, `UTC`, or `local`)
 - `GOG_ENABLE_COMMANDS` - Comma-separated allowlist of top-level commands (e.g., `calendar,tasks`)
+- `GOG_ENABLE_COMMAND_PATHS` - Comma-separated allowlist of exact command paths (e.g., `gmail search,calendar events`)
 
 ### Config File (JSON5)
 
@@ -479,13 +490,34 @@ Aliases work anywhere you pass `--account` or `GOG_ACCOUNT` (reserved: `auto`, `
 
 ### Command Allowlist (Sandboxing)
 
+Two complementary invocation allowlists restrict which commands may run:
+
+- `--enable-commands` / `GOG_ENABLE_COMMANDS`: top-level services only (e.g. `gmail`, `calendar`)
+- `--enable-command-paths` / `GOG_ENABLE_COMMAND_PATHS`: exact parser-resolved command paths (e.g. `gmail search`, `gmail thread get`)
+
+Matching rules for exact paths:
+
+- Identity is the Kong-resolved command path: command segments only (flags and positional values are excluded)
+- Documented aliases resolve via the parser model (`mail search` == `gmail search`; `gmail read` == `gmail thread get`); parent paths written by primary name do not implicitly allow default child leaves
+- Parent paths do **not** allow children (`gmail thread` does not allow `gmail thread get`)
+- When both lists are set, a match in **either** list permits the command (OR)
+- When neither list is set, enablement is unrestricted
+- Persisted `policy` rules remain a separate subsequent gate (AND with enablement)
+
 ```bash
-# Only allow calendar + tasks commands for an agent
+# Only allow calendar + tasks commands for an agent (top-level)
 gog --enable-commands calendar,tasks calendar events --today
 
 # Same via env
 export GOG_ENABLE_COMMANDS=calendar,tasks
 gog tasks list <tasklistId>
+
+# Exact paths: allow Gmail search without other Gmail commands
+gog --enable-command-paths "gmail search" gmail search 'is:unread'
+export GOG_ENABLE_COMMAND_PATHS='gmail search,calendar events'
+
+# Compose: top-level calendar OR exact gmail search
+gog --enable-commands calendar --enable-command-paths "gmail search" gmail search 'is:unread'
 ```
  
 ## Security
@@ -539,6 +571,7 @@ gog auth service-account unset <email>             # Remove service account
 gog auth keep <email> --key <path>                 # Legacy alias (Keep)
 gog auth keyring [backend]            # Show/set keyring backend (auto|keychain|file)
 gog auth status                       # Show current auth state/services
+gog auth doctor                       # Read-only auth/keyring/token health check
 gog auth services                     # List available services and OAuth scopes
 gog auth list                         # List stored accounts
 gog auth list --check                 # Validate stored refresh tokens
@@ -1337,6 +1370,7 @@ All commands support these flags:
 
 - `--account <email|alias|auto>` - Account to use (overrides GOG_ACCOUNT)
 - `--enable-commands <csv>` - Allowlist top-level commands (e.g., `calendar,tasks`)
+- `--enable-command-paths <csv>` - Allowlist exact command paths (e.g., `gmail search,calendar events`)
 - `--json` - Output JSON to stdout (best for scripting)
 - `--results-only` - Output the command's declared primary result (requires `--json`)
 - `--select <paths>` - Project comma-separated dotted paths from JSON output (requires `--json`)

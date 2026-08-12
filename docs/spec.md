@@ -35,6 +35,7 @@ This replaces the existing separate CLIs (`gmcli`, `gccli`, `gdcli`) and the Pyt
   - `--results-only` (emit the command's declared primary JSON result; requires `--json`)
   - `--select <paths>` (project comma-separated dotted paths from JSON objects or arrays of objects; requires `--json`)
   - `--plain` (TSV output to stdout; stable/parseable; disables colors)
+  - `--wrap-untrusted` (JSON only: wrap free-text Workspace fields with untrusted-content fences; default off; no-op without JSON; does not change plain/human output)
   - `--force` (skip confirmations for destructive commands)
   - `--no-input` (never prompt; fail instead)
   - `--version` (print version)
@@ -49,6 +50,7 @@ Environment:
 - `GOG_COLOR=auto|always|never` (default `auto`, overridden by `--color`)
 - `GOG_JSON=1` (default JSON output; overridden by flags)
 - `GOG_PLAIN=1` (default plain output; overridden by flags)
+- `GOG_WRAP_UNTRUSTED=1` (default wrap-untrusted for JSON; same truthy values as other bool envs; overridden by flags)
 
 ## Output (TTY-aware colors)
 
@@ -136,6 +138,7 @@ Environment:
 - `GOG_KEYRING_BACKEND={auto|keychain|file}` (force backend; use `file` to avoid Keychain prompts and pair with `GOG_KEYRING_PASSWORD` for non-interactive)
 - `GOG_TIMEZONE=America/New_York` (default output timezone; IANA name or `UTC`; `local` forces local timezone)
 - `GOG_ENABLE_COMMANDS=calendar,tasks` (optional allowlist of top-level commands)
+- `GOG_ENABLE_COMMAND_PATHS=gmail search,calendar events` (optional allowlist of exact command paths; aliases canonicalize; parents do not allow children; ORs with top-level enablement; policies still apply after)
 - `config.json` can also set `keyring_backend` (JSON5; env vars take precedence)
 - `config.json` can also set `default_timezone` (IANA name or `UTC`)
 - `config.json` can also set `account_aliases` for `gog auth alias` (JSON5)
@@ -373,9 +376,11 @@ Default: human-friendly tables (stdlib `text/tabwriter`).
 
 - Parseable stdout:
   - `--json`: JSON objects/arrays suitable for scripting
+  - `--wrap-untrusted` (with JSON mode): free-text content keys get spoof-resistant `<<<EXTERNAL_UNTRUSTED_CONTENT id="…">>>` / `<<<END_EXTERNAL_UNTRUSTED_CONTENT id="…">>>` fences; metadata keys (ids, tokens, URLs, emails, timestamps, mime types, etc.) stay plain; top-level `externalContent` annotation only when something was wrapped
   - `--plain`: stable TSV (tabs preserved; no alignment; no colors)
 - Human-facing hints/progress are written to stderr so stdout can be safely captured.
 - Colors are only used for human-facing output and are disabled automatically for `--json` and `--plain`.
+- `--wrap-untrusted` / `GOG_WRAP_UNTRUSTED` does not change plain or human output; it is a no-op without JSON mode.
 
 We avoid heavy table deps unless we decide we need them.
 

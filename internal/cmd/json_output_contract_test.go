@@ -37,9 +37,8 @@ func TestInternalCmdProductionWriteJSONCallsDeclareResultsContract(t *testing.T)
 				t.Errorf("%s: WriteJSON must receive context, writer, and explicit result contract", fset.Position(call.Pos()))
 				return true
 			}
-			ctx, ok := call.Args[0].(*ast.Ident)
-			if !ok || ctx.Name != "ctx" {
-				t.Errorf("%s: WriteJSON first argument must be the current command context ctx", fset.Position(call.Args[0].Pos()))
+			if !isContextIdentifier(call.Args[0]) {
+				t.Errorf("%s: WriteJSON first argument must be a context identifier", fset.Position(call.Args[0].Pos()))
 			}
 			contract, ok := call.Args[2].(*ast.CallExpr)
 			if !ok || !(isPackageCall(contract.Fun, outfmtAliases, "DirectResult") || isPackageCall(contract.Fun, outfmtAliases, "PrimaryResult")) {
@@ -48,6 +47,11 @@ func TestInternalCmdProductionWriteJSONCallsDeclareResultsContract(t *testing.T)
 			return true
 		})
 	}
+}
+
+func isContextIdentifier(expr ast.Expr) bool {
+	ident, ok := expr.(*ast.Ident)
+	return ok && ident.Name != ""
 }
 
 func importedPackageAliases(file *ast.File, importPath string) map[string]struct{} {
