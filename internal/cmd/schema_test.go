@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -112,6 +114,37 @@ func TestExecuteSchemaEmitsVersionedJSONWithoutUpdateCheck(t *testing.T) {
 	}
 }
 
+func TestExecuteSchemaBypassesPolicyEnforcementForMalformedConfig(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	if _, err := config.EnsureDir(); err != nil {
+		t.Fatalf("ensure config dir: %v", err)
+	}
+	path, err := config.ConfigPath()
+	if err != nil {
+		t.Fatalf("config path: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("{malformed"), 0o600); err != nil {
+		t.Fatalf("write malformed config: %v", err)
+	}
+
+	document, _ := executeSchema(t, "schema")
+	if document.Automation.Policy.Status != "unresolved" || document.Automation.Policy.UnresolvedReason != "configuration could not be read" {
+		t.Fatalf("policy state = %+v, want unresolved config read", document.Automation.Policy)
+	}
+
+	stderr := captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			if err := Execute([]string{"time", "now"}); err == nil {
+				t.Fatal("ordinary command succeeded with malformed config")
+			}
+		})
+	})
+	if !strings.Contains(stderr, "read config") {
+		t.Fatalf("ordinary command stderr = %q, want config read failure", stderr)
+	}
+}
+
 func TestExecuteSchemaIncludesKongCommandArgumentAndFlagMetadata(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("GOG_SKIP_UPDATE_CHECK", "1")
@@ -160,6 +193,11 @@ func TestExecuteSchemaIncludesKongCommandArgumentAndFlagMetadata(t *testing.T) {
 	if force.Default != "false" {
 		t.Fatalf("global force default = %q, want false", force.Default)
 	}
+	calendarCreate := findSchemaCommand(t, document.Commands, "calendar create")
+	sendUpdates := findSchemaValue(t, calendarCreate.Flags, "send-updates")
+	if sendUpdates.Default != "all" {
+		t.Fatalf("calendar create send-updates default = %q, want all", sendUpdates.Default)
+	}
 
 	seen := make(map[string]bool, len(document.Commands))
 	for i, command := range document.Commands {
@@ -175,7 +213,7 @@ func TestExecuteSchemaIncludesKongCommandArgumentAndFlagMetadata(t *testing.T) {
 		}
 	}
 
-	parser, _, err := newParser(baseDescription())
+	parser, cli, err := newParser(baseDescription())
 	if err != nil {
 		t.Fatalf("new parser: %v", err)
 	}
@@ -188,21 +226,53 @@ func TestExecuteSchemaIncludesKongCommandArgumentAndFlagMetadata(t *testing.T) {
 			t.Fatalf("visible Kong command %q missing from schema", path)
 		}
 	}
+	if _, err := parser.Parse([]string{"calendar", "create", "primary"}); err != nil {
+		t.Fatalf("parse calendar create defaults: %v", err)
+	}
+	if cli.Calendar.Create.SendUpdates != scopeAll {
+		t.Fatalf("calendar create runtime send-updates default = %q, want %q", cli.Calendar.Create.SendUpdates, scopeAll)
+	}
 }
 
 func TestExecuteSchemaUsesEffectiveEnvironmentDefaults(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("GOG_SKIP_UPDATE_CHECK", "1")
 	t.Setenv("GOG_JSON", "1")
+	t.Setenv("GOG_PLAIN", "")
+	t.Setenv("GOG_COLOR", "always")
 	t.Setenv("GOG_CLIENT", "env-client")
 	t.Setenv("GOG_ACCOUNT", "env@example.com")
+	t.Setenv("GOG_ENABLE_COMMANDS", "calendar,gmail")
 
 	document, _ := executeSchema(t, "schema")
-	jsonFlag := findSchemaValue(t, document.GlobalFlags, "json")
-	if jsonFlag.Default != "true" {
-		t.Fatalf("global json default = %q, want true", jsonFlag.Default)
+	wantDefaults := map[string]string{
+		"account":         "env@example.com",
+		"client":          "env-client",
+		"color":           "always",
+		"enable-commands": "calendar,gmail",
+		"json":            "true",
+		"plain":           "false",
+	}
+	for name, want := range wantDefaults {
+		if got := findSchemaValue(t, document.GlobalFlags, name).Default; got != want {
+			t.Fatalf("global %s default = %q, want %q", name, got, want)
+		}
 	}
 	if !document.Automation.JSON || document.Automation.ClientInput != "env-client" || document.Automation.AccountInput != "env@example.com" {
+		t.Fatalf("environment automation defaults = %+v", document.Automation)
+	}
+}
+
+func TestExecuteSchemaUsesEffectivePlainEnvironmentDefault(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("GOG_JSON", "")
+	t.Setenv("GOG_PLAIN", "1")
+
+	document, _ := executeSchema(t, "schema")
+	if got := findSchemaValue(t, document.GlobalFlags, "plain").Default; got != "true" {
+		t.Fatalf("global plain default = %q, want true", got)
+	}
+	if !document.Automation.Plain || document.Automation.JSON {
 		t.Fatalf("environment automation defaults = %+v", document.Automation)
 	}
 }
@@ -324,16 +394,50 @@ func TestExecuteSchemaIsDeterministicAndExcludesSecretValues(t *testing.T) {
 	t.Setenv("GOG_SKIP_UPDATE_CHECK", "1")
 	t.Setenv("GOG_KEYRING_PASSWORD", "schema-secret-password-152")
 	t.Setenv("GITHUB_TOKEN", "schema-secret-token-152")
+	t.Setenv("GH_TOKEN", "schema-secret-fallback-token-152")
 
 	_, first := executeSchema(t, "schema")
 	_, second := executeSchema(t, "schema")
 	if first != second {
 		t.Fatalf("schema output changed between identical invocations")
 	}
-	for _, secret := range []string{"schema-secret-password-152", "schema-secret-token-152"} {
+	for _, secret := range []string{"schema-secret-password-152", "schema-secret-token-152", "schema-secret-fallback-token-152"} {
 		if strings.Contains(first, secret) {
 			t.Fatalf("schema output contains secret value %q", secret)
 		}
+	}
+}
+
+func TestSchemaV1ContractFingerprint(t *testing.T) {
+	normalizeSchemaEnvironment(t)
+
+	_, output := executeSchema(t, "schema")
+	got := fmt.Sprintf("%x", sha256.Sum256([]byte(output)))
+	const want = "35bdf825496c042720ebdf294b49afe0a134d396ea61edf8f623606de4d86afb"
+	if got != want {
+		t.Fatalf("schema v1 contract fingerprint = %s, want %s; review the contract change and schema version", got, want)
+	}
+}
+
+func normalizeSchemaEnvironment(t *testing.T) {
+	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	for _, key := range []string{
+		"GOG_ACCOUNT",
+		"GOG_CALENDAR_WEEKDAY",
+		"GOG_CLIENT",
+		"GOG_COLOR",
+		"GOG_ENABLE_COMMANDS",
+		"GOG_JSON",
+		"GOG_KEYRING_PASSWORD",
+		"GOG_PLAIN",
+		"GOG_SKIP_UPDATE_CHECK",
+		"GOG_UPDATE_REPO",
+		"GITHUB_TOKEN",
+		"GH_TOKEN",
+	} {
+		t.Setenv(key, "")
 	}
 }
 

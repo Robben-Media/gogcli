@@ -36,7 +36,7 @@ var maybeNotifyUpdate = selfupdate.MaybeNotify
 
 type RootFlags struct {
 	Color          string `help:"Color output: auto|always|never" default:"${color}"`
-	Account        string `help:"Account email for API commands (gmail/calendar/chat/classroom/drive/docs/slides/contacts/tasks/people/sheets)"`
+	Account        string `help:"Account email for API commands (gmail/calendar/chat/classroom/drive/docs/slides/contacts/tasks/people/sheets)" schema-default-env:"GOG_ACCOUNT"`
 	Client         string `help:"OAuth client name (selects stored credentials + token bucket)" default:"${client}"`
 	EnableCommands string `help:"Comma-separated list of enabled top-level commands (restricts CLI)" default:"${enabled_commands}"`
 	JSON           bool   `help:"Output JSON to stdout (best for scripting)" default:"${json}"`
@@ -204,6 +204,11 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func isSchemaCommand(command string) bool {
+	parts := strings.Fields(command)
+	return len(parts) > 0 && parts[0] == "schema"
 }
 
 // skipsUpdateCheck reports whether a command must remain local and deterministic.

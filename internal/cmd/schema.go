@@ -269,6 +269,11 @@ func schemaDefault(value *kong.Value) string {
 	if value.HasDefault {
 		return value.Default
 	}
+	if value.Tag != nil {
+		if envName := value.Tag.Get("schema-default-env"); envName != "" {
+			return strings.TrimSpace(os.Getenv(envName))
+		}
+	}
 	if !value.Target.IsValid() {
 		return ""
 	}

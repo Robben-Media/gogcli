@@ -33,6 +33,10 @@ type policyDecision struct {
 }
 
 func enforceCommandPolicies(kctx *kong.Context, flags *RootFlags) error {
+	if isSchemaCommand(kctx.Command()) {
+		return nil
+	}
+
 	cfg, err := config.ReadConfig()
 	if err != nil {
 		return fmt.Errorf("read config: %w", err)

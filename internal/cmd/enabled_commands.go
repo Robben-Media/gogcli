@@ -23,7 +23,7 @@ func enforceEnabledCommands(kctx *kong.Context, enabled string) error {
 		return nil
 	}
 	top := strings.ToLower(cmd[0])
-	if top == "schema" {
+	if isSchemaCommand(kctx.Command()) {
 		return nil
 	}
 	if !allow[top] {
