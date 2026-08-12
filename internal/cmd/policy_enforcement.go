@@ -33,6 +33,10 @@ type policyDecision struct {
 }
 
 func enforceCommandPolicies(kctx *kong.Context, flags *RootFlags) error {
+	if isSchemaCommand(kctx.Command()) {
+		return nil
+	}
+
 	cfg, err := config.ReadConfig()
 	if err != nil {
 		return fmt.Errorf("read config: %w", err)
@@ -93,22 +97,7 @@ func hasPolicyForService(policies []config.Policy, service string) bool {
 }
 
 func evaluatePolicies(policies []config.Policy, action string, account string, client string) policyDecision {
-	var candidates []config.Policy
-	bestSpecificity := -1
-	for _, policy := range policies {
-		if !policyApplies(policy, account, client) {
-			continue
-		}
-		specificity := policySpecificity(policy)
-		if specificity > bestSpecificity {
-			bestSpecificity = specificity
-			candidates = []config.Policy{policy}
-			continue
-		}
-		if specificity == bestSpecificity {
-			candidates = append(candidates, policy)
-		}
-	}
+	candidates := mostSpecificApplicablePolicies(policies, account, client)
 	if len(candidates) == 0 {
 		return policyDecision{}
 	}
@@ -135,6 +124,26 @@ func evaluatePolicies(policies []config.Policy, action string, account string, c
 	}
 
 	return policyDecision{}
+}
+
+func mostSpecificApplicablePolicies(policies []config.Policy, account string, client string) []config.Policy {
+	var candidates []config.Policy
+	bestSpecificity := -1
+	for _, policy := range policies {
+		if !policyApplies(policy, account, client) {
+			continue
+		}
+		specificity := policySpecificity(policy)
+		if specificity > bestSpecificity {
+			bestSpecificity = specificity
+			candidates = []config.Policy{policy}
+			continue
+		}
+		if specificity == bestSpecificity {
+			candidates = append(candidates, policy)
+		}
+	}
+	return candidates
 }
 
 func policyApplies(policy config.Policy, account string, client string) bool {

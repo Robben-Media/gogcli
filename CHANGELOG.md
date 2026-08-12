@@ -6,6 +6,7 @@
 
 - Auth: add `gog auth doctor` for unified read-only diagnostics of config, keyring, OAuth client credentials, stored identities, and refresh-token usability. (#157)
 - CLI: add `--results-only` and `--select` for concise, projected JSON output. (#156)
+- CLI: add `gog schema` for deterministic, versioned JSON discovery of commands, flags, exit codes, and effective automation safeguards. (#152)
 - CLI: add opt-in `--wrap-untrusted` / `GOG_WRAP_UNTRUSTED` JSON fences for external Workspace text used by agents. (#155)
 - CLI: add `--enable-command-paths` / `GOG_ENABLE_COMMAND_PATHS` for exact command-path allowlisting alongside top-level `--enable-commands`. (#153)
 
