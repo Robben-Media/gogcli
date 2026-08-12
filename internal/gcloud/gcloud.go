@@ -10,12 +10,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
 
 var (
 	errProjectIDRequired = errors.New("project id required")
+	errProjectListLimit  = errors.New("project list limit must be positive")
 	errGCloudCommand     = errors.New("gcloud command failed")
 	errGCloudParse       = errors.New("parse gcloud output")
 )
@@ -23,6 +25,12 @@ var (
 // Runner executes a gcloud-style command. Tests inject a fake implementation.
 type Runner interface {
 	Run(ctx context.Context, name string, args ...string) (stdout, stderr string, exitCode int, err error)
+}
+
+// InteractiveRunner executes commands that require a human terminal. Its output
+// must not be captured because gcloud login may prompt in a browser or terminal.
+type InteractiveRunner interface {
+	RunInteractive(ctx context.Context, name string, args ...string) (exitCode int, err error)
 }
 
 // ExecRunner runs real subprocesses via os/exec.
@@ -47,6 +55,26 @@ func (ExecRunner) Run(ctx context.Context, name string, args ...string) (string,
 	}
 
 	return stdout.String(), stderr.String(), exitCode, nil
+}
+
+// RunInteractive attaches stdin and sends all gcloud login output to stderr so
+// setup's stdout remains structured and parseable.
+func (ExecRunner) RunInteractive(ctx context.Context, name string, args ...string) (int, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			return ee.ExitCode(), nil
+		}
+
+		return -1, fmt.Errorf("run interactive gcloud: %w", err)
+	}
+
+	return 0, nil
 }
 
 // Client is a typed gcloud integration used by auth setup.
@@ -76,14 +104,15 @@ type Result struct {
 type BlockerKind string
 
 const (
-	BlockerNone         BlockerKind = ""
-	BlockerNotInstalled BlockerKind = "not_installed"
-	BlockerNotLoggedIn  BlockerKind = "not_logged_in"
-	BlockerPermission   BlockerKind = "permission"
-	BlockerQuota        BlockerKind = "quota"
-	BlockerNotFound     BlockerKind = "not_found"
-	BlockerInvalidInput BlockerKind = "invalid_input"
-	BlockerUnknown      BlockerKind = "unknown"
+	BlockerNone          BlockerKind = ""
+	BlockerNotInstalled  BlockerKind = "not_installed"
+	BlockerNotLoggedIn   BlockerKind = "not_logged_in"
+	BlockerPermission    BlockerKind = "permission"
+	BlockerQuota         BlockerKind = "quota"
+	BlockerNotFound      BlockerKind = "not_found"
+	BlockerAlreadyExists BlockerKind = "already_exists"
+	BlockerInvalidInput  BlockerKind = "invalid_input"
+	BlockerUnknown       BlockerKind = "unknown"
 )
 
 // Account is the active gcloud account identity.
@@ -209,13 +238,37 @@ func (c *Client) ActiveAccount(ctx context.Context) (Account, Result, error) {
 // Login runs interactive user login. Callers must not invoke this under --no-input.
 // Does not set Application Default Credentials and does not mutate config.
 func (c *Client) Login(ctx context.Context) Result {
-	// Do not pass ADC flags; ADC login is intentionally out of scope.
-	return c.run(ctx, "auth", "login", "--brief")
+	args := []string{"auth", "login", "--brief"} // Do not pass ADC flags.
+	if runner, ok := c.Runner.(InteractiveRunner); ok {
+		exitCode, err := runner.RunInteractive(ctx, c.binary(), args...)
+
+		res := Result{ExitCode: exitCode}
+		if err != nil {
+			res.ExitCode = -1
+
+			res.Stderr = sanitize(err.Error())
+			if isNotInstalled(res.Stderr) {
+				res.Kind = BlockerNotInstalled
+			} else {
+				res.Kind = BlockerUnknown
+			}
+		} else if exitCode != 0 {
+			res.Kind = BlockerUnknown
+		}
+
+		return res
+	}
+	// Test runners that do not implement InteractiveRunner retain the captured seam.
+	return c.run(ctx, args...)
 }
 
-// ListProjects returns accessible projects (one bounded list call).
-func (c *Client) ListProjects(ctx context.Context) ([]Project, Result, error) {
-	res := c.run(ctx, "projects", "list", "--format=json")
+// ListProjects returns at most limit accessible projects in one list call.
+func (c *Client) ListProjects(ctx context.Context, limit int) ([]Project, Result, error) {
+	if limit <= 0 {
+		return nil, Result{Kind: BlockerInvalidInput}, errProjectListLimit
+	}
+
+	res := c.run(ctx, "projects", "list", "--format=json", "--limit", fmt.Sprint(limit))
 	if res.ExitCode != 0 {
 		return nil, res, fmt.Errorf("%w: projects list exit %d: %s", errGCloudCommand, res.ExitCode, res.Stderr)
 	}
@@ -301,6 +354,30 @@ func (c *Client) CreateProject(ctx context.Context, projectID, name, parent stri
 	}
 
 	return p, res, nil
+}
+
+// DescribeProject retrieves one explicit project without changing gcloud config.
+func (c *Client) DescribeProject(ctx context.Context, projectID string) (Project, Result, error) {
+	projectID = strings.TrimSpace(projectID)
+	if projectID == "" {
+		return Project{}, Result{Kind: BlockerInvalidInput}, errProjectIDRequired
+	}
+
+	res := c.run(ctx, "projects", "describe", projectID, "--format=json")
+	if res.ExitCode != 0 {
+		return Project{}, res, fmt.Errorf("%w: projects describe exit %d: %s", errGCloudCommand, res.ExitCode, res.Stderr)
+	}
+
+	var project Project
+	if err := json.Unmarshal([]byte(strings.TrimSpace(res.Stdout)), &project); err != nil {
+		return Project{}, res, fmt.Errorf("%w: projects describe: %w", errGCloudParse, err)
+	}
+
+	if project.ProjectID == "" {
+		project.ProjectID = projectID
+	}
+
+	return project, res, nil
 }
 
 // ListEnabledServices lists enabled services for an explicit project.
@@ -507,6 +584,8 @@ func classify(stderr string, exitCode int) BlockerKind {
 		return BlockerPermission
 	case strings.Contains(lower, "quota") || strings.Contains(lower, "rate limit"):
 		return BlockerQuota
+	case strings.Contains(lower, "already exists") || strings.Contains(lower, "alreadyexists") || strings.Contains(lower, "already_exists") || strings.Contains(lower, "already in use"):
+		return BlockerAlreadyExists
 	case strings.Contains(lower, "was not found") || strings.Contains(lower, "not found") || strings.Contains(lower, "404"):
 		return BlockerNotFound
 	case strings.Contains(lower, "invalid") || strings.Contains(lower, "must match") || exitCode == 2:

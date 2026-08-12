@@ -119,7 +119,7 @@ func TestAuthSetup_Discover_ProjectAndAPIs(t *testing.T) {
 		"auth list --filter=status:ACTIVE --format=json": {
 			stdout: `[{"account":"dev@example.com","status":"ACTIVE"}]`, code: 0,
 		},
-		"projects list --format=json": {
+		"projects list --format=json --limit 100": {
 			stdout: `[{"projectId":"demo-proj","name":"Demo"}]`, code: 0,
 		},
 		"services list --enabled --project demo-proj --format=json": {
@@ -188,7 +188,7 @@ func TestAuthSetup_NonInteractive_CreateProjectRequiresForce(t *testing.T) {
 		"auth list --filter=status:ACTIVE --format=json": {
 			stdout: `[{"account":"dev@example.com","status":"ACTIVE"}]`, code: 0,
 		},
-		"projects list --format=json": {stdout: `[]`, code: 0},
+		"projects list --format=json --limit 100": {stdout: `[]`, code: 0},
 	}}
 	withSetupGCloud(t, r)
 
@@ -213,7 +213,7 @@ func TestAuthSetup_EnableAPIs_WithForce(t *testing.T) {
 		"auth list --filter=status:ACTIVE --format=json": {
 			stdout: `[{"account":"dev@example.com","status":"ACTIVE"}]`, code: 0,
 		},
-		"projects list --format=json": {
+		"projects list --format=json --limit 100": {
 			stdout: `[{"projectId":"demo-proj"}]`, code: 0,
 		},
 		// first missing check: only gmail
@@ -302,7 +302,7 @@ func TestAuthSetup_CredentialsProjectMismatch(t *testing.T) {
 		"auth list --filter=status:ACTIVE --format=json": {
 			stdout: `[{"account":"dev@example.com","status":"ACTIVE"}]`, code: 0,
 		},
-		"projects list --format=json": {stdout: `[{"projectId":"demo-proj"}]`, code: 0},
+		"projects list --format=json --limit 100": {stdout: `[{"projectId":"demo-proj"}]`, code: 0},
 		"services list --enabled --project demo-proj --format=json": {
 			stdout: `[{"name":"gmail.googleapis.com","state":"ENABLED"}]`, code: 0,
 		},
@@ -359,7 +359,7 @@ func TestAuthSetup_CredentialsInstallIdempotent(t *testing.T) {
 		"auth list --filter=status:ACTIVE --format=json": {
 			stdout: `[{"account":"dev@example.com","status":"ACTIVE"}]`, code: 0,
 		},
-		"projects list --format=json": {stdout: `[{"projectId":"demo-proj"}]`, code: 0},
+		"projects list --format=json --limit 100": {stdout: `[{"projectId":"demo-proj"}]`, code: 0},
 		"services list --enabled --project demo-proj --format=json": {
 			stdout: `[{"name":"gmail.googleapis.com","state":"ENABLED"}]`, code: 0,
 		},
@@ -451,7 +451,7 @@ func TestAuthSetup_ProjectPickerCreate_UsesEnteredIDWithoutChangingGCloudConfig(
 		code           int
 		err            error
 	}{
-		"projects list --format=json":               {stdout: `[]`},
+		"projects list --format=json --limit 100":   {stdout: `[]`},
 		"projects create new-project --format=json": {stdout: `{"projectId":"new-project"}`},
 	}}
 	u, err := ui.New(ui.Options{Color: "never"})
@@ -468,7 +468,7 @@ func TestAuthSetup_ProjectPickerCreate_UsesEnteredIDWithoutChangingGCloudConfig(
 	t.Cleanup(func() { setupPromptLine = origPrompt })
 
 	rt := &setupRuntime{
-		cmd:         &AuthSetupCmd{},
+		cmd:         &AuthSetupCmd{ProjectLimit: 100},
 		flags:       &RootFlags{Force: true},
 		u:           u,
 		gc:          gcloud.New(r),
@@ -571,6 +571,123 @@ func parseSetupServices(t *testing.T, csv string) []googleauth.Service {
 		t.Fatalf("parse services %q: %v", csv, err)
 	}
 	return services
+}
+
+func TestAuthSetup_DiscoverDoesNotClaimSetupComplete(t *testing.T) {
+	report := SetupReport{DiscoveryOnly: true, Stages: []SetupStage{
+		{ID: stageGCloudInstall, Status: stageStatusOK},
+		{ID: stageGCloudAuth, Status: stageStatusOK},
+		{ID: stageProject, Status: stageStatusOK},
+		{ID: stageAPIs, Status: stageStatusMissing},
+	}}
+	if setupComplete(report) {
+		t.Fatal("discovery with missing setup requirements must not be complete")
+	}
+	if !discoveryComplete(report) {
+		t.Fatal("successful discovery inspection should be separately complete")
+	}
+}
+
+func TestAuthSetup_StoredCredentialsAreValidatedBeforeAccount(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg-config"))
+	u, err := ui.New(ui.Options{Color: "never"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name, raw, project, prior string
+		force                     bool
+		want                      string
+	}{
+		{"malformed", `{not-json`, "demo", "demo", false, stageStatusFailed},
+		{"mismatch", `{"client_id":"id","client_secret":"secret","project_id":"other"}`, "demo", "demo", false, stageStatusBlocked},
+		{"unassociated missing project", `{"client_id":"id","client_secret":"secret"}`, "demo", "", false, stageStatusBlocked},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path, _ := config.ClientCredentialsPathFor("default")
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte(tc.raw), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			rt := &setupRuntime{cmd: &AuthSetupCmd{}, flags: &RootFlags{NoInput: true, Force: tc.force}, u: u, client: "default", priorProjectID: tc.prior, force: tc.force, report: SetupReport{ProjectID: tc.project}}
+			if ok := rt.appendCredentialsExisting(context.Background(), tc.project); ok {
+				t.Fatal("invalid stored credentials accepted")
+			}
+			if got := rt.report.Stages[0].Status; got != tc.want {
+				t.Fatalf("status=%s want=%s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestAuthSetup_ExistingCredentialMakesDesktopStageNonBlocking(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg-config"))
+	if err := config.WriteClientCredentialsFor("default", config.ClientCredentials{ClientID: "id", ClientSecret: "secret", ProjectID: "demo"}); err != nil {
+		t.Fatal(err)
+	}
+	u, _ := ui.New(ui.Options{Color: "never"})
+	rt := &setupRuntime{cmd: &AuthSetupCmd{}, flags: &RootFlags{NoInput: true}, u: u, client: "default", report: SetupReport{ProjectID: "demo"}}
+	_, _ = rt.runManualStages(context.Background())
+	for _, st := range rt.report.Stages {
+		if st.ID == stageDesktopClient && st.Status != stageStatusOK {
+			t.Fatalf("desktop stage=%#v", st)
+		}
+	}
+}
+
+func TestAuthSetup_APIsBlockDownstreamStages(t *testing.T) {
+	rt := &setupRuntime{cmd: &AuthSetupCmd{}, u: mustSetupUI(t), report: SetupReport{ProjectID: "demo"}, usageIDs: []string{"gmail.googleapis.com"}, gc: gcloud.New(&setupFakeRunner{byArgs: map[string]struct {
+		stdout, stderr string
+		code           int
+		err            error
+	}{
+		"services list --enabled --project demo --format=json": {stdout: `[]`},
+	}})}
+	stop, _ := rt.runAPIs(context.Background())
+	if !stop || len(rt.report.Stages) != 1 || rt.report.Stages[0].ID != stageAPIs {
+		t.Fatalf("stop=%t stages=%#v", stop, rt.report.Stages)
+	}
+}
+
+func mustSetupUI(t *testing.T) *ui.UI {
+	t.Helper()
+	u, err := ui.New(ui.Options{Color: "never"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return u
+}
+
+func TestAuthSetup_CreateAlreadyExistsSelectsDescribedProject(t *testing.T) {
+	r := &setupFakeRunner{byArgs: map[string]struct {
+		stdout, stderr string
+		code           int
+		err            error
+	}{
+		"projects create demo --format=json":   {stderr: "ALREADY_EXISTS", code: 1},
+		"projects describe demo --format=json": {stdout: `{"projectId":"demo"}`},
+	}}
+	rt := &setupRuntime{cmd: &AuthSetupCmd{Project: "demo"}, flags: &RootFlags{Force: true}, u: mustSetupUI(t), gc: gcloud.New(r), force: true}
+	got, created, err := rt.createProject(context.Background())
+	if err != nil || !created || got != "demo" {
+		t.Fatalf("id=%q created=%t err=%v", got, created, err)
+	}
+}
+
+func TestGCloudFailureClassification(t *testing.T) {
+	for _, kind := range []gcloud.BlockerKind{gcloud.BlockerPermission, gcloud.BlockerQuota, gcloud.BlockerInvalidInput, gcloud.BlockerUnknown} {
+		if status, resumable := gcloudFailureStage(kind); status != stageStatusFailed || resumable {
+			t.Fatalf("kind %s: %s resumable=%t", kind, status, resumable)
+		}
+	}
 }
 
 func TestSetupComplete_RequiresAcksAndCreds(t *testing.T) {

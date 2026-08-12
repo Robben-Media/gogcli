@@ -113,14 +113,14 @@ func TestListProjects_Parses(t *testing.T) {
 		code           int
 		err            error
 	}{
-		"projects list --format=json": {
+		"projects list --format=json --limit 100": {
 			stdout: `[{"projectId":"p1","name":"One"},{"projectId":"p2","name":"Two"}]`,
 			code:   0,
 		},
 	}}
 	c := New(r)
 
-	projects, _, err := c.ListProjects(context.Background())
+	projects, _, err := c.ListProjects(context.Background(), 100)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -275,9 +275,56 @@ func TestClassify_Permission(t *testing.T) {
 	}
 }
 
+func TestClassify_AlreadyInUse(t *testing.T) {
+	if got := classify("project ID demo is already in use", 1); got != BlockerAlreadyExists {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestSanitize_RedactsSecrets(t *testing.T) {
 	if got := sanitize("client_secret=abc access denied"); got != "[redacted gcloud error]" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+type interactiveFakeRunner struct {
+	fakeRunner
+	interactiveCalls [][]string
+}
+
+func (f *interactiveFakeRunner) RunInteractive(ctx context.Context, name string, args ...string) (int, error) {
+	_ = ctx
+
+	f.interactiveCalls = append(f.interactiveCalls, append([]string{name}, args...))
+
+	return 0, nil
+}
+
+func TestLoginUsesInteractiveRunner(t *testing.T) {
+	r := &interactiveFakeRunner{}
+	if got := New(r).Login(context.Background()); got.ExitCode != 0 {
+		t.Fatalf("login=%#v", got)
+	}
+
+	if len(r.interactiveCalls) != 1 || len(r.calls) != 0 {
+		t.Fatalf("interactive=%v captured=%v", r.interactiveCalls, r.calls)
+	}
+}
+
+func TestListProjectsUsesBoundedLimit(t *testing.T) {
+	r := &fakeRunner{responses: map[string]struct {
+		stdout, stderr string
+		code           int
+		err            error
+	}{
+		"projects list --format=json --limit 2": {stdout: `[]`},
+	}}
+	if _, _, err := New(r).ListProjects(context.Background(), 2); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(r.calls) != 1 || !strings.Contains(strings.Join(r.calls[0], " "), "--limit 2") {
+		t.Fatalf("calls=%v", r.calls)
 	}
 }
 
@@ -287,7 +334,7 @@ func TestNeverUsesConfigSet(t *testing.T) {
 		code           int
 		err            error
 	}{
-		"projects list --format=json":                       {stdout: "[]", code: 0},
+		"projects list --format=json --limit 100":           {stdout: "[]", code: 0},
 		"auth list --filter=status:ACTIVE --format=json":    {stdout: "[]", code: 0},
 		"config get-value project --format=json":            {stdout: "null", code: 0},
 		"services list --enabled --project p --format=json": {stdout: "[]", code: 0},
@@ -300,7 +347,7 @@ func TestNeverUsesConfigSet(t *testing.T) {
 	ctx := context.Background()
 	_, _ = c.Installed(ctx)
 	_, _, _ = c.ActiveAccount(ctx)
-	_, _, _ = c.ListProjects(ctx)
+	_, _, _ = c.ListProjects(ctx, 100)
 	_, _, _ = c.ActiveProjectID(ctx)
 	_, _, _ = c.CreateProject(ctx, "p", "", "")
 	_, _, _ = c.ListEnabledServices(ctx, "p")

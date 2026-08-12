@@ -189,7 +189,10 @@ type AuthorizeAccountOptions struct {
 	ReplaceScopes bool
 	Readonly      bool
 	DriveScope    string
-	GmailScope    string
+	// SuppressClientMapping preserves an existing account/domain client mapping.
+	// Setup uses this when no explicit --client was supplied.
+	SuppressClientMapping bool
+	GmailScope            string
 }
 
 // AuthorizeAccountResult is returned after a successful token store.
@@ -306,7 +309,7 @@ func AuthorizeAndStoreAccount(ctx context.Context, opts AuthorizeAccountOptions)
 	}); err != nil {
 		return AuthorizeAccountResult{}, err
 	}
-	if strings.TrimSpace(override) != "" {
+	if strings.TrimSpace(override) != "" && !opts.SuppressClientMapping {
 		cfg, cfgErr := config.ReadConfig()
 		if cfgErr != nil {
 			return AuthorizeAccountResult{}, cfgErr
