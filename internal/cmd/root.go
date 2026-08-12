@@ -23,11 +23,11 @@ import (
 )
 
 const (
-	colorAuto  = "auto"
-	colorNever = "never"
-	boolTrue   = "true"
-	boolFalse  = "false"
-	always     = "always"
+	colorAuto   = "auto"
+	colorNever  = "never"
+	colorAlways = "always"
+	boolTrue    = "true"
+	boolFalse   = "false"
 )
 
 var rootHelpDescription = helpDescription
@@ -146,7 +146,7 @@ func Execute(args []string) (err error) {
 
 	ctx := context.Background()
 	ctx = googleapi.WithReadOnly(ctx, cli.ReadOnly)
-	if grants, preflightErr := preflightDeclaredWrite(kctx, &cli.RootFlags); preflightErr != nil && !isAuthAddLocalReadonly(args) && cli.Auth.Add.DriveScope != strFile {
+	if grants, preflightErr := preflightDeclaredWrite(kctx, &cli.RootFlags); preflightErr != nil && cli.Auth.Add.DriveScope != strFile {
 		return reportPreUIError(preflightErr)
 	} else if len(grants) != 0 {
 		ctx = googleapi.WithReadOnlyWriteGrants(ctx, grants...)
@@ -313,27 +313,6 @@ func reportPreUIError(err error) error {
 	}
 	_, _ = fmt.Fprintln(os.Stderr, errfmt.Format(err))
 	return err
-}
-
-// isAuthAddLocalReadonly preserves the established `auth add ... --readonly`
-// scope-selection syntax. A global flag appears before the command path.
-func isAuthAddLocalReadonly(args []string) bool {
-	addAt := -1
-	for i, arg := range args {
-		if arg == "add" && i > 0 && args[i-1] == "auth" {
-			addAt = i
-			break
-		}
-	}
-	if addAt < 0 {
-		return false
-	}
-	for _, arg := range args[addAt+1:] {
-		if arg == "--readonly" || strings.HasPrefix(arg, "--readonly=") {
-			return true
-		}
-	}
-	return false
 }
 
 func hasVersionFlag(args []string) bool {

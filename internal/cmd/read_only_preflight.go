@@ -42,7 +42,13 @@ var mutationWords = map[string]struct{}{
 }
 
 var explicitMutations = map[string]struct{}{
-	"auth:add": {}, "auth:credentials.set": {}, "auth:keyring.set": {}, "auth:service.account.set": {}, "auth:service.account.unset": {}, "auth:keep": {}, "auth:tokens.import": {}, "auth:tokens.delete": {}, "auth:remove": {}, "auth:alias": {}, "config:set": {}, "config:unset": {}, "policy:create": {}, "policy:delete": {}, "policy:exceptions.create": {}, "policy:exceptions.revoke": {}, "gmail:settings.autoforward": {}, "gmail:settings.vacation": {}, "gmail:settings.imap": {}, "gmail:settings.pop": {}, "gmail:settings.language": {}, "calendar:propose.time": {},
+	"auth:add": {}, "auth:credentials.set": {}, "auth:keyring.set": {}, "auth:service.account.set": {}, "auth:service.account.unset": {}, "auth:keep": {}, "auth:tokens.import": {}, "auth:tokens.delete": {}, "auth:remove": {}, "auth:alias": {}, "config:set": {}, "config:unset": {}, "policy:create": {}, "policy:delete": {}, "policy:exceptions.create": {}, "policy:exceptions.revoke": {},
+	"gmail:sendas.verify": {}, "gmail:cse.keypairs.enable": {}, "gmail:cse.keypairs.disable": {}, "gmail:cse.keypairs.obliterate": {}, "gmail:settings.autoforward": {}, "gmail:settings.vacation": {}, "gmail:settings.imap": {}, "gmail:settings.pop": {}, "gmail:settings.language": {},
+	"drive:unshare": {}, "drive:comments.reply": {}, "drive:file-ops.empty-trash": {}, "drive:shared-drive.hide": {}, "drive:shared-drive.unhide": {},
+	"calendar:propose.time": {}, "calendar:focus-time": {}, "calendar:out-of-office": {}, "calendar:working-location": {},
+	"sheets:copy-to": {}, "tasks:done": {}, "tasks:undo": {},
+	"classroom:courses.archive": {}, "classroom:courses.unarchive": {}, "classroom:courses.join": {}, "classroom:courses.leave": {}, "classroom:coursework.assignees": {}, "classroom:announcements.assignees": {}, "classroom:submissions.turn-in": {}, "classroom:submissions.reclaim": {}, "classroom:submissions.return": {}, "classroom:submissions.grade": {}, "classroom:invitations.accept": {},
+	"businessprofile:account-invitations.accept": {}, "businessprofile:account-invitations.decline": {}, "businessprofile:locations-transfer": {},
 }
 
 func declaredOperation(kctx *kong.Context) (operationSpec, bool) {
@@ -64,7 +70,47 @@ func declaredOperation(kctx *kong.Context) (operationSpec, bool) {
 		}
 	}
 
-	return operationSpec{Service: service, Operation: operation, Summary: fmt.Sprintf("%s %s", service, strings.ReplaceAll(operation, ".", " "))}, true
+	target := declaredTarget(kctx, operation)
+
+	return operationSpec{Service: service, Operation: operation, Target: target, Summary: operationSummary(service, operation, target)}, true
+}
+
+func declaredTarget(kctx *kong.Context, operation string) string {
+	if kctx == nil || len(kctx.Args) == 0 || !targetableOperation(operation) {
+		return ""
+	}
+	for i, arg := range kctx.Args {
+		if arg == "--" {
+			break
+		}
+		if strings.HasPrefix(arg, "-") {
+			continue
+		}
+		if i > 0 && kctx.Args[i-1] == "--account" {
+			continue
+		}
+		if strings.Contains(arg, "@") || strings.Contains(arg, "/") || strings.Contains(arg, ":") || strings.HasPrefix(arg, "https://") {
+			return arg
+		}
+	}
+	return ""
+}
+
+func targetableOperation(operation string) bool {
+	for _, word := range []string{"delete", "update", "patch", "modify", "move", "rename", "trash", "untrash", "hide", "unhide", "enable", "disable", "obliterate", "done", "undo", "turn-in", "reclaim", "return", "grade", "accept", "decline"} {
+		if strings.Contains(operation, word) {
+			return true
+		}
+	}
+	return false
+}
+
+func operationSummary(service, operation, target string) string {
+	summary := fmt.Sprintf("%s %s", service, strings.ReplaceAll(operation, ".", " "))
+	if target != "" {
+		return summary + " target " + target
+	}
+	return summary
 }
 
 // preflightDeclaredWrite runs after policy enforcement. It accepts persisted
@@ -143,7 +189,7 @@ func confirmReadOnlyWrite(ctx context.Context, flags *RootFlags, spec operationS
 	switch strings.ToLower(strings.TrimSpace(line)) {
 	case "2", "once", "y", "yes":
 		return googleapi.WriteGrant{Service: spec.Service, Operation: spec.Operation, Target: spec.Target}, nil
-	case "3", always:
+	case "3", "always":
 		return persistReadOnlyWrite(ctx, flags, spec)
 	default:
 		return googleapi.WriteGrant{}, &ExitError{Code: 2, Err: errors.New("readonly write denied")}

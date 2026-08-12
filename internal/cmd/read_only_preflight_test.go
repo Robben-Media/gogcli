@@ -13,6 +13,11 @@ func TestDeclaredOperationCoversRepresentativeMutations(t *testing.T) {
 		{"calendar", "delete", "primary", "event-id"},
 		{"sheets", "clear", "spreadsheet-id", "Sheet1!A1"},
 		{"config", "set", "default_timezone", "UTC"},
+		{"tasks", "done", "list-id", "task-id"},
+		{"classroom", "submissions", "turn-in", "course-id", "work-id", "submission-id"},
+		{"business-profile", "account-invitations", "accept", "accounts/1/invitations/2"},
+		{"gmail", "settings", "cse", "keypairs", "enable", "key-id"},
+		{"drive", "shared-drive", "hide", "drive-id"},
 	} {
 		parser, _, err := newParser("test")
 		if err != nil {

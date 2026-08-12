@@ -256,19 +256,21 @@ func TestAuthAddCmd_ReadonlyScopes(t *testing.T) {
 		return "user@example.com", nil
 	}
 
-	_ = captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{
-				"--json",
-				"auth",
-				"add",
-				"user@example.com",
-				"--services",
-				"gmail,drive,calendar",
-				"--readonly",
-			}); err != nil {
-				t.Fatalf("Execute: %v", err)
-			}
+	withStdin(t, "2\n", func() {
+		_ = captureStdout(t, func() {
+			_ = captureStderr(t, func() {
+				if err := Execute([]string{
+					"--json",
+					"auth",
+					"add",
+					"user@example.com",
+					"--services",
+					"gmail,drive,calendar",
+					"--readonly",
+				}); err != nil {
+					t.Fatalf("Execute: %v", err)
+				}
+			})
 		})
 	})
 
@@ -517,19 +519,21 @@ func TestAuthAddCmd_SheetsReadonlyIncludesDriveReadonly(t *testing.T) {
 		return "user@example.com", nil
 	}
 
-	_ = captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{
-				"--json",
-				"auth",
-				"add",
-				"user@example.com",
-				"--services",
-				"sheets",
-				"--readonly",
-			}); err != nil {
-				t.Fatalf("Execute: %v", err)
-			}
+	withStdin(t, "2\n", func() {
+		_ = captureStdout(t, func() {
+			_ = captureStderr(t, func() {
+				if err := Execute([]string{
+					"--json",
+					"auth",
+					"add",
+					"user@example.com",
+					"--services",
+					"sheets",
+					"--readonly",
+				}); err != nil {
+					t.Fatalf("Execute: %v", err)
+				}
+			})
 		})
 	})
 

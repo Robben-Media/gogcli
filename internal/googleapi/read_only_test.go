@@ -59,6 +59,8 @@ func TestReadOnlyPOSTRegistryRejectsNearMatchesAndOverrides(t *testing.T) {
 		"https://www.googleapis.com/calendar/v3/freeBusy",
 		"https://searchconsole.googleapis.com/webmasters/v3/sites/example/searchAnalytics/query",
 		"https://sheets.googleapis.com/v4/spreadsheets/id/values:batchGetByDataFilter",
+		"https://analyticsadmin.googleapis.com/v1/properties/123:checkCompatibility",
+		"https://analyticsdata.googleapis.com/v1alpha/properties/123/audiences/456:query",
 	} {
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, raw, nil)
 		if err != nil {
@@ -141,6 +143,7 @@ func TestReadOnlyTargetGrantRejectsDifferentTarget(t *testing.T) {
 		allow bool
 	}{
 		{"https://www.googleapis.com/drive/v3/files/file-a", true},
+		{"https://www.googleapis.com/drive/v3/files/file-ab", false},
 		{"https://www.googleapis.com/drive/v3/files/file-b", false},
 		{"https://example.test/drive/v3/files/file-a", false},
 	} {

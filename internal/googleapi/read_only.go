@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -109,7 +110,7 @@ func ReadOnlyWriteGrantsAllow(grants []WriteGrant, req *http.Request) bool {
 			continue
 		}
 
-		if grant.Target != "" && !strings.Contains(req.URL.Path, grant.Target) {
+		if grant.Target != "" && !requestHasExactTarget(req, grant.Target) {
 			continue
 		}
 
@@ -118,6 +119,25 @@ func ReadOnlyWriteGrantsAllow(grants []WriteGrant, req *http.Request) bool {
 		}
 
 		return true
+	}
+
+	return false
+}
+
+func requestHasExactTarget(req *http.Request, target string) bool {
+	for _, segment := range strings.Split(req.URL.EscapedPath(), "/") {
+		decoded, err := url.PathUnescape(segment)
+		if err == nil && decoded == target {
+			return true
+		}
+	}
+
+	for _, values := range req.URL.Query() {
+		for _, value := range values {
+			if value == target {
+				return true
+			}
+		}
 	}
 
 	return false
@@ -133,19 +153,21 @@ func operationMatchesRequest(operation string, req *http.Request) bool {
 		last = last[index+1:]
 	}
 
-	if last == "send" {
+	switch last {
+	case "send":
 		return req.Method == http.MethodPost && strings.HasSuffix(req.URL.Path, "/send")
-	}
-
-	if last == "delete" || last == "remove" || last == "unshare" {
+	case "delete", "remove", "unshare", "leave":
 		return req.Method == http.MethodDelete
-	}
-
-	if last == "update" || last == "patch" || last == "modify" || last == "rename" || last == "respond" || last == "write" || last == "format" || last == "clear" {
+	case "enable", "disable", "obliterate", "hide", "unhide", "turn-in", "reclaim", "return", "accept", "decline":
+		suffixes := map[string]string{"turn-in": "turnIn", "enable": "enable", "disable": "disable", "obliterate": "obliterate", "hide": "hide", "unhide": "unhide", "reclaim": "reclaim", "return": "return", "accept": "accept", "decline": "decline"}
+		return req.Method == http.MethodPost && strings.HasSuffix(req.URL.Path, ":"+suffixes[last])
+	case "done", "undo", "grade", "update", "patch", "modify", "rename", "respond", "write", "format", "clear", "archive", "unarchive":
 		return req.Method == http.MethodPatch || req.Method == http.MethodPut || req.Method == http.MethodPost
+	case "create", "add", "append", "insert", "copy", "move", "share", "trash", "untrash", "import", "upload", "mkdir", "watch", "stop", "start", "replace", "set", "revoke", "publish":
+		return req.Method == http.MethodPost || req.Method == http.MethodPut || req.Method == http.MethodPatch
+	default:
+		return false
 	}
-
-	return true
 }
 
 func sharedHostPathMatchesService(service, path string) bool {
@@ -233,7 +255,9 @@ func readOnlyPOSTRequest(req *http.Request) bool {
 	case "driveactivity.googleapis.com", "driveactivity.mtls.googleapis.com":
 		return strings.HasSuffix(path, "/v2/activity:query")
 	case "analyticsdata.googleapis.com", "analyticsdata.mtls.googleapis.com":
-		return strings.HasSuffix(path, ":runReport") || strings.HasSuffix(path, ":batchRunReports") || strings.HasSuffix(path, ":runPivotReport") || strings.HasSuffix(path, ":batchRunPivotReports") || strings.HasSuffix(path, ":runRealtimeReport")
+		return strings.HasSuffix(path, ":runReport") || strings.HasSuffix(path, ":batchRunReports") || strings.HasSuffix(path, ":runPivotReport") || strings.HasSuffix(path, ":batchRunPivotReports") || strings.HasSuffix(path, ":runRealtimeReport") || strings.HasSuffix(path, ":query")
+	case "analyticsadmin.googleapis.com", "analyticsadmin.mtls.googleapis.com":
+		return strings.HasSuffix(path, ":checkCompatibility")
 	case "bigquery.googleapis.com", "bigquery.mtls.googleapis.com":
 		return strings.HasPrefix(path, "/bigquery/v2/projects/") && strings.HasSuffix(path, "/queries")
 	case "mybusinessbusinessinformation.googleapis.com", "mybusinessbusinessinformation.mtls.googleapis.com":

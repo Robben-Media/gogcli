@@ -109,7 +109,7 @@ func helpProfile(stdout io.Writer, mode string) termenv.Profile {
 	switch mode {
 	case colorNever:
 		return termenv.Ascii
-	case always:
+	case colorAlways:
 		return termenv.TrueColor
 	default:
 		o := termenv.NewOutput(stdout, termenv.WithProfile(termenv.EnvColorProfile()))
