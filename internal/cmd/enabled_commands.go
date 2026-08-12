@@ -31,6 +31,9 @@ func enforceEnabledCommands(kctx *kong.Context, enabledTop string, enabledPaths 
 	if pathConfigured && pathAllow[strings.Join(path, " ")] {
 		return nil
 	}
+	if isSchemaCommand(kctx.Command()) {
+		return nil
+	}
 
 	display := strings.Join(path, " ")
 	if pathConfigured && !topConfigured {

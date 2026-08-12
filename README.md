@@ -76,6 +76,8 @@ Help:
 - `gog --help` shows top-level command groups.
 - Drill down with `gog <group> --help` (and deeper subcommands).
 - For the full expanded command list: `GOG_HELP=full gog --help`.
+- For machine-readable discovery: `gog schema` emits one deterministic, versioned JSON document describing visible commands, aliases, arguments, flags, global flags, exit-code classes, and effective automation/policy state.
+- `gog schema` is read-only and remains available under `--enable-commands` restrictions; it does not authenticate, call Google APIs, prompt, check for updates, write configuration, or expose stored credentials and secret environment values.
 - Make shortcut: `make gog -- --help` (or `make gog -- gmail --help`).
 - `make gog-help` shows CLI help (note: `make gog --help` is Make’s own help; use `--`).
 
