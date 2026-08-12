@@ -43,8 +43,10 @@ type decodedSchemaAutomation struct {
 }
 
 type decodedEnabledState struct {
-	Restricted bool     `json:"restricted"`
-	Allowed    []string `json:"allowed"`
+	Input        string   `json:"input"`
+	Restricted   bool     `json:"restricted"`
+	Allowed      []string `json:"allowed"`
+	Unrecognized []string `json:"unrecognized"`
 }
 
 type decodedPolicyState struct {
@@ -193,10 +195,12 @@ func TestExecuteSchemaIncludesKongCommandArgumentAndFlagMetadata(t *testing.T) {
 	if force.Default != "false" {
 		t.Fatalf("global force default = %q, want false", force.Default)
 	}
-	calendarCreate := findSchemaCommand(t, document.Commands, "calendar create")
-	sendUpdates := findSchemaValue(t, calendarCreate.Flags, "send-updates")
-	if sendUpdates.Default != "all" {
-		t.Fatalf("calendar create send-updates default = %q, want all", sendUpdates.Default)
+	for _, path := range []string{"calendar create", "calendar events-move", "calendar events-quick-add"} {
+		command := findSchemaCommand(t, document.Commands, path)
+		sendUpdates := findSchemaValue(t, command.Flags, "send-updates")
+		if sendUpdates.Default != scopeAll {
+			t.Fatalf("%s send-updates default = %q, want %q", path, sendUpdates.Default, scopeAll)
+		}
 	}
 
 	seen := make(map[string]bool, len(document.Commands))
@@ -226,11 +230,33 @@ func TestExecuteSchemaIncludesKongCommandArgumentAndFlagMetadata(t *testing.T) {
 			t.Fatalf("visible Kong command %q missing from schema", path)
 		}
 	}
-	if _, err := parser.Parse([]string{"calendar", "create", "primary"}); err != nil {
-		t.Fatalf("parse calendar create defaults: %v", err)
+	if _, parseErr := parser.Parse([]string{"calendar", "create", "primary"}); parseErr != nil {
+		t.Fatalf("parse calendar create defaults: %v", parseErr)
 	}
 	if cli.Calendar.Create.SendUpdates != scopeAll {
 		t.Fatalf("calendar create runtime send-updates default = %q, want %q", cli.Calendar.Create.SendUpdates, scopeAll)
+	}
+
+	parser, cli, err = newParser(baseDescription())
+	if err != nil {
+		t.Fatalf("new parser: %v", err)
+	}
+	if _, parseErr := parser.Parse([]string{"calendar", "events-quick-add", "primary", "meeting"}); parseErr != nil {
+		t.Fatalf("parse calendar events-quick-add defaults: %v", parseErr)
+	}
+	if cli.Calendar.EventsQuickAdd.SendUpdate != scopeAll {
+		t.Fatalf("calendar events-quick-add runtime send-updates default = %q, want %q", cli.Calendar.EventsQuickAdd.SendUpdate, scopeAll)
+	}
+
+	parser, cli, err = newParser(baseDescription())
+	if err != nil {
+		t.Fatalf("new parser: %v", err)
+	}
+	if _, parseErr := parser.Parse([]string{"calendar", "events-move", "primary", "event", "destination"}); parseErr != nil {
+		t.Fatalf("parse calendar events-move defaults: %v", parseErr)
+	}
+	if cli.Calendar.EventsMove.SendUpdate != scopeAll {
+		t.Fatalf("calendar events-move runtime send-updates default = %q, want %q", cli.Calendar.EventsMove.SendUpdate, scopeAll)
 	}
 }
 
@@ -324,6 +350,23 @@ func TestExecuteSchemaReportsExitCodesAndEffectiveAutomationState(t *testing.T) 
 	}
 }
 
+func TestExecuteSchemaReportsCanonicalAndUnrecognizedEnabledCommands(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	canonical, _ := executeSchema(t, "--enable-commands", "gmail", "schema")
+	if strings.Join(canonical.Automation.EnabledCommands.Allowed, ",") != "gmail" || len(canonical.Automation.EnabledCommands.Unrecognized) != 0 {
+		t.Fatalf("canonical enabled-command state = %+v", canonical.Automation.EnabledCommands)
+	}
+
+	alias, _ := executeSchema(t, "--enable-commands", "mail", "schema")
+	if len(alias.Automation.EnabledCommands.Allowed) != 0 || strings.Join(alias.Automation.EnabledCommands.Unrecognized, ",") != "mail" {
+		t.Fatalf("alias enabled-command state = %+v", alias.Automation.EnabledCommands)
+	}
+	if alias.Automation.EnabledCommands.Input != "mail" || !alias.Automation.EnabledCommands.Restricted {
+		t.Fatalf("alias enabled-command input/restriction = %+v", alias.Automation.EnabledCommands)
+	}
+}
+
 func TestExecuteSchemaReportsPolicyEffectsOrUnresolvedContext(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("GOG_SKIP_UPDATE_CHECK", "1")
@@ -396,12 +439,29 @@ func TestExecuteSchemaIsDeterministicAndExcludesSecretValues(t *testing.T) {
 	t.Setenv("GITHUB_TOKEN", "schema-secret-token-152")
 	t.Setenv("GH_TOKEN", "schema-secret-fallback-token-152")
 
+	configMarkers := []string{
+		"schema-config-backend-marker-152",
+		"schema-config-timezone-marker-152",
+		"schema-config-alias-marker-152",
+		"schema-config-account-client-marker-152",
+		"schema-config-domain-marker-152",
+	}
+	if err := config.WriteConfig(config.File{
+		KeyringBackend:  configMarkers[0],
+		DefaultTimezone: configMarkers[1],
+		AccountAliases:  map[string]string{configMarkers[2]: "marker@example.com"},
+		AccountClients:  map[string]string{"marker@example.com": configMarkers[3]},
+		ClientDomains:   map[string]string{configMarkers[4]: "example.com"},
+	}); err != nil {
+		t.Fatalf("write marker config: %v", err)
+	}
+
 	_, first := executeSchema(t, "schema")
 	_, second := executeSchema(t, "schema")
 	if first != second {
 		t.Fatalf("schema output changed between identical invocations")
 	}
-	for _, secret := range []string{"schema-secret-password-152", "schema-secret-token-152", "schema-secret-fallback-token-152"} {
+	for _, secret := range append([]string{"schema-secret-password-152", "schema-secret-token-152", "schema-secret-fallback-token-152"}, configMarkers...) {
 		if strings.Contains(first, secret) {
 			t.Fatalf("schema output contains secret value %q", secret)
 		}
@@ -412,8 +472,16 @@ func TestSchemaV1ContractFingerprint(t *testing.T) {
 	normalizeSchemaEnvironment(t)
 
 	_, output := executeSchema(t, "schema")
-	got := fmt.Sprintf("%x", sha256.Sum256([]byte(output)))
-	const want = "35bdf825496c042720ebdf294b49afe0a134d396ea61edf8f623606de4d86afb"
+	var document any
+	if err := json.Unmarshal([]byte(output), &document); err != nil {
+		t.Fatalf("decode complete schema contract: %v", err)
+	}
+	canonical, err := json.Marshal(document)
+	if err != nil {
+		t.Fatalf("marshal canonical schema: %v", err)
+	}
+	got := fmt.Sprintf("%x", sha256.Sum256(canonical))
+	const want = "b55b0f31c26dc4ac3983e1b9e53f0bd52a62c3b7a014c83b13e43516b3ac6930"
 	if got != want {
 		t.Fatalf("schema v1 contract fingerprint = %s, want %s; review the contract change and schema version", got, want)
 	}

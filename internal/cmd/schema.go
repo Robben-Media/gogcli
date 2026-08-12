@@ -44,9 +44,10 @@ type schemaAutomation struct {
 }
 
 type schemaEnabledState struct {
-	Input      string   `json:"input"`
-	Restricted bool     `json:"restricted"`
-	Allowed    []string `json:"allowed"`
+	Input        string   `json:"input"`
+	Restricted   bool     `json:"restricted"`
+	Allowed      []string `json:"allowed"`
+	Unrecognized []string `json:"unrecognized"`
 }
 
 type schemaPolicyState struct {
@@ -98,7 +99,7 @@ func buildSchemaDocument(root *kong.Node, flags *RootFlags) schemaDocument {
 			{Code: 1, Class: "runtime", Description: "Command failed during execution"},
 			{Code: 2, Class: "usage", Description: "Arguments or flags could not be parsed or validated"},
 		},
-		Automation: buildSchemaAutomation(flags),
+		Automation: buildSchemaAutomation(root, flags),
 	}
 	appendSchemaCommands(root, &document.Commands)
 	sort.Slice(document.Commands, func(i, j int) bool {
@@ -107,7 +108,7 @@ func buildSchemaDocument(root *kong.Node, flags *RootFlags) schemaDocument {
 	return document
 }
 
-func buildSchemaAutomation(flags *RootFlags) schemaAutomation {
+func buildSchemaAutomation(root *kong.Node, flags *RootFlags) schemaAutomation {
 	if flags == nil {
 		flags = &RootFlags{}
 	}
@@ -128,7 +129,7 @@ func buildSchemaAutomation(flags *RootFlags) schemaAutomation {
 		ClientInput:     client,
 		Account:         resolvedAccount,
 		Client:          resolvedClient,
-		EnabledCommands: buildSchemaEnabledState(flags.EnableCommands),
+		EnabledCommands: buildSchemaEnabledState(flags.EnableCommands, visibleTopLevelCommands(root)),
 		Policy:          buildSchemaPolicyState(cfg.Policies, resolvedAccount, resolvedClient, readErr, resolutionErr),
 	}
 }
@@ -155,18 +156,34 @@ func resolveSchemaSelection(cfg config.File, accountInput string, clientInput st
 	return account, client, ""
 }
 
-func buildSchemaEnabledState(input string) schemaEnabledState {
+func buildSchemaEnabledState(input string, known map[string]bool) schemaEnabledState {
 	input = strings.TrimSpace(input)
 	allowedSet := parseEnabledCommands(input)
 	if input == "" || len(allowedSet) == 0 || allowedSet["*"] || allowedSet["all"] {
-		return schemaEnabledState{Input: input, Allowed: []string{}}
+		return schemaEnabledState{Input: input, Allowed: []string{}, Unrecognized: []string{}}
 	}
 	allowed := make([]string, 0, len(allowedSet))
+	unrecognized := make([]string, 0, len(allowedSet))
 	for command := range allowedSet {
-		allowed = append(allowed, command)
+		if known[command] {
+			allowed = append(allowed, command)
+		} else {
+			unrecognized = append(unrecognized, command)
+		}
 	}
 	sort.Strings(allowed)
-	return schemaEnabledState{Input: input, Restricted: true, Allowed: allowed}
+	sort.Strings(unrecognized)
+	return schemaEnabledState{Input: input, Restricted: true, Allowed: allowed, Unrecognized: unrecognized}
+}
+
+func visibleTopLevelCommands(root *kong.Node) map[string]bool {
+	commands := map[string]bool{}
+	for _, child := range root.Children {
+		if child.Type == kong.CommandNode && !child.Hidden {
+			commands[strings.ToLower(child.Name)] = true
+		}
+	}
+	return commands
 }
 
 func buildSchemaPolicyState(policies []config.Policy, account string, client string, readErr error, resolutionErr string) schemaPolicyState {

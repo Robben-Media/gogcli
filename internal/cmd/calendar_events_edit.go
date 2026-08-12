@@ -268,7 +268,7 @@ func (c *CalendarEventsInstancesCmd) Run(ctx context.Context, flags *RootFlags) 
 type CalendarEventsQuickAddCmd struct {
 	CalendarID string `arg:"" name:"calendarId" help:"Calendar ID (default: primary)"`
 	Text       string `arg:"" name:"text" help:"Event description (e.g., 'Meeting tomorrow at 3pm')"`
-	SendUpdate string `name:"send-updates" help:"Notification mode: all, externalOnly, none (default: all)"`
+	SendUpdate string `name:"send-updates" help:"Notification mode: all, externalOnly, none (default: all)" default:"all"`
 }
 
 func (c *CalendarEventsQuickAddCmd) Run(ctx context.Context, flags *RootFlags) error {
@@ -320,7 +320,7 @@ type CalendarEventsMoveCmd struct {
 	SourceCalendarID      string `arg:"" name:"sourceCalendarId" help:"Source calendar ID (default: primary)"`
 	EventID               string `arg:"" name:"eventId" help:"Event ID"`
 	DestinationCalendarID string `arg:"" name:"destinationCalendarId" help:"Destination calendar ID"`
-	SendUpdate            string `name:"send-updates" help:"Notification mode: all, externalOnly, none (default: all)"`
+	SendUpdate            string `name:"send-updates" help:"Notification mode: all, externalOnly, none (default: all)" default:"all"`
 }
 
 func (c *CalendarEventsMoveCmd) Run(ctx context.Context, flags *RootFlags) error {
