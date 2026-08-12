@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,6 +41,13 @@ func (f *setupFakeRunner) Run(ctx context.Context, name string, args ...string) 
 	if resp, ok := f.byArgs[key]; ok {
 		return resp.stdout, resp.stderr, resp.code, resp.err
 	}
+	// Existing fixtures use the display limit; setup requests one extra item to
+	// determine whether that display is actually truncated.
+	if strings.HasPrefix(key, "projects list --format=json --limit ") {
+		if resp, ok := f.byArgs["projects list --format=json --limit 100"]; ok {
+			return resp.stdout, resp.stderr, resp.code, resp.err
+		}
+	}
 
 	for k, resp := range f.byArgs {
 		if strings.HasPrefix(key, k) {
@@ -47,6 +55,10 @@ func (f *setupFakeRunner) Run(ctx context.Context, name string, args ...string) 
 		}
 	}
 
+	if strings.HasPrefix(key, "projects describe ") {
+		fields := strings.Fields(key)
+		return fmt.Sprintf(`{"projectId":%q}`, fields[2]), "", 0, nil
+	}
 	return "", "unexpected gcloud call: " + key, 1, nil
 }
 
@@ -657,6 +669,68 @@ func TestAuthSetup_APIsBlockDownstreamStages(t *testing.T) {
 	}
 }
 
+func TestAuthSetup_StoppedRunHasFullDeferredInventoryWithoutDownstreamCalls(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg-config"))
+	r := &setupFakeRunner{byArgs: map[string]struct {
+		stdout, stderr string
+		code           int
+		err            error
+	}{
+		"version --format=json":                                {stdout: `{}`},
+		"auth list --filter=status:ACTIVE --format=json":       {stdout: `[{"account":"dev@example.com"}]`},
+		"projects list --format=json --limit 100":              {stdout: `[{"projectId":"demo"}]`},
+		"services list --enabled --project demo --format=json": {stdout: `[]`},
+	}}
+	withSetupGCloud(t, r)
+	var exit error
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			exit = Execute([]string{"--json", "--no-input", "auth", "setup", "--project", "demo", "--services", "gmail"})
+		})
+	})
+	if ExitCode(exit) != 1 {
+		t.Fatalf("exit=%v", exit)
+	}
+	var report SetupReport
+	if err := json.Unmarshal([]byte(out), &report); err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Stages) != len(setupStageOrder) {
+		t.Fatalf("stages=%#v", report.Stages)
+	}
+	for _, stage := range report.Stages[4:] {
+		if stage.Status != stageStatusUnavailable {
+			t.Fatalf("downstream stage=%#v", stage)
+		}
+	}
+	for _, call := range r.calls {
+		if strings.Contains(strings.Join(call, " "), "credentials") {
+			t.Fatalf("downstream credential read: %v", call)
+		}
+	}
+}
+
+func TestAuthSetup_ProjectPickerLabelsCurrentPairedTarget(t *testing.T) {
+	label := projectPickerLabel(gcloud.Project{ProjectID: "paired", Name: "Paired", LifecycleState: "ACTIVE"}, "paired")
+	for _, want := range []string{"paired (Paired)", "[ACTIVE]", "[current paired target]"} {
+		if !strings.Contains(label, want) {
+			t.Fatalf("picker label missing %q: %q", want, label)
+		}
+	}
+}
+
+func TestContinueSetupCmdPreservesRetryInputs(t *testing.T) {
+	cmd := &AuthSetupCmd{CreateProject: true, ProjectName: "Demo", ProjectParent: "folders/42", ServicesCSV: "gmail,drive", EnableAPIs: true, CredentialsPath: "/tmp/client.json", AccountEmail: "person@example.com", ManualOAuth: true, AckBranding: true, AckAudience: true, AckDataAccess: true}
+	got := continueSetupCmd("work", cmd, "demo", true)
+	for _, want := range []string{"--client work", "--force", "--project demo", "--create-project", "--project-name Demo", "--project-parent folders/42", "--services gmail,drive", "--enable-apis", "--credentials /tmp/client.json", "--email person@example.com", "--manual", "--ack-branding", "--ack-audience", "--ack-data-access"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("continuation missing %q: %s", want, got)
+		}
+	}
+}
+
 func mustSetupUI(t *testing.T) *ui.UI {
 	t.Helper()
 	u, err := ui.New(ui.Options{Color: "never"})
@@ -683,10 +757,13 @@ func TestAuthSetup_CreateAlreadyExistsSelectsDescribedProject(t *testing.T) {
 }
 
 func TestGCloudFailureClassification(t *testing.T) {
-	for _, kind := range []gcloud.BlockerKind{gcloud.BlockerPermission, gcloud.BlockerQuota, gcloud.BlockerInvalidInput, gcloud.BlockerUnknown} {
-		if status, resumable := gcloudFailureStage(kind); status != stageStatusFailed || resumable {
+	for _, kind := range []gcloud.BlockerKind{gcloud.BlockerPermission, gcloud.BlockerQuota, gcloud.BlockerUnknown} {
+		if status, resumable := gcloudFailureStage(kind); status != stageStatusBlocked || !resumable {
 			t.Fatalf("kind %s: %s resumable=%t", kind, status, resumable)
 		}
+	}
+	if status, resumable := gcloudFailureStage(gcloud.BlockerInvalidInput); status != stageStatusFailed || resumable {
+		t.Fatalf("invalid input: %s resumable=%t", status, resumable)
 	}
 }
 

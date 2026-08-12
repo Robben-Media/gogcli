@@ -262,7 +262,8 @@ func (c *Client) Login(ctx context.Context) Result {
 	return c.run(ctx, args...)
 }
 
-// ListProjects returns at most limit accessible projects in one list call.
+// ListProjects returns the projects returned by one gcloud list call, capped by limit.
+// Callers that need to detect truncation should request their display limit plus one.
 func (c *Client) ListProjects(ctx context.Context, limit int) ([]Project, Result, error) {
 	if limit <= 0 {
 		return nil, Result{Kind: BlockerInvalidInput}, errProjectListLimit
@@ -444,6 +445,8 @@ func (c *Client) EnableServices(ctx context.Context, projectID string, serviceID
 	}
 
 	wanted := uniqueNonEmpty(serviceIDs)
+
+	stillMissing = make([]string, 0, len(wanted))
 	if len(wanted) == 0 {
 		return nil, nil, Result{}, nil
 	}

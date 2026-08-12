@@ -98,3 +98,15 @@ Notes:
 - Acknowledgments reset if the paired project for the client changes.
 - Exit codes: `0` complete or successful discovery, `1` incomplete/manual/blocked after emitting a report, `2` invalid usage.
 - Direct `gog auth credentials` / `gog auth add` remain supported for advanced use.
+
+### Machine-readable setup report
+
+`--json` emits one `SetupReport` object on stdout; `--plain` emits a stable TSV report on stdout. Progress and human guidance remain on stderr. Both forms emit a report before exit `1`.
+
+Top-level JSON fields are `complete`, `discovery_only`, `discovery_complete`, `projects_truncated`, `client`, `project_id`, `gcloud_account`, `services`, `service_usage_ids`, `missing_apis`, `projects`, `stages`, `next`, and `continue_command` (empty optional fields are omitted). `complete` means the whole setup is complete. `discovery_complete` means all requested discovery inspections succeeded; it does not mean setup is complete. Project discovery uses one list call with `limit + 1`; `projects_truncated` is true only when an extra project was found.
+
+Each `stages` element contains `id`, `status`, `action_kind`, and optional `summary`, `blocker`, `resumable`, `console_url`, `command`, `next_action`, and `detail`. The defined stage IDs, in execution order, are `gcloud_install`, `gcloud_auth`, `project`, `apis`, `branding`, `audience`, `data_access`, `desktop_client`, `credentials`, and `account`. A full report always lists every stage. After the first incomplete stage, later stages have status `unavailable`: they were not inspected and no prompts, credential reads, OAuth, or mutations occurred.
+
+Statuses are `ok`, `missing`, `blocked`, `failed`, `manual`, `acknowledged`, and `unavailable`. Action kinds are `none`, `command`, and `console`. `blocked` with `resumable: true` denotes an external prerequisite that can be retried after action or propagation; malformed input, invalid credentials, and invariant violations are `failed` and non-resumable. `next` and `continue_command` identify the first required action. Continuation commands preserve retry-defining non-secret inputs; credential paths are included when supplied, but stdin credential content and all secrets are never emitted.
+
+Plain output has the header `STAGE STATUS SUMMARY BLOCKER COMMAND` (tab-separated), one row per stage, then `meta complete <true|false> <project_id> <continue_command>`. Consumers should tolerate new JSON fields and stage IDs. Exit `0` means `complete` or successful `discovery_complete`; exit `1` means a report was emitted but work remains; exit `2` is invalid usage.
