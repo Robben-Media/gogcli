@@ -32,7 +32,7 @@ func confirmDestructive(ctx context.Context, flags *RootFlags, action string) er
 		return fmt.Errorf("read confirmation: %w", readErr)
 	}
 	ans := strings.TrimSpace(strings.ToLower(line))
-	//nolint:goconst // "yes" is a common confirmation string across codebase
+	//nolint:goconst // "yes" is a common confirmation response, not shared domain vocabulary
 	if ans == "y" || ans == "yes" {
 		return nil
 	}

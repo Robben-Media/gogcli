@@ -517,7 +517,7 @@ func TestSchemaV1ContractFingerprint(t *testing.T) {
 		t.Fatalf("marshal canonical schema: %v", err)
 	}
 	got := fmt.Sprintf("%x", sha256.Sum256(canonical))
-	const want = "f81a4eb2f44cf4fa5ab12825a1aed982b38201b3082d05b7ccda329522ae8f6f"
+	const want = "7ca0719c4142b6b7c09962f510dcf09b486462a81d115fc14f7aaa670c3025d1"
 	if got != want {
 		t.Fatalf("schema v1 contract fingerprint = %s, want %s; review the contract change and schema version", got, want)
 	}

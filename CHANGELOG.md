@@ -4,6 +4,7 @@
 
 ### Added
 
+- Auth: add guided `gog auth setup` for project selection/creation, selected-project API enablement, Console-only OAuth client guidance, credential install, and first-account authorization (re-runnable; agent-friendly). (#158)
 - Auth: add `gog auth doctor` for unified read-only diagnostics of config, keyring, OAuth client credentials, stored identities, and refresh-token usability. (#157)
 - CLI: add `--results-only` and `--select` for concise, projected JSON output. (#156)
 - CLI: add `gog schema` for deterministic, versioned JSON discovery of commands, flags, exit codes, and effective automation safeguards. (#152)

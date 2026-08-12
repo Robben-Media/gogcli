@@ -107,7 +107,25 @@ Before adding an account, create OAuth2 credentials from Google Cloud Console:
    - Application type: "Desktop app"
    - Download the JSON file (usually named `client_secret_....apps.googleusercontent.com.json`)
 
-### 2. Store Credentials
+### 2. Guided setup (recommended)
+
+For a re-runnable, agent-friendly flow that discovers or creates a Cloud project, enables APIs, guides Console-only OAuth client steps, installs credentials, and can authorize the first account:
+
+```bash
+gog auth setup
+```
+
+Non-interactive discovery / resume:
+
+```bash
+gog --json --no-input auth setup --discover
+gog --no-input --force auth setup --project my-proj --enable-apis --credentials ~/Downloads/client_secret.json
+```
+
+See [docs/auth-clients.md](docs/auth-clients.md) for flags, acknowledgments, and exit codes. Advanced users can still run the manual steps below.
+
+### 3. Store Credentials (manual)
+
 
 ```bash
 gog auth credentials ~/Downloads/client_secret_....json
@@ -120,7 +138,7 @@ gog --client work auth credentials ~/Downloads/work-client.json
 gog auth credentials list
 ```
 
-### 3. Authorize Your Account
+### 4. Authorize Your Account
 
 ```bash
 gog auth add you@gmail.com
@@ -128,7 +146,7 @@ gog auth add you@gmail.com
 
 This will open a browser window for OAuth authorization. The refresh token is stored securely in your system keychain.
 
-### 4. Test Authentication
+### 5. Test Authentication
 
 ```bash
 export GOG_ACCOUNT=you@gmail.com
@@ -563,6 +581,7 @@ Flag aliases:
 ### Authentication
 
 ```bash
+gog auth setup                        # Guided Cloud project + OAuth client setup
 gog auth credentials <path>           # Store OAuth client credentials
 gog auth credentials list             # List stored OAuth client credentials
 gog --client work auth credentials <path>  # Store named OAuth client credentials
