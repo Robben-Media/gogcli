@@ -74,7 +74,7 @@ func (c *GroupsListCmd) Run(ctx context.Context, flags *RootFlags) error {
 				Role:        getRelationType(m.RelationType),
 			})
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"groups":        items,
 			"nextPageToken": resp.NextPageToken,
 		})
@@ -187,7 +187,7 @@ func (c *GroupsMembersCmd) Run(ctx context.Context, flags *RootFlags) error {
 				Type:  m.Type,
 			})
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"members":       items,
 			"nextPageToken": resp.NextPageToken,
 		})

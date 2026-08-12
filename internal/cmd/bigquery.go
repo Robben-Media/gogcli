@@ -69,7 +69,7 @@ func (c *BigqueryQueryCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"schema":    resp.Schema,
 			"rows":      resp.Rows,
 			"totalRows": resp.TotalRows,
@@ -147,7 +147,7 @@ func (c *BigqueryDatasetsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"datasets":      resp.Datasets,
 			"nextPageToken": resp.NextPageToken,
 		})
@@ -211,7 +211,7 @@ func (c *BigqueryTablesCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"tables":        resp.Tables,
 			"nextPageToken": resp.NextPageToken,
 		})
@@ -274,7 +274,7 @@ func (c *BigquerySchemaCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"schema": tbl.Schema,
 		})
 	}
@@ -333,7 +333,7 @@ func (c *BigqueryJobsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"jobs":          resp.Jobs,
 			"nextPageToken": resp.NextPageToken,
 		})

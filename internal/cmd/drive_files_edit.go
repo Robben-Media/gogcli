@@ -73,7 +73,7 @@ func (c *DriveFilesWatchCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"channel":    resp,
 			"channelId":  resp.Id,
 			"resourceId": resp.ResourceId,
@@ -136,7 +136,7 @@ func (c *DriveFilesGenerateIdsCmd) Run(ctx context.Context, flags *RootFlags) er
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"ids":   resp.Ids,
 			"space": resp.Space,
 			"kind":  resp.Kind,
@@ -176,7 +176,7 @@ func (c *DriveFilesEmptyTrashCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"emptied": true,
 		})
 	}

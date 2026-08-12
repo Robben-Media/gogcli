@@ -42,7 +42,7 @@ func (c *PeopleGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return wrapPeopleAPIError(err)
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"person": person})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"person": person})
 	}
 
 	name := primaryName(person)
@@ -119,7 +119,7 @@ func (c *PeopleSearchCmd) Run(ctx context.Context, flags *RootFlags) error {
 				Email:    primaryEmail(p),
 			})
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"people":        items,
 			"nextPageToken": resp.NextPageToken,
 		})
@@ -201,7 +201,7 @@ func (c *PeopleRelationsCmd) Run(ctx context.Context, flags *RootFlags) error {
 		if relationType != "" {
 			resp["relationType"] = relationType
 		}
-		return outfmt.WriteJSON(os.Stdout, resp)
+		return outfmt.WriteJSON(ctx, os.Stdout, resp)
 	}
 
 	if len(relations) == 0 {

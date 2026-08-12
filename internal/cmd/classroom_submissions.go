@@ -79,7 +79,7 @@ func (c *ClassroomSubmissionsListCmd) Run(ctx context.Context, flags *RootFlags)
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"submissions":   resp.StudentSubmissions,
 			"nextPageToken": resp.NextPageToken,
 		})
@@ -147,7 +147,7 @@ func (c *ClassroomSubmissionsGetCmd) Run(ctx context.Context, flags *RootFlags) 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"submission": sub})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"submission": sub})
 	}
 
 	u.Out().Printf("id\t%s", sub.Id)
@@ -237,7 +237,7 @@ func submissionAction(ctx context.Context, flags *RootFlags, courseID, coursewor
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"ok":           true,
 			"courseId":     courseID,
 			"courseworkId": courseworkID,
@@ -313,7 +313,7 @@ func (c *ClassroomSubmissionsGradeCmd) Run(ctx context.Context, flags *RootFlags
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"submission": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"submission": updated})
 	}
 	u.Out().Printf("id\t%s", updated.Id)
 	u.Out().Printf("draft_grade\t%s", formatFloatValue(updated.DraftGrade))

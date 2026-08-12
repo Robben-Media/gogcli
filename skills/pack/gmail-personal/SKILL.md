@@ -20,14 +20,14 @@ Use `gog gmail` for **personal** mail only: `jdjb78@gmail.com`.
 ## Quick Start
 
 ```bash
-# Search inbox threads
-gog --json --no-input --account jdjb78@gmail.com gmail search "is:unread" --max 20
+# Search inbox threads (agents: --wrap-untrusted fences free-text fields)
+gog --json --wrap-untrusted --no-input --account jdjb78@gmail.com gmail search "is:unread" --max 20
 
 # Alias (after verified)
-gog --json --no-input --account personal gmail search "is:unread" --max 20
+gog --json --wrap-untrusted --no-input --account personal gmail search "is:unread" --max 20
 
 # Read a message
-gog --json --no-input --account jdjb78@gmail.com gmail get MESSAGE_ID
+gog --json --wrap-untrusted --no-input --account jdjb78@gmail.com gmail get MESSAGE_ID
 ```
 
 ## Available Commands (readonly phase)

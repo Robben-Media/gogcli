@@ -90,7 +90,7 @@ func (c *SlidesCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{strFile: created})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{strFile: created})
 	}
 
 	u.Out().Printf("id\t%s", created.Id)

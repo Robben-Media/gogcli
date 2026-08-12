@@ -74,7 +74,7 @@ func (c *ChatSpacesListCmd) Run(ctx context.Context, flags *RootFlags) error {
 				ThreadState: space.SpaceThreadingState,
 			})
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"spaces":        items,
 			"nextPageToken": resp.NextPageToken,
 		})
@@ -171,7 +171,7 @@ func (c *ChatSpacesFindCmd) Run(ctx context.Context, flags *RootFlags) error {
 				SpaceURI:  space.SpaceUri,
 			})
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"spaces": items})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"spaces": items})
 	}
 
 	if len(matches) == 0 {
@@ -250,7 +250,7 @@ func (c *ChatSpacesCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"space": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"space": resp})
 	}
 
 	if resp == nil {
