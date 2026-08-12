@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/99designs/keyring"
+
 	"github.com/steipete/gogcli/internal/config"
 	"github.com/steipete/gogcli/internal/gcloud"
 	"github.com/steipete/gogcli/internal/googleauth"
@@ -417,6 +419,112 @@ func TestAuthSetup_CredentialsInstallIdempotent(t *testing.T) {
 				t.Fatalf("unexpected credentials summary: %q", st.Summary)
 			}
 		}
+	}
+}
+
+func TestAuthSetup_ReplacingCredentialsInvalidatesOnlyClientTokens(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg-config"))
+
+	if err := config.WriteClientCredentialsFor("work", config.ClientCredentials{
+		ClientID: "old-id", ClientSecret: "old-secret", ProjectID: "demo-proj", ClientType: config.OAuthClientTypeInstalled,
+	}); err != nil {
+		t.Fatalf("prewrite credentials: %v", err)
+	}
+	credentialsPath := filepath.Join(t.TempDir(), "credentials.json")
+	if err := os.WriteFile(credentialsPath, []byte(`{"installed":{"client_id":"new-id","client_secret":"new-secret","project_id":"demo-proj"}}`), 0o600); err != nil {
+		t.Fatalf("write credentials: %v", err)
+	}
+
+	store := newMemSecretsStore()
+	for client, email := range map[string]string{"work": "work@example.com", "other": "other@example.com"} {
+		if err := store.SetToken(client, email, secrets.Token{RefreshToken: client + "-token"}); err != nil {
+			t.Fatalf("set %s token: %v", client, err)
+		}
+	}
+	origOpen, origOpenNoInput := authSetupOpen, authSetupOpenNoInput
+	authSetupOpen = func() (secrets.Store, error) { return store, nil }
+	authSetupOpenNoInput = authSetupOpen
+	t.Cleanup(func() { authSetupOpen, authSetupOpenNoInput = origOpen, origOpenNoInput })
+
+	rt := &setupRuntime{
+		cmd:      &AuthSetupCmd{CredentialsPath: credentialsPath, AccountEmail: "work@example.com"},
+		flags:    &RootFlags{Force: true, NoInput: true},
+		u:        mustSetupUI(t),
+		client:   "work",
+		force:    true,
+		services: parseSetupServices(t, "gmail"),
+		report:   SetupReport{ProjectID: "demo-proj"},
+	}
+	if stop, err := rt.installCredentials(context.Background(), "demo-proj"); stop || err != nil {
+		t.Fatalf("install credentials: stop=%t err=%v", stop, err)
+	}
+	if _, err := store.GetToken("work", "work@example.com"); !errors.Is(err, keyring.ErrKeyNotFound) {
+		t.Fatalf("replaced client token was not invalidated: %v", err)
+	}
+	if _, err := store.GetToken("other", "other@example.com"); err != nil {
+		t.Fatalf("other client token was removed: %v", err)
+	}
+	if got := rt.report.Stages[len(rt.report.Stages)-1].Summary; !strings.Contains(got, "1 existing account token(s) invalidated") {
+		t.Fatalf("replacement warning detail=%q", got)
+	}
+	if stop, err := rt.runAccount(context.Background()); stop || err != nil {
+		t.Fatalf("replacement must require reauthorization: stop=%t err=%v", stop, err)
+	}
+	if got := rt.report.Stages[len(rt.report.Stages)-1].Status; got != stageStatusManual {
+		t.Fatalf("account stage=%s, want %s after replacement", got, stageStatusManual)
+	}
+}
+
+func TestAuthSetup_IdenticalCredentialsRetainTokenCompletion(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg-config"))
+
+	credentials := config.ClientCredentials{ClientID: "id", ClientSecret: "secret", ProjectID: "demo-proj", ClientType: config.OAuthClientTypeInstalled}
+	if err := config.WriteClientCredentialsFor("work", credentials); err != nil {
+		t.Fatalf("prewrite credentials: %v", err)
+	}
+	credentialsPath := filepath.Join(t.TempDir(), "credentials.json")
+	if err := os.WriteFile(credentialsPath, []byte(`{"installed":{"client_id":"id","client_secret":"secret","project_id":"demo-proj"}}`), 0o600); err != nil {
+		t.Fatalf("write credentials: %v", err)
+	}
+
+	store := newMemSecretsStore()
+	services := parseSetupServices(t, "gmail")
+	if err := store.SetToken("work", "person@example.com", secrets.Token{
+		Services:     authServiceNames(services),
+		Scopes:       accountScopes(services),
+		RefreshToken: "token",
+	}); err != nil {
+		t.Fatalf("set token: %v", err)
+	}
+	origOpen, origOpenNoInput := authSetupOpen, authSetupOpenNoInput
+	authSetupOpen = func() (secrets.Store, error) { return store, nil }
+	authSetupOpenNoInput = authSetupOpen
+	t.Cleanup(func() { authSetupOpen, authSetupOpenNoInput = origOpen, origOpenNoInput })
+
+	rt := &setupRuntime{
+		cmd:      &AuthSetupCmd{CredentialsPath: credentialsPath, AccountEmail: "person@example.com"},
+		flags:    &RootFlags{Force: true, NoInput: true},
+		u:        mustSetupUI(t),
+		client:   "work",
+		force:    true,
+		services: services,
+		report:   SetupReport{ProjectID: "demo-proj"},
+	}
+	if stop, err := rt.installCredentials(context.Background(), "demo-proj"); stop || err != nil {
+		t.Fatalf("install credentials: stop=%t err=%v", stop, err)
+	}
+	if _, err := store.GetToken("work", "person@example.com"); err != nil {
+		t.Fatalf("identical credentials removed token: %v", err)
+	}
+	if stop, err := rt.runAccount(context.Background()); stop || err != nil {
+		t.Fatalf("retained token should satisfy account stage: stop=%t err=%v", stop, err)
+	}
+	if got := rt.report.Stages[len(rt.report.Stages)-1].Status; got != stageStatusOK {
+		t.Fatalf("account stage=%s, want %s", got, stageStatusOK)
 	}
 }
 

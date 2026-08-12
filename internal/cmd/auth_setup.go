@@ -836,6 +836,34 @@ func (rt *setupRuntime) runCredentials(ctx context.Context) (stop bool, err erro
 	return stopSetup()
 }
 
+func (rt *setupRuntime) invalidateClientTokens(client string) (int, error) {
+	open := authSetupOpen
+	if rt.flags != nil && rt.flags.NoInput {
+		open = authSetupOpenNoInput
+	}
+	store, err := open()
+	if err != nil {
+		return 0, err
+	}
+	tokens, err := store.ListTokens()
+	if err != nil {
+		return 0, err
+	}
+
+	invalidated := 0
+	for _, token := range tokens {
+		sameClient := token.Client == client || (client == config.DefaultClientName && token.Client == "")
+		if !sameClient {
+			continue
+		}
+		if err := store.DeleteToken(client, token.Email); err != nil {
+			return 0, err
+		}
+		invalidated++
+	}
+	return invalidated, nil
+}
+
 func (rt *setupRuntime) installCredentials(ctx context.Context, projectID string) (stop bool, err error) {
 	confirmFn := func(action string) error {
 		return confirmDestructive(ctx, rt.flags, action)
@@ -849,6 +877,7 @@ func (rt *setupRuntime) installCredentials(ctx context.Context, projectID string
 		RequireForceToReplace:        true,
 		Force:                        rt.force,
 		Confirm:                      confirmFn,
+		BeforeReplacement:            rt.invalidateClientTokens,
 	})
 	if instErr != nil {
 		status, resumable := credentialInstallFailure(instErr)
@@ -867,6 +896,9 @@ func (rt *setupRuntime) installCredentials(ctx context.Context, projectID string
 		summary = "credentials already installed (identical)"
 	case result.Replaced:
 		summary = "credentials replaced"
+	}
+	if result.InvalidatedTokens > 0 {
+		summary = fmt.Sprintf("credentials replaced; %d existing account token(s) invalidated; reauthorize to complete setup", result.InvalidatedTokens)
 	}
 
 	rt.appendStage(SetupStage{ID: stageCredentials, Status: stageStatusOK, Summary: summary, ActionKind: actionNone, Detail: result.Path})

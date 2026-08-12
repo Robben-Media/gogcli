@@ -29,12 +29,13 @@ const (
 
 // InstallCredentialsResult is the outcome of storing OAuth client credentials.
 type InstallCredentialsResult struct {
-	Saved     bool
-	Path      string
-	Client    string
-	Replaced  bool
-	Identical bool
-	ProjectID string
+	Saved             bool
+	Path              string
+	Client            string
+	Replaced          bool
+	Identical         bool
+	ProjectID         string
+	InvalidatedTokens int
 }
 
 // InstallCredentialsOptions controls credential installation.
@@ -61,6 +62,10 @@ type InstallCredentialsOptions struct {
 	// Confirm is called before replacing different credentials when interactive.
 	// If nil and replacement requires confirmation, the operation fails.
 	Confirm func(action string) error
+	// BeforeReplacement runs after a replacement has been confirmed but before the
+	// new credentials are stored. Setup uses it to invalidate tokens issued to the
+	// credentials being replaced.
+	BeforeReplacement func(client string) (invalidated int, err error)
 }
 
 // InstallClientCredentials stores OAuth client credentials for a client
@@ -147,6 +152,13 @@ func InstallClientCredentials(opts InstallCredentialsOptions) (InstallCredential
 		}
 	}
 
+	invalidatedTokens := 0
+	if replaced && opts.BeforeReplacement != nil {
+		invalidatedTokens, err = opts.BeforeReplacement(client)
+		if err != nil {
+			return InstallCredentialsResult{}, fmt.Errorf("invalidate tokens for replaced credentials: %w", err)
+		}
+	}
 	if !identical {
 		if err := config.WriteClientCredentialsFor(client, creds); err != nil {
 			return InstallCredentialsResult{}, err
@@ -184,12 +196,13 @@ func InstallClientCredentials(opts InstallCredentialsOptions) (InstallCredential
 	}
 
 	return InstallCredentialsResult{
-		Saved:     true,
-		Path:      outPath,
-		Client:    client,
-		Replaced:  replaced,
-		Identical: identical,
-		ProjectID: creds.ProjectID,
+		Saved:             true,
+		Path:              outPath,
+		Client:            client,
+		Replaced:          replaced,
+		Identical:         identical,
+		ProjectID:         creds.ProjectID,
+		InvalidatedTokens: invalidatedTokens,
 	}, nil
 }
 
