@@ -86,7 +86,7 @@ func (c *AADataStreamsCreateCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"dataStream": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"dataStream": resp}, resp))
 	}
 	if outfmt.IsPlain(ctx) {
 		w, flush := tableWriter(ctx)
@@ -138,7 +138,7 @@ func (c *AADataStreamsDeleteCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"deleted": true, "name": name})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{"deleted": true, "name": name}))
 	}
 	if outfmt.IsPlain(ctx) {
 		w, flush := tableWriter(ctx)
@@ -179,7 +179,7 @@ func (c *AADataStreamsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"dataStream": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"dataStream": resp}, resp))
 	}
 
 	w, flush := tableWriter(ctx)
@@ -228,10 +228,10 @@ func (c *AADataStreamsListCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"dataStreams":   resp.DataStreams,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.DataStreams))
 	}
 
 	u := ui.FromContext(ctx)
@@ -293,7 +293,7 @@ func (c *AADataStreamsPatchCmd) Run(ctx context.Context, flags *RootFlags, kctx 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"dataStream": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"dataStream": resp}, resp))
 	}
 	if outfmt.IsPlain(ctx) {
 		w, flush := tableWriter(ctx)
@@ -351,7 +351,7 @@ func (c *AAMpSecretsCreateCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"measurementProtocolSecret": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"measurementProtocolSecret": resp}, resp))
 	}
 	if outfmt.IsPlain(ctx) {
 		w, flush := tableWriter(ctx)
@@ -397,7 +397,7 @@ func (c *AAMpSecretsDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"deleted": true, "name": name})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{"deleted": true, "name": name}))
 	}
 	if outfmt.IsPlain(ctx) {
 		w, flush := tableWriter(ctx)
@@ -439,7 +439,7 @@ func (c *AAMpSecretsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"measurementProtocolSecret": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"measurementProtocolSecret": resp}, resp))
 	}
 
 	w, flush := tableWriter(ctx)
@@ -485,10 +485,10 @@ func (c *AAMpSecretsListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"measurementProtocolSecrets": resp.MeasurementProtocolSecrets,
 			"nextPageToken":              resp.NextPageToken,
-		})
+		}, resp.MeasurementProtocolSecrets))
 	}
 
 	u := ui.FromContext(ctx)
@@ -547,7 +547,7 @@ func (c *AAMpSecretsPatchCmd) Run(ctx context.Context, flags *RootFlags, kctx *k
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"measurementProtocolSecret": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"measurementProtocolSecret": resp}, resp))
 	}
 	if outfmt.IsPlain(ctx) {
 		w, flush := tableWriter(ctx)

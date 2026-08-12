@@ -36,17 +36,21 @@ var rootHelpDescription = helpDescription
 var maybeNotifyUpdate = selfupdate.MaybeNotify
 
 type RootFlags struct {
-	Color          string `help:"Color output: auto|always|never" default:"${color}"`
-	Account        string `help:"Account email for API commands (gmail/calendar/chat/classroom/drive/docs/slides/contacts/tasks/people/sheets)"`
-	Client         string `help:"OAuth client name (selects stored credentials + token bucket)" default:"${client}"`
-	EnableCommands string `help:"Comma-separated list of enabled top-level commands (restricts CLI)" default:"${enabled_commands}"`
-	JSON           bool   `help:"Output JSON to stdout (best for scripting)" default:"${json}"`
-	Plain          bool   `help:"Output stable, parseable text to stdout (TSV; no colors)" default:"${plain}"`
-	Version        bool   `help:"Print version and exit"`
-	Force          bool   `help:"Skip confirmations for destructive commands"`
-	NoInput        bool   `help:"Never prompt; fail instead (useful for CI)"`
-	ReadOnly       bool   `name:"readonly" help:"Block mutating API requests at runtime" default:"${readonly}"`
-	Verbose        bool   `help:"Enable verbose logging"`
+	Color              string `help:"Color output: auto|always|never" default:"${color}"`
+	Account            string `help:"Account email for API commands (gmail/calendar/chat/classroom/drive/docs/slides/contacts/tasks/people/sheets)" schema-default-env:"GOG_ACCOUNT"`
+	Client             string `help:"OAuth client name (selects stored credentials + token bucket)" default:"${client}"`
+	EnableCommands     string `help:"Comma-separated list of enabled top-level commands (restricts CLI)" default:"${enabled_commands}"`
+	EnableCommandPaths string `help:"Comma-separated list of enabled exact command paths (e.g. 'gmail search,calendar events'; restricts CLI)" default:"${enabled_command_paths}"`
+	JSON               bool   `help:"Output JSON to stdout (best for scripting)" default:"${json}"`
+	Plain              bool   `help:"Output stable, parseable text to stdout (TSV; no colors)" default:"${plain}"`
+	ResultsOnly        bool   `name:"results-only" help:"Output only the declared primary result (requires --json)"`
+	Select             string `name:"select" help:"Comma-separated fields to select from JSON output (requires --json)"`
+	WrapUntrusted      bool   `name:"wrap-untrusted" help:"Wrap free-text Workspace fields in JSON with untrusted-content fences (agents; requires --json / GOG_JSON; no-op otherwise)" default:"${wrap_untrusted}"`
+	ReadOnly           bool   `name:"readonly" help:"Block mutating API requests at runtime" default:"${readonly}"`
+	Version            bool   `help:"Print version and exit"`
+	Force              bool   `help:"Skip confirmations for destructive commands"`
+	NoInput            bool   `help:"Never prompt; fail instead (useful for CI)"`
+	Verbose            bool   `help:"Enable verbose logging"`
 }
 
 type CLI struct {
@@ -77,6 +81,7 @@ type CLI struct {
 	Policy          PolicyCmd             `cmd:"" help:"Manage command safety policies"`
 	Update          UpdateCmd             `cmd:"" help:"Update gog binary and companion Google skills"`
 	Skills          SkillsCmd             `cmd:"" help:"Manage companion Google skill pack (pack skills only)"`
+	Schema          SchemaCmd             `cmd:"" help:"Print machine-readable CLI schema as JSON"`
 	VersionCmd      VersionCmd            `cmd:"" name:"version" help:"Print version"`
 	Completion      CompletionCmd         `cmd:"" help:"Generate shell completion scripts"`
 	Complete        CompletionInternalCmd `cmd:"" name:"__complete" hidden:"" help:"Internal completion helper"`
@@ -86,11 +91,15 @@ type exitPanic struct{ code int }
 
 func Execute(args []string) (err error) {
 	if hasVersionFlag(args) {
-		mode, innerErr := outputModeFromVersionArgs(args)
+		mode, jsonConfig, innerErr := outputModeFromVersionArgs(args)
 		if innerErr != nil {
 			return reportPreUIError(newUsageError(innerErr))
 		}
 		ctx := outfmt.WithMode(context.Background(), mode)
+		ctx, innerErr = outfmt.WithJSONConfig(ctx, jsonConfig)
+		if innerErr != nil {
+			return reportPreUIError(newUsageError(innerErr))
+		}
 		return (&VersionCmd{}).Run(ctx)
 	}
 
@@ -120,7 +129,7 @@ func Execute(args []string) (err error) {
 		return parsedErr
 	}
 
-	if err = enforceEnabledCommands(kctx, cli.EnableCommands); err != nil {
+	if err = enforceEnabledCommands(kctx, cli.EnableCommands, cli.EnableCommandPaths); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, errfmt.Format(err))
 		return err
 	}
@@ -137,14 +146,21 @@ func Execute(args []string) (err error) {
 		Level: logLevel,
 	})))
 
-	mode, err := outfmt.FromFlags(cli.JSON, cli.Plain)
+	mode, err := outfmt.FromFlagsFull(cli.JSON, cli.Plain, cli.WrapUntrusted)
 	if err != nil {
 		return reportPreUIError(newUsageError(err))
 	}
-
+	jsonConfig, err := jsonConfigFromFlags(mode, cli.ResultsOnly, cli.Select, hasSelectFlag(args))
+	if err != nil {
+		return reportPreUIError(newUsageError(err))
+	}
 	ctx := context.Background()
 	ctx = googleapi.WithReadOnly(ctx, cli.ReadOnly)
 	ctx = outfmt.WithMode(ctx, mode)
+	ctx, err = outfmt.WithJSONConfig(ctx, jsonConfig)
+	if err != nil {
+		return reportPreUIError(newUsageError(err))
+	}
 	ctx = authclient.WithClient(ctx, cli.Client)
 
 	uiColor := cli.Color
@@ -166,9 +182,9 @@ func Execute(args []string) (err error) {
 	kctx.Bind(&cli.RootFlags)
 
 	// Throttled non-fatal update notice for humans and agents (stderr only).
-	// Shell completion must stay fast/deterministic: never touch update cache
-	// or the release service for completion-script generation or __complete.
-	if !isCompletionCommand(kctx.Command()) {
+	// Local discovery and shell completion must stay deterministic: never touch
+	// the update cache or release service for schema, completion, or __complete.
+	if !skipsUpdateCheck(kctx.Command()) {
 		if notice := maybeNotifyUpdate(ctx, &selfupdate.Client{
 			Repo:  strings.TrimSpace(os.Getenv("GOG_UPDATE_REPO")),
 			Token: envOr("GITHUB_TOKEN", envOr("GH_TOKEN", "")),
@@ -193,6 +209,22 @@ func Execute(args []string) (err error) {
 	return err
 }
 
+func jsonConfigFromFlags(mode outfmt.Mode, resultsOnly bool, selectPaths string, selectSet bool) (outfmt.JSONConfig, error) {
+	selectPaths = strings.TrimSpace(selectPaths)
+	if !mode.JSON && (resultsOnly || selectSet) {
+		return outfmt.JSONConfig{}, errors.New("--results-only and --select require --json")
+	}
+	if selectSet && selectPaths == "" {
+		return outfmt.JSONConfig{}, errors.New("--select requires a value")
+	}
+
+	jsonOutput := outfmt.JSONConfig{ResultsOnly: resultsOnly}
+	if selectSet {
+		jsonOutput.Select = strings.Split(selectPaths, ",")
+	}
+	return jsonOutput, nil
+}
+
 func wrapParseError(err error) error {
 	if err == nil {
 		return nil
@@ -211,15 +243,19 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-// isCompletionCommand reports whether the parsed kong command is shell-completion
-// related and must bypass background update checks.
-func isCompletionCommand(command string) bool {
+func isSchemaCommand(command string) bool {
+	parts := strings.Fields(command)
+	return len(parts) > 0 && parts[0] == "schema"
+}
+
+// skipsUpdateCheck reports whether a command must remain local and deterministic.
+func skipsUpdateCheck(command string) bool {
 	parts := strings.Fields(command)
 	if len(parts) == 0 {
 		return false
 	}
 	switch parts[0] {
-	case "completion", "__complete":
+	case "completion", "__complete", "schema":
 		return true
 	default:
 		return false
@@ -236,15 +272,17 @@ func boolString(v bool) string {
 func newParser(description string) (*kong.Kong, *CLI, error) {
 	envMode := outfmt.FromEnv()
 	vars := kong.Vars{
-		"auth_services":    googleauth.UserServiceCSV(),
-		"color":            envOr("GOG_COLOR", "auto"),
-		"calendar_weekday": envOr("GOG_CALENDAR_WEEKDAY", "false"),
-		"client":           envOr("GOG_CLIENT", ""),
-		"enabled_commands": envOr("GOG_ENABLE_COMMANDS", ""),
-		"json":             boolString(envMode.JSON),
-		"plain":            boolString(envMode.Plain),
-		"readonly":         boolString(envOr("GOG_READONLY", "") == "1"),
-		"version":          VersionString(),
+		"auth_services":         googleauth.UserServiceCSV(),
+		"color":                 envOr("GOG_COLOR", "auto"),
+		"calendar_weekday":      envOr("GOG_CALENDAR_WEEKDAY", "false"),
+		"client":                envOr("GOG_CLIENT", ""),
+		"enabled_commands":      envOr("GOG_ENABLE_COMMANDS", ""),
+		"enabled_command_paths": envOr("GOG_ENABLE_COMMAND_PATHS", ""),
+		"json":                  boolString(envMode.JSON),
+		"plain":                 boolString(envMode.Plain),
+		"wrap_untrusted":        boolString(envMode.WrapUntrusted),
+		"readonly":              boolString(envOr("GOG_READONLY", "") == "1"),
+		"version":               VersionString(),
 	}
 
 	cli := &CLI{}
@@ -318,12 +356,29 @@ func hasVersionFlag(args []string) bool {
 	return false
 }
 
-func outputModeFromVersionArgs(args []string) (outfmt.Mode, error) {
+func hasSelectFlag(args []string) bool {
+	for _, arg := range args {
+		if arg == "--" {
+			break
+		}
+		if arg == "--select" || strings.HasPrefix(arg, "--select=") {
+			return true
+		}
+	}
+	return false
+}
+
+func outputModeFromVersionArgs(args []string) (outfmt.Mode, outfmt.JSONConfig, error) {
 	envMode := outfmt.FromEnv()
 	jsonOut := envMode.JSON
 	plainOut := envMode.Plain
+	wrapOut := envMode.WrapUntrusted
+	resultsOnly := false
+	selectPaths := ""
+	selectSet := false
 
-	for _, arg := range args {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
 		if arg == "--" {
 			break
 		}
@@ -332,22 +387,56 @@ func outputModeFromVersionArgs(args []string) (outfmt.Mode, error) {
 			jsonOut = true
 		case arg == "--plain":
 			plainOut = true
+		case arg == "--wrap-untrusted":
+			wrapOut = true
+		case arg == "--results-only":
+			resultsOnly = true
+		case arg == "--select":
+			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
+				return outfmt.Mode{}, outfmt.JSONConfig{}, errors.New("--select requires a value")
+			}
+			i++
+			selectPaths = args[i]
+			selectSet = true
 		case strings.HasPrefix(arg, "--json="):
 			v, err := parseFlagBool(strings.TrimPrefix(arg, "--json="))
 			if err != nil {
-				return outfmt.Mode{}, err
+				return outfmt.Mode{}, outfmt.JSONConfig{}, err
 			}
 			jsonOut = v
 		case strings.HasPrefix(arg, "--plain="):
 			v, err := parseFlagBool(strings.TrimPrefix(arg, "--plain="))
 			if err != nil {
-				return outfmt.Mode{}, err
+				return outfmt.Mode{}, outfmt.JSONConfig{}, err
 			}
 			plainOut = v
+		case strings.HasPrefix(arg, "--wrap-untrusted="):
+			v, err := parseFlagBool(strings.TrimPrefix(arg, "--wrap-untrusted="))
+			if err != nil {
+				return outfmt.Mode{}, outfmt.JSONConfig{}, err
+			}
+			wrapOut = v
+		case strings.HasPrefix(arg, "--results-only="):
+			v, err := parseFlagBool(strings.TrimPrefix(arg, "--results-only="))
+			if err != nil {
+				return outfmt.Mode{}, outfmt.JSONConfig{}, err
+			}
+			resultsOnly = v
+		case strings.HasPrefix(arg, "--select="):
+			selectPaths = strings.TrimPrefix(arg, "--select=")
+			selectSet = true
 		}
 	}
 
-	return outfmt.FromFlags(jsonOut, plainOut)
+	mode, err := outfmt.FromFlagsFull(jsonOut, plainOut, wrapOut)
+	if err != nil {
+		return outfmt.Mode{}, outfmt.JSONConfig{}, err
+	}
+	jsonOutput, err := jsonConfigFromFlags(mode, resultsOnly, selectPaths, selectSet)
+	if err != nil {
+		return outfmt.Mode{}, outfmt.JSONConfig{}, err
+	}
+	return mode, jsonOutput, nil
 }
 
 func parseFlagBool(value string) (bool, error) {

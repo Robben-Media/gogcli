@@ -47,7 +47,7 @@ func (c *ChatSpacesCompleteImportCmd) Run(ctx context.Context, flags *RootFlags)
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"space": resp.Space})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"space": resp.Space}, resp.Space))
 	}
 
 	printSpaceDetails(u, resp.Space)
@@ -107,7 +107,7 @@ func (c *ChatSpacesCreateDirectCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"space": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"space": resp}, resp))
 	}
 
 	printSpaceDetails(u, resp)
@@ -186,7 +186,7 @@ func (c *ChatSpacesFindDmCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"space": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"space": resp}, resp))
 	}
 
 	printSpaceDetails(u, resp)
@@ -227,7 +227,7 @@ func (c *ChatSpacesGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"space": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"space": resp}, resp))
 	}
 
 	printSpaceDetails(u, resp)
@@ -298,7 +298,7 @@ func (c *ChatSpacesPatchCmd) Run(ctx context.Context, flags *RootFlags, kctx *ko
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"space": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"space": resp}, resp))
 	}
 
 	printSpaceDetails(u, resp)
@@ -363,10 +363,10 @@ func (c *ChatSpacesSearchCmd) Run(ctx context.Context, flags *RootFlags) error {
 				ThreadState: space.SpaceThreadingState,
 			})
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"spaces":        items,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, items))
 	}
 
 	if len(resp.Spaces) == 0 {

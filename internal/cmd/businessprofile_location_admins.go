@@ -52,9 +52,9 @@ func (c *BusinessProfileLocationAdminsListCmd) Run(ctx context.Context, flags *R
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"admins": resp.Admins,
-		})
+		}, resp.Admins))
 	}
 
 	if len(resp.Admins) == 0 {
@@ -114,7 +114,7 @@ func (c *BusinessProfileLocationAdminsCreateCmd) Run(ctx context.Context, flags 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"admin": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"admin": resp}, resp))
 	}
 
 	if resp.Name != "" {
@@ -205,7 +205,7 @@ func (c *BusinessProfileLocationAdminsPatchCmd) Run(ctx context.Context, flags *
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"admin": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"admin": resp}, resp))
 	}
 
 	if resp.Name != "" {

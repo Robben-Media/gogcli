@@ -70,11 +70,11 @@ func (c *DriveCommentsListCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"fileId":        fileID,
 			"comments":      resp.Comments,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Comments))
 	}
 
 	if len(resp.Comments) == 0 {
@@ -159,7 +159,7 @@ func (c *DriveCommentsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"comment": comment})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"comment": comment}, comment))
 	}
 
 	u.Out().Printf("id\t%s", comment.Id)
@@ -225,7 +225,7 @@ func (c *DriveCommentsCreateCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"comment": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"comment": created}, created))
 	}
 
 	u.Out().Printf("id\t%s", created.Id)
@@ -277,7 +277,7 @@ func (c *DriveCommentsUpdateCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"comment": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"comment": updated}, updated))
 	}
 
 	u.Out().Printf("id\t%s", updated.Id)
@@ -320,11 +320,11 @@ func (c *DriveCommentsDeleteCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"deleted":   true,
 			"fileId":    fileID,
 			"commentId": commentID,
-		})
+		}))
 	}
 
 	u.Out().Printf("deleted\ttrue")
@@ -376,7 +376,7 @@ func (c *DriveCommentReplyCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"reply": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"reply": created}, created))
 	}
 
 	u.Out().Printf("id\t%s", created.Id)
@@ -437,12 +437,12 @@ func (c *DriveRepliesListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"fileId":        fileID,
 			"commentId":     commentID,
 			"replies":       resp.Replies,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Replies))
 	}
 
 	if len(resp.Replies) == 0 {
@@ -510,7 +510,7 @@ func (c *DriveRepliesGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"reply": reply})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"reply": reply}, reply))
 	}
 
 	u.Out().Printf("id\t%s", reply.Id)
@@ -567,7 +567,7 @@ func (c *DriveRepliesCreateCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"reply": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"reply": created}, created))
 	}
 
 	u.Out().Printf("id\t%s", created.Id)
@@ -625,7 +625,7 @@ func (c *DriveRepliesUpdateCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"reply": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"reply": updated}, updated))
 	}
 
 	u.Out().Printf("id\t%s", updated.Id)
@@ -674,12 +674,12 @@ func (c *DriveRepliesDeleteCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"deleted":   true,
 			"fileId":    fileID,
 			"commentId": commentID,
 			"replyId":   replyID,
-		})
+		}))
 	}
 
 	u.Out().Printf("deleted\ttrue")

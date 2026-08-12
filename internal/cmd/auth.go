@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,8 +10,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/99designs/keyring"
 
 	"github.com/steipete/gogcli/internal/authclient"
 	"github.com/steipete/gogcli/internal/config"
@@ -54,12 +51,14 @@ const (
 )
 
 type AuthCmd struct {
+	Setup       AuthSetupCmd          `cmd:"" name:"setup" help:"Guide Google Cloud and OAuth setup"`
 	Credentials AuthCredentialsCmd    `cmd:"" name:"credentials" help:"Manage OAuth client credentials"`
 	Add         AuthAddCmd            `cmd:"" name:"add" help:"Authorize and store a refresh token"`
 	Services    AuthServicesCmd       `cmd:"" name:"services" help:"List supported auth services and scopes"`
 	List        AuthListCmd           `cmd:"" name:"list" help:"List stored accounts"`
 	Aliases     AuthAliasCmd          `cmd:"" name:"alias" help:"Manage account aliases"`
 	Status      AuthStatusCmd         `cmd:"" name:"status" help:"Show auth configuration and keyring backend"`
+	Doctor      AuthDoctorCmd         `cmd:"" name:"doctor" help:"Diagnose auth, keyring, and token health (read-only)"`
 	Keyring     AuthKeyringCmd        `cmd:"" name:"keyring" help:"Configure keyring backend"`
 	Remove      AuthRemoveCmd         `cmd:"" name:"remove" help:"Remove a stored refresh token"`
 	Tokens      AuthTokensCmd         `cmd:"" name:"tokens" help:"Manage stored refresh tokens"`
@@ -84,54 +83,30 @@ func (c *AuthCredentialsSetCmd) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	inPath := c.Path
-	var b []byte
-	if inPath == "-" {
-		b, err = io.ReadAll(os.Stdin)
-	} else {
-		inPath, err = config.ExpandPath(inPath)
-		if err != nil {
-			return err
-		}
-		b, err = os.ReadFile(inPath) //nolint:gosec // user-provided path
-	}
+	result, err := InstallClientCredentials(InstallCredentialsOptions{
+		Client:  client,
+		Path:    c.Path,
+		Domains: c.Domains,
+	})
 	if err != nil {
 		return err
 	}
-
-	creds, err := config.ParseGoogleOAuthClientJSON(b)
-	if err != nil {
-		return err
-	}
-
-	if err := config.WriteClientCredentialsFor(client, creds); err != nil {
-		return err
-	}
-
-	outPath, _ := config.ClientCredentialsPathFor(client)
-	if strings.TrimSpace(c.Domains) != "" {
-		cfg, err := config.ReadConfig()
-		if err != nil {
-			return err
-		}
-		for _, domain := range splitCommaList(c.Domains) {
-			if err := config.SetClientDomain(&cfg, domain, client); err != nil {
-				return err
-			}
-		}
-		if err := config.WriteConfig(cfg); err != nil {
-			return err
-		}
+	if result.Replaced {
+		u.Err().Printf("OAuth credentials for client %q changed; reauthorize stored accounts before use.", result.Client)
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
-			"saved":  true,
-			"path":   outPath,
-			"client": client,
-		})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
+			"saved":    true,
+			"path":     result.Path,
+			"client":   result.Client,
+			"replaced": result.Replaced,
+		}))
 	}
-	u.Out().Printf("path\t%s", outPath)
-	u.Out().Printf("client\t%s", client)
+	u.Out().Printf("path\t%s", result.Path)
+	u.Out().Printf("client\t%s", result.Client)
+	if result.Replaced {
+		u.Err().Println("WARNING: credentials replaced; existing authorizations for this client must be renewed before guided setup can complete")
+	}
 	return nil
 }
 
@@ -196,14 +171,14 @@ func (c *AuthCredentialsListCmd) Run(ctx context.Context) error {
 
 	if len(entries) == 0 {
 		if outfmt.IsJSON(ctx) {
-			return outfmt.WriteJSON(os.Stdout, map[string]any{"clients": []entry{}})
+			return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"clients": []entry{}}, []entry{}))
 		}
 		u.Err().Println("No OAuth client credentials stored")
 		return nil
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"clients": entries})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"clients": entries}, entries))
 	}
 
 	w, done := tableWriter(ctx)
@@ -245,13 +220,13 @@ func (c *AuthTokensListCmd) Run(ctx context.Context) error {
 
 	if len(filtered) == 0 {
 		if outfmt.IsJSON(ctx) {
-			return outfmt.WriteJSON(os.Stdout, map[string]any{"keys": []string{}})
+			return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"keys": []string{}}, []string{}))
 		}
 		u.Err().Println("No tokens stored")
 		return nil
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"keys": filtered})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"keys": filtered}, filtered))
 	}
 	for _, k := range filtered {
 		u.Out().Println(k)
@@ -286,11 +261,11 @@ func (c *AuthTokensDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"deleted": true,
 			"email":   email,
 			"client":  client,
-		})
+		}))
 	}
 	u.Out().Printf("deleted\ttrue")
 	u.Out().Printf("email\t%s", email)
@@ -375,12 +350,12 @@ func (c *AuthTokensExportCmd) Run(ctx context.Context) error {
 
 	u.Err().Println("WARNING: exported file contains a refresh token (keep it safe and delete it when done)")
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"exported": true,
 			"email":    tok.Email,
 			"client":   client,
 			"path":     outPath,
-		})
+		}))
 	}
 	u.Out().Printf("exported\ttrue")
 	u.Out().Printf("email\t%s", tok.Email)
@@ -470,11 +445,11 @@ func (c *AuthTokensImportCmd) Run(ctx context.Context) error {
 
 	u.Err().Println("Imported refresh token into keyring")
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"imported": true,
 			"email":    ex.Email,
 			"client":   client,
-		})
+		}))
 	}
 	u.Out().Printf("imported\ttrue")
 	u.Out().Printf("email\t%s", ex.Email)
@@ -494,122 +469,34 @@ type AuthAddCmd struct {
 
 func (c *AuthAddCmd) Run(ctx context.Context) error {
 	u := ui.FromContext(ctx)
-	readonly := googleapi.ReadOnly(ctx)
-
-	override := authclient.ClientOverrideFromContext(ctx)
-	client, err := authclient.ResolveClientWithOverride(c.Email, override)
-	if err != nil {
-		return err
-	}
-
-	services, err := parseAuthServices(c.ServicesCSV)
-	if err != nil {
-		return err
-	}
-	if len(services) == 0 {
-		return fmt.Errorf("no services selected")
-	}
-
-	if readonly && c.DriveScope == strFile {
-		return usage("cannot combine --readonly with --drive-scope=file (file is write-capable)")
-	}
-	driveScope := strings.ToLower(strings.TrimSpace(c.DriveScope))
-	gmailScope := strings.ToLower(strings.TrimSpace(c.GmailScope))
-	scopes, err := googleauth.ScopesForManageWithOptions(services, googleauth.ScopeOptions{
-		Readonly:   readonly,
-		DriveScope: googleauth.DriveScopeMode(c.DriveScope),
-		GmailScope: googleauth.GmailScopeMode(c.GmailScope),
-	})
-	if err != nil {
-		return err
-	}
-
-	// Pre-flight: ensure keychain is accessible before starting OAuth
-	if keychainErr := ensureKeychainAccessIfNeeded(); keychainErr != nil {
-		return fmt.Errorf("keychain access: %w", keychainErr)
-	}
-	store, err := openSecretsStore()
-	if err != nil {
-		return err
-	}
-
-	existing, existingErr := store.GetToken(client, c.Email)
-	hasExisting := existingErr == nil
-	if existingErr != nil && !errors.Is(existingErr, keyring.ErrKeyNotFound) {
-		return fmt.Errorf("read existing token: %w", existingErr)
-	}
-
-	if hasExisting && !c.ReplaceScopes && !readonly {
-		services, scopes = googleauth.MergeAuthGrant(services, scopes, existing.Services, existing.Scopes)
-	}
-
-	serviceNames := authServiceNames(services)
-	forceConsent := c.ForceConsent || c.ReplaceScopes
-	// Scope variants must be requested exactly because Google can reject a
-	// historical grant containing incompatible variants (for example old
-	// YouTube scopes plus drive.file). Existing scopes are still explicitly
-	// included above unless the user chose --replace-scopes.
-	disableIncludeGrantedScopes := forceConsent ||
-		readonly ||
-		driveScope == "readonly" ||
-		driveScope == strFile ||
-		gmailScope == "readonly"
 	if c.ReplaceScopes {
 		u.Err().Println("Replacing the existing OAuth grant with exactly the selected services and scopes.")
 	}
-
-	refreshToken, err := authorizeGoogle(ctx, googleauth.AuthorizeOptions{
-		Services:                    services,
-		Scopes:                      scopes,
-		Manual:                      c.Manual,
-		ForceConsent:                forceConsent,
-		DisableIncludeGrantedScopes: disableIncludeGrantedScopes,
-		Client:                      client,
+	result, err := AuthorizeAndStoreAccount(ctx, AuthorizeAccountOptions{
+		Email:         c.Email,
+		Client:        authclient.ClientOverrideFromContext(ctx),
+		ServicesCSV:   c.ServicesCSV,
+		Manual:        c.Manual,
+		ForceConsent:  c.ForceConsent,
+		ReplaceScopes: c.ReplaceScopes,
+		Readonly:      googleapi.ReadOnly(ctx),
+		DriveScope:    c.DriveScope,
+		GmailScope:    c.GmailScope,
 	})
 	if err != nil {
 		return err
 	}
-
-	authorizedEmail, err := fetchAuthorizedEmail(ctx, client, refreshToken, scopes, 15*time.Second)
-	if err != nil {
-		return fmt.Errorf("fetch authorized email: %w", err)
-	}
-	if normalizeEmail(authorizedEmail) != normalizeEmail(c.Email) {
-		return fmt.Errorf("authorized as %s, expected %s", authorizedEmail, c.Email)
-	}
-
-	if err := store.SetToken(client, authorizedEmail, secrets.Token{
-		Client:       client,
-		Email:        authorizedEmail,
-		Services:     serviceNames,
-		Scopes:       scopes,
-		RefreshToken: refreshToken,
-	}); err != nil {
-		return err
-	}
-	if override != "" {
-		cfg, err := config.ReadConfig()
-		if err != nil {
-			return err
-		}
-		if err := config.SetAccountClient(&cfg, authorizedEmail, client); err != nil {
-			return err
-		}
-		if err := config.WriteConfig(cfg); err != nil {
-			return err
-		}
-	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"stored":   true,
-			"email":    authorizedEmail,
-			"services": serviceNames,
-			"client":   client,
-		})
+			"email":    result.Email,
+			"services": result.Services,
+			"client":   result.Client,
+		}))
 	}
-	u.Out().Printf("email\t%s", authorizedEmail)
-	u.Out().Printf("services\t%s", strings.Join(serviceNames, ","))
-	u.Out().Printf("client\t%s", client)
+	u.Out().Printf("email\t%s", result.Email)
+	u.Out().Printf("services\t%s", strings.Join(result.Services, ","))
+	u.Out().Printf("client\t%s", result.Client)
 	return nil
 }
 
@@ -680,7 +567,7 @@ func (c *AuthStatusCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"config": map[string]any{
 				"path":   configPath,
 				"exists": configExists,
@@ -698,7 +585,7 @@ func (c *AuthStatusCmd) Run(ctx context.Context, flags *RootFlags) error {
 				"service_account_configured": serviceAccountConfigured,
 				"service_account_path":       serviceAccountPath,
 			},
-		})
+		}))
 	}
 	u.Out().Printf("config_path\t%s", configPath)
 	u.Out().Printf("config_exists\t%t", configExists)
@@ -855,7 +742,7 @@ func (c *AuthListCmd) Run(ctx context.Context) error {
 			}
 			out = append(out, it)
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"accounts": out})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"accounts": out}, out))
 	}
 	if len(entries) == 0 {
 		u.Err().Println("No tokens stored")
@@ -937,7 +824,7 @@ type AuthServicesCmd struct {
 func (c *AuthServicesCmd) Run(ctx context.Context) error {
 	infos := googleauth.ServicesInfo()
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"services": infos})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"services": infos}, infos))
 	}
 	if c.Markdown {
 		_, err := io.WriteString(os.Stdout, googleauth.ServicesMarkdown(infos))
@@ -988,11 +875,11 @@ func (c *AuthRemoveCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"deleted": true,
 			"email":   email,
 			"client":  client,
-		})
+		}))
 	}
 	u.Out().Printf("deleted\ttrue")
 	u.Out().Printf("email\t%s", email)
@@ -1070,12 +957,12 @@ func (c *AuthKeepCmd) Run(ctx context.Context) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"stored": true,
 			"email":  email,
 			"path":   destPath,
 			"paths":  []string{destPath, genericPath},
-		})
+		}))
 	}
 	u.Out().Printf("email\t%s", email)
 	u.Out().Printf("path\t%s", destPath)

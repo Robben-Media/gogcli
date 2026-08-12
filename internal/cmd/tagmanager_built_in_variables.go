@@ -62,7 +62,7 @@ func (c *TagManagerBuiltInVariablesDeleteCmd) Run(ctx context.Context, flags *Ro
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"deleted": true, "path": path, "types": types})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{"deleted": true, "path": path, "types": types}))
 	}
 	if outfmt.IsPlain(ctx) {
 		w, flush := tableWriter(ctx)
@@ -102,7 +102,7 @@ func (c *TagManagerBuiltInVariablesListCmd) Run(ctx context.Context, flags *Root
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, resp.BuiltInVariable)
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(resp.BuiltInVariable, resp.BuiltInVariable))
 	}
 	return writeTagManagerBuiltInVariables(ctx, resp.BuiltInVariable, resp.NextPageToken)
 }
@@ -129,7 +129,7 @@ func (c *TagManagerBuiltInVariablesRevertCmd) Run(ctx context.Context, flags *Ro
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"type": types[0], "enabled": resp.Enabled})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{"type": types[0], "enabled": resp.Enabled}))
 	}
 	if outfmt.IsPlain(ctx) {
 		w, flush := tableWriter(ctx)
@@ -167,7 +167,7 @@ func tagManagerBuiltInRequest(flags *RootFlags, workspace tagManagerWorkspaceFla
 
 func writeTagManagerBuiltInVariables(ctx context.Context, variables []*tagmanager.BuiltInVariable, nextPageToken string) error {
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"builtInVariables": variables, "nextPageToken": nextPageToken})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"builtInVariables": variables, "nextPageToken": nextPageToken}, variables))
 	}
 	if len(variables) == 0 {
 		ui.FromContext(ctx).Err().Println("No built-in variables")

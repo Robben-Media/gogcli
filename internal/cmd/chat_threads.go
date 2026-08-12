@@ -81,10 +81,10 @@ func (c *ChatThreadsListCmd) Run(ctx context.Context, flags *RootFlags) error {
 				"createTime": item.message.CreateTime,
 			})
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"threads":       items,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, items))
 	}
 
 	if len(threads) == 0 {

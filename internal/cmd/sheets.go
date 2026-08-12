@@ -119,10 +119,10 @@ func (c *SheetsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"range":  resp.Range,
 			"values": resp.Values,
-		})
+		}, resp.Values))
 	}
 
 	if len(resp.Values) == 0 {
@@ -221,12 +221,12 @@ func (c *SheetsUpdateCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"updatedRange":   resp.UpdatedRange,
 			"updatedRows":    resp.UpdatedRows,
 			"updatedColumns": resp.UpdatedColumns,
 			"updatedCells":   resp.UpdatedCells,
-		})
+		}))
 	}
 	if outfmt.IsPlain(ctx) {
 		writeSheetsValueMutationPlainSingle(ctx, "update", sheetsMutationSpreadsheetID(spreadsheetID, resp.SpreadsheetId), resp.UpdatedRange, resp.UpdatedRows, resp.UpdatedColumns, resp.UpdatedCells)
@@ -319,12 +319,12 @@ func (c *SheetsAppendCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"updatedRange":   resp.Updates.UpdatedRange,
 			"updatedRows":    resp.Updates.UpdatedRows,
 			"updatedColumns": resp.Updates.UpdatedColumns,
 			"updatedCells":   resp.Updates.UpdatedCells,
-		})
+		}))
 	}
 	if outfmt.IsPlain(ctx) {
 		spreadsheetIDOut := sheetsMutationSpreadsheetID(spreadsheetID, resp.SpreadsheetId)
@@ -381,9 +381,9 @@ func (c *SheetsClearCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"clearedRange": resp.ClearedRange,
-		})
+		}))
 	}
 	if outfmt.IsPlain(ctx) {
 		spreadsheetIDOut := sheetsMutationSpreadsheetID(spreadsheetID, resp.SpreadsheetId)
@@ -422,13 +422,13 @@ func (c *SheetsMetadataCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"spreadsheetId": resp.SpreadsheetId,
 			"title":         resp.Properties.Title,
 			"locale":        resp.Properties.Locale,
 			"timeZone":      resp.Properties.TimeZone,
 			"sheets":        resp.Sheets,
-		})
+		}, resp.Sheets))
 	}
 
 	if outfmt.IsPlain(ctx) {
@@ -558,11 +558,11 @@ func (c *SheetsCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"spreadsheetId":  resp.SpreadsheetId,
 			"title":          resp.Properties.Title,
 			"spreadsheetUrl": resp.SpreadsheetUrl,
-		})
+		}))
 	}
 	if outfmt.IsPlain(ctx) {
 		writeSheetsStructuralPlain(ctx, "create", resp.SpreadsheetId, "", resp.Properties.Title, "")

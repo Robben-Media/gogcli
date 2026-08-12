@@ -15,37 +15,61 @@ var (
 type ClientCredentials struct {
 	ClientID     string `json:"client_id"`
 	ClientSecret string `json:"client_secret"`
+	// ProjectID is the Google Cloud project_id from the downloaded OAuth client
+	// JSON when present. Optional for backwards compatibility.
+	ProjectID string `json:"project_id,omitempty"`
+	// ClientType records the original OAuth JSON envelope (installed or web).
+	// Empty is a legacy compact credential whose type is intentionally unknown.
+	ClientType string `json:"client_type,omitempty"`
 }
+
+const (
+	OAuthClientTypeInstalled = "installed"
+	OAuthClientTypeWeb       = "web"
+)
 
 type googleCredentialsFile struct {
 	Installed *struct {
 		ClientID     string `json:"client_id"`
 		ClientSecret string `json:"client_secret"`
+		ProjectID    string `json:"project_id"`
 	} `json:"installed"`
 	Web *struct {
 		ClientID     string `json:"client_id"`
 		ClientSecret string `json:"client_secret"`
+		ProjectID    string `json:"project_id"`
 	} `json:"web"`
 }
 
 func ParseGoogleOAuthClientJSON(b []byte) (ClientCredentials, error) {
+	return parseGoogleOAuthClientJSON(b, false)
+}
+
+// ParseGoogleInstalledOAuthClientJSON accepts only a Desktop/installed OAuth
+// client. Guided setup requires this redirect-capable client type; standalone
+// credential installation retains historical web-client compatibility.
+func ParseGoogleInstalledOAuthClientJSON(b []byte) (ClientCredentials, error) {
+	return parseGoogleOAuthClientJSON(b, true)
+}
+
+func parseGoogleOAuthClientJSON(b []byte, requireInstalled bool) (ClientCredentials, error) {
 	var f googleCredentialsFile
 	if err := json.Unmarshal(b, &f); err != nil {
 		return ClientCredentials{}, fmt.Errorf("decode credentials json: %w", err)
 	}
 
-	var clientID, clientSecret string
+	var clientID, clientSecret, projectID, clientType string
 	if f.Installed != nil {
-		clientID, clientSecret = f.Installed.ClientID, f.Installed.ClientSecret
-	} else if f.Web != nil {
-		clientID, clientSecret = f.Web.ClientID, f.Web.ClientSecret
+		clientID, clientSecret, projectID, clientType = f.Installed.ClientID, f.Installed.ClientSecret, f.Installed.ProjectID, OAuthClientTypeInstalled
+	} else if !requireInstalled && f.Web != nil {
+		clientID, clientSecret, projectID, clientType = f.Web.ClientID, f.Web.ClientSecret, f.Web.ProjectID, OAuthClientTypeWeb
 	}
 
 	if clientID == "" || clientSecret == "" {
 		return ClientCredentials{}, errInvalidCredentials
 	}
 
-	return ClientCredentials{ClientID: clientID, ClientSecret: clientSecret}, nil
+	return ClientCredentials{ClientID: clientID, ClientSecret: clientSecret, ProjectID: projectID, ClientType: clientType}, nil
 }
 
 func WriteClientCredentials(c ClientCredentials) error {
@@ -129,6 +153,12 @@ func ClientCredentialsExists(client string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// SameClientCredentials reports whether two stored credential sets match for
+// idempotent install (client id/secret/project).
+func SameClientCredentials(a, b ClientCredentials) bool {
+	return a.ClientID == b.ClientID && a.ClientSecret == b.ClientSecret && a.ProjectID == b.ProjectID && a.ClientType == b.ClientType
 }
 
 type CredentialsMissingError struct {

@@ -104,14 +104,14 @@ func (c *AnalyticsPivotReportCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"pivotHeaders":     resp.PivotHeaders,
 			"dimensionHeaders": resp.DimensionHeaders,
 			"metricHeaders":    resp.MetricHeaders,
 			"rows":             resp.Rows,
 			"metadata":         resp.Metadata,
 			"propertyQuota":    resp.PropertyQuota,
-		})
+		}, resp.Rows))
 	}
 
 	u := ui.FromContext(ctx)
@@ -201,9 +201,9 @@ func (c *AnalyticsBatchReportsCmd) Run(ctx context.Context, flags *RootFlags) er
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"reports": resp.Reports,
-		})
+		}, resp.Reports))
 	}
 	if outfmt.IsPlain(ctx) {
 		w, flush := tableWriter(ctx)
@@ -333,9 +333,9 @@ func (c *AnalyticsBatchPivotReportsCmd) Run(ctx context.Context, flags *RootFlag
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"pivotReports": resp.PivotReports,
-		})
+		}, resp.PivotReports))
 	}
 	if outfmt.IsPlain(ctx) {
 		w, flush := tableWriter(ctx)
@@ -449,10 +449,10 @@ func (c *AnalyticsCheckCompatibilityCmd) Run(ctx context.Context, flags *RootFla
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"dimensionCompatibilities": resp.DimensionCompatibilities,
 			"metricCompatibilities":    resp.MetricCompatibilities,
-		})
+		}))
 	}
 
 	u := ui.FromContext(ctx)

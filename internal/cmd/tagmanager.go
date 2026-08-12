@@ -58,9 +58,9 @@ func (c *TagManagerAccountsCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"accounts": resp.Account,
-		})
+		}, resp.Account))
 	}
 
 	if len(resp.Account) == 0 {
@@ -105,9 +105,9 @@ func (c *TagManagerContainersCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"containers": resp.Container,
-		})
+		}, resp.Container))
 	}
 
 	if len(resp.Container) == 0 {
@@ -157,9 +157,9 @@ func (c *TagManagerTagsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"tags": resp.Tag,
-		})
+		}, resp.Tag))
 	}
 
 	if len(resp.Tag) == 0 {
@@ -204,7 +204,7 @@ func (c *TagManagerTagCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"tag": tag})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"tag": tag}, tag))
 	}
 	if outfmt.IsPlain(ctx) {
 		return writeTagManagerTagPlain(ctx, tag)
@@ -350,9 +350,9 @@ func (c *TagManagerTriggersListCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"triggers": resp.Trigger,
-		})
+		}, resp.Trigger))
 	}
 
 	if len(resp.Trigger) == 0 {
@@ -411,9 +411,9 @@ func (c *TagManagerVariablesListCmd) Run(ctx context.Context, flags *RootFlags) 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"variables": resp.Variable,
-		})
+		}, resp.Variable))
 	}
 
 	if len(resp.Variable) == 0 {
@@ -467,9 +467,9 @@ func (c *TagManagerVersionsListCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"versionHeaders": resp.ContainerVersionHeader,
-		})
+		}, resp.ContainerVersionHeader))
 	}
 
 	if len(resp.ContainerVersionHeader) == 0 {

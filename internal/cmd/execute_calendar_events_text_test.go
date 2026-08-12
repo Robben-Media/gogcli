@@ -59,6 +59,57 @@ func TestExecute_CalendarEvents_Text_WithPaging(t *testing.T) {
 	}
 }
 
+func TestExecute_CalendarEvents_SelectCoexistsWithAPIFields(t *testing.T) {
+	origNew := newCalendarService
+	t.Cleanup(func() { newCalendarService = origNew })
+
+	srv := httptest.NewServer(withPrimaryCalendar(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/calendars/c1/events") {
+			http.NotFound(w, r)
+			return
+		}
+		if got := r.URL.Query().Get("fields"); got != "items(id,summary),nextPageToken" {
+			t.Fatalf("fields=%q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"items":         []map[string]any{{"id": "e1", "summary": "Meeting", "description": "hidden"}},
+			"nextPageToken": "npt",
+		})
+	})))
+	defer srv.Close()
+
+	svc, err := calendar.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newCalendarService = func(context.Context, string) (*calendar.Service, error) { return svc, nil }
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--json", "--results-only", "--select", "id,summary", "--account", "a@b.com",
+				"calendar", "events", "c1", "--from", "2025-12-17T00:00:00Z", "--to", "2025-12-18T00:00:00Z",
+				"--fields", "items(id,summary),nextPageToken",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	var events []map[string]any
+	if err := json.Unmarshal([]byte(out), &events); err != nil {
+		t.Fatalf("json parse: %v\nout=%q", err, out)
+	}
+	if len(events) != 1 || len(events[0]) != 2 || events[0]["id"] != "e1" || events[0]["summary"] != "Meeting" {
+		t.Fatalf("unexpected events: %#v", events)
+	}
+}
+
 func setupCalendarFailureService(t *testing.T, failAll bool) {
 	t.Helper()
 

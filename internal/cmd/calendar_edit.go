@@ -27,7 +27,7 @@ type CalendarCreateCmd struct {
 	ColorId               string   `name:"event-color" help:"Event color ID (1-11). Use 'gog calendar colors' to see available colors."`
 	Visibility            string   `name:"visibility" help:"Event visibility: default, public, private, confidential"`
 	Transparency          string   `name:"transparency" help:"Show as busy (opaque) or free (transparent). Aliases: busy, free"`
-	SendUpdates           string   `name:"send-updates" help:"Notification mode: all, externalOnly, none (default: all)"`
+	SendUpdates           string   `name:"send-updates" help:"Notification mode: all, externalOnly, none (default: all)" default:"all"`
 	GuestsCanInviteOthers *bool    `name:"guests-can-invite" help:"Allow guests to invite others"`
 	GuestsCanModify       *bool    `name:"guests-can-modify" help:"Allow guests to modify event"`
 	GuestsCanSeeOthers    *bool    `name:"guests-can-see-others" help:"Allow guests to see other guests"`
@@ -159,7 +159,7 @@ func (c *CalendarCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 	tz, loc, _ := getCalendarLocation(ctx, svc, calendarID)
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"event": wrapEventWithDaysWithTimezone(created, tz, loc)})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"event": wrapEventWithDaysWithTimezone(created, tz, loc)}, wrapEventWithDaysWithTimezone(created, tz, loc)))
 	}
 	printCalendarEventWithTimezone(u, created, tz, loc)
 	return nil
@@ -425,7 +425,7 @@ func (c *CalendarUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *
 	}
 	tz, loc, _ := getCalendarLocation(ctx, svc, calendarID)
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"event": wrapEventWithDaysWithTimezone(updated, tz, loc)})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"event": wrapEventWithDaysWithTimezone(updated, tz, loc)}, wrapEventWithDaysWithTimezone(updated, tz, loc)))
 	}
 	printCalendarEventWithTimezone(u, updated, tz, loc)
 	return nil
@@ -890,11 +890,11 @@ func (c *CalendarDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 		}
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"deleted":    true,
 			"calendarId": calendarID,
 			"eventId":    targetEventID,
-		})
+		}))
 	}
 	u.Out().Printf("deleted\ttrue")
 	u.Out().Printf("calendarId\t%s", calendarID)

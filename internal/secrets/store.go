@@ -25,6 +25,18 @@ type Store interface {
 	SetDefaultAccount(client string, email string) error
 }
 
+// TokenInspector exposes read-only token diagnostics without triggering legacy-token migration.
+type TokenInspector interface {
+	InspectTokens() ([]TokenInspection, error)
+}
+
+type TokenInspection struct {
+	Client string
+	Email  string
+	Token  Token
+	Err    error
+}
+
 type KeyringStore struct {
 	ring keyring.Keyring
 }
@@ -50,6 +62,8 @@ var (
 	errNoTTY                 = errors.New("no TTY available for keyring file backend password prompt")
 	errInvalidKeyringBackend = errors.New("invalid keyring backend")
 	errKeyringTimeout        = errors.New("keyring connection timed out")
+	errReadOnlyFileKeyring   = errors.New("file keyring directory does not exist; refusing to create it during read-only inspection")
+	errNoInputFilePassword   = errors.New("file keyring requires GOG_KEYRING_PASSWORD under --no-input")
 	openKeyringFunc          = openKeyring
 	keyringOpenFunc          = keyring.Open
 )
@@ -158,14 +172,24 @@ func shouldUseKeyringTimeout(goos string, backendInfo KeyringBackendInfo, dbusAd
 }
 
 func openKeyring() (keyring.Keyring, error) {
-	// On Linux/WSL/containers, OS keychains (secret-service/kwallet) may be unavailable.
-	// In that case github.com/99designs/keyring falls back to the "file" backend,
-	// which *requires* both a directory and a password prompt function.
 	keyringDir, err := config.EnsureKeyringDir()
 	if err != nil {
 		return nil, fmt.Errorf("ensure keyring dir: %w", err)
 	}
 
+	return openKeyringAt(keyringDir, false)
+}
+
+func openKeyringReadOnly() (keyring.Keyring, error) {
+	keyringDir, err := config.KeyringDir()
+	if err != nil {
+		return nil, fmt.Errorf("resolve keyring dir: %w", err)
+	}
+
+	return openKeyringAt(keyringDir, true)
+}
+
+func openKeyringAt(keyringDir string, readOnly bool) (keyring.Keyring, error) {
 	backendInfo, err := ResolveKeyringBackendInfo()
 	if err != nil {
 		return nil, err
@@ -182,6 +206,19 @@ func openKeyring() (keyring.Keyring, error) {
 	// trying to connect (common on headless systems like Raspberry Pi).
 	if shouldForceFileBackend(runtime.GOOS, backendInfo, dbusAddr) {
 		backends = []keyring.BackendType{keyring.FileBackend}
+	}
+
+	if readOnly {
+		if _, statErr := os.Stat(keyringDir); statErr != nil {
+			if !os.IsNotExist(statErr) {
+				return nil, fmt.Errorf("stat keyring dir: %w", statErr)
+			}
+
+			backends = withoutFileBackend(backends)
+			if len(backends) == 0 {
+				return nil, errReadOnlyFileKeyring
+			}
+		}
 	}
 
 	cfg := keyring.Config{
@@ -211,6 +248,21 @@ func openKeyring() (keyring.Keyring, error) {
 	}
 
 	return ring, nil
+}
+
+func withoutFileBackend(backends []keyring.BackendType) []keyring.BackendType {
+	if backends == nil {
+		backends = keyring.AvailableBackends()
+	}
+
+	out := make([]keyring.BackendType, 0, len(backends))
+	for _, backend := range backends {
+		if backend != keyring.FileBackend {
+			out = append(out, backend)
+		}
+	}
+
+	return out
 }
 
 type keyringResult struct {
@@ -247,8 +299,39 @@ func openKeyringWithTimeout(cfg keyring.Config, timeout time.Duration) (keyring.
 	}
 }
 
+// OpenDefaultNoInput opens the token store without permitting a file-backend
+// password prompt. It is appropriate for inspection paths controlled by --no-input.
+func OpenDefaultNoInput() (Store, error) {
+	info, err := ResolveKeyringBackendInfo()
+	if err != nil {
+		return nil, err
+	}
+	// On Linux without D-Bus, auto resolves to the file backend. Reject it
+	// before OpenDefault so a TTY never triggers TerminalPrompt under --no-input.
+	usesFile := info.Value == "file" || shouldForceFileBackend(runtime.GOOS, info, os.Getenv("DBUS_SESSION_BUS_ADDRESS"))
+	if usesFile && os.Getenv(keyringPasswordEnv) == "" {
+		return nil, errNoInputFilePassword
+	}
+
+	return OpenDefault()
+}
+
 func OpenDefault() (Store, error) {
 	ring, err := openKeyringFunc()
+	if err != nil {
+		return nil, err
+	}
+
+	return &KeyringStore{ring: ring}, nil
+}
+
+func IsKeyringStorageMissing(err error) bool {
+	return errors.Is(err, errReadOnlyFileKeyring)
+}
+
+// OpenReadOnlyDefault opens a token inspector that will not create keyring storage.
+func OpenReadOnlyDefault() (TokenInspector, error) {
+	ring, err := openKeyringReadOnly()
 	if err != nil {
 		return nil, err
 	}
@@ -427,6 +510,80 @@ func (s *KeyringStore) DeleteToken(client string, email string) error {
 	}
 
 	return nil
+}
+
+func (s *KeyringStore) InspectTokens() ([]TokenInspection, error) {
+	keys, err := s.Keys()
+	if err != nil {
+		return nil, fmt.Errorf("list tokens: %w", err)
+	}
+
+	out := make([]TokenInspection, 0)
+	seen := make(map[string]struct{})
+
+	for _, key := range keys {
+		client, email, ok := ParseTokenKey(key)
+		if !ok {
+			continue
+		}
+
+		identity := client + "\n" + email
+		if _, ok := seen[identity]; ok {
+			continue
+		}
+		seen[identity] = struct{}{}
+
+		inspection := TokenInspection{Client: client, Email: email}
+
+		token, err := s.getTokenReadOnly(client, email)
+		if err != nil {
+			inspection.Err = fmt.Errorf("read token: %w", err)
+		} else {
+			inspection.Token = token
+		}
+
+		out = append(out, inspection)
+	}
+
+	return out, nil
+}
+
+func (s *KeyringStore) getTokenReadOnly(client string, email string) (Token, error) {
+	email = normalize(email)
+	if email == "" {
+		return Token{}, errMissingEmail
+	}
+
+	normalizedClient, err := normalizeClient(client)
+	if err != nil {
+		return Token{}, err
+	}
+
+	item, err := s.ring.Get(tokenKey(normalizedClient, email))
+	if err != nil {
+		if normalizedClient != config.DefaultClientName {
+			return Token{}, fmt.Errorf("read token: %w", err)
+		}
+
+		item, err = s.ring.Get(legacyTokenKey(email))
+		if err != nil {
+			return Token{}, fmt.Errorf("read legacy token: %w", err)
+		}
+	}
+
+	var st storedToken
+	if err := json.Unmarshal(item.Data, &st); err != nil {
+		return Token{}, fmt.Errorf("decode token: %w", err)
+	}
+
+	return Token{
+		Client:       normalizedClient,
+		Email:        email,
+		Services:     st.Services,
+		Scopes:       st.Scopes,
+		CreatedAt:    st.CreatedAt,
+		RefreshToken: st.RefreshToken,
+	}, nil
 }
 
 func (s *KeyringStore) ListTokens() ([]Token, error) {

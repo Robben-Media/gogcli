@@ -89,12 +89,12 @@ func (c *TagManagerWorkspacesCreateVersionCmd) Run(ctx context.Context, flags *R
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"compilerError":    resp.CompilerError,
 			"containerVersion": resp.ContainerVersion,
 			"newWorkspacePath": resp.NewWorkspacePath,
 			"path":             versionPath,
-		})
+		}))
 	}
 	if outfmt.IsPlain(ctx) {
 		w, flush := tableWriter(ctx)
@@ -150,11 +150,11 @@ func (c *TagManagerVersionsPublishCmd) Run(ctx context.Context, flags *RootFlags
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"compilerError":    resp.CompilerError,
 			"containerVersion": resp.ContainerVersion,
 			"path":             versionPath,
-		})
+		}))
 	}
 	if outfmt.IsPlain(ctx) {
 		w, flush := tableWriter(ctx)

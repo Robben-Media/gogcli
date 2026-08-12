@@ -39,7 +39,7 @@ func (c *GmailVacationGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"vacation": vacation})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"vacation": vacation}, vacation))
 	}
 
 	u.Out().Printf("enable_auto_reply\t%t", vacation.EnableAutoReply)
@@ -145,7 +145,7 @@ func (c *GmailVacationUpdateCmd) Run(ctx context.Context, kctx *kong.Context, fl
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"vacation": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"vacation": updated}, updated))
 	}
 
 	if outfmt.IsPlain(ctx) {
