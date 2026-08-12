@@ -1414,7 +1414,7 @@ func emitSetupReport(ctx context.Context, u *ui.UI, flags *RootFlags, report Set
 	}
 
 	if outfmt.IsJSON(ctx) {
-		if err := outfmt.WriteJSON(os.Stdout, report); err != nil {
+		if err := outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(report)); err != nil {
 			return err
 		}
 		if report.Complete || report.DiscoveryComplete {
