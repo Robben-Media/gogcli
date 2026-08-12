@@ -1,9 +1,11 @@
 package googleapi
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"testing"
 )
 
@@ -53,6 +55,40 @@ func TestReadOnlyTransportBlocksMutationsAndPermitsReads(t *testing.T) {
 	}
 }
 
+func TestReadOnlyTransportBlocksBigQueryMutations(t *testing.T) {
+	base := &readOnlyTestTransport{}
+	transport := readOnlyTransportFromContext(WithReadOnly(context.Background(), true), base)
+
+	for _, query := range []string{
+		"DELETE FROM dataset.table WHERE id = 1",
+		"UPDATE dataset.table SET enabled = FALSE",
+		"CREATE TABLE dataset.created AS SELECT 1",
+	} {
+		req, err := http.NewRequestWithContext(
+			context.Background(),
+			http.MethodPost,
+			"https://bigquery.googleapis.com/bigquery/v2/projects/project/queries",
+			bytes.NewBufferString(`{"query":`+strconv.Quote(query)+`}`),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		response, err := transport.RoundTrip(req)
+		if response != nil {
+			defer response.Body.Close()
+		}
+
+		if !errors.Is(err, ErrReadOnly) {
+			t.Errorf("query %q error = %v, want ErrReadOnly", query, err)
+		}
+	}
+
+	if base.calls != 0 {
+		t.Fatalf("base calls = %d, want 0", base.calls)
+	}
+}
+
 func TestReadOnlyPOSTRegistryRejectsNearMatchesAndOverrides(t *testing.T) {
 	for _, raw := range []string{
 		"https://www.googleapis.com/calendar/v3/freeBusy",
@@ -62,7 +98,6 @@ func TestReadOnlyPOSTRegistryRejectsNearMatchesAndOverrides(t *testing.T) {
 		"https://analyticsdata.googleapis.com/v1beta/properties/123:batchRunPivotReports",
 		"https://analyticsdata.googleapis.com/v1beta/properties/123:checkCompatibility",
 		"https://analyticsdata.googleapis.com/v1alpha/properties/123/audiences/456:query",
-		"https://bigquery.googleapis.com/bigquery/v2/projects/project/queries",
 		"https://mybusinessbusinessinformation.googleapis.com/v1/locations:search",
 	} {
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, raw, nil)

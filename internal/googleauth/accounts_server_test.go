@@ -1012,6 +1012,66 @@ func TestManageServer_HandleAuthUpgrade(t *testing.T) {
 	}
 }
 
+func TestManageServer_HandleAuthUpgrade_ReadonlyDropsExistingWriteScopes(t *testing.T) {
+	origRead := readClientCredentials
+	origState := randomStateFn
+	origEndpoint := oauthEndpoint
+
+	t.Cleanup(func() {
+		readClientCredentials = origRead
+		randomStateFn = origState
+		oauthEndpoint = origEndpoint
+	})
+
+	readClientCredentials = func(string) (config.ClientCredentials, error) {
+		return config.ClientCredentials{ClientID: "id", ClientSecret: "secret"}, nil
+	}
+	randomStateFn = func() (string, error) { return "state-readonly", nil }
+	oauthEndpoint = oauth2.Endpoint{AuthURL: "http://example.com/auth", TokenURL: "http://example.com/token"}
+
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+
+	t.Cleanup(func() { _ = ln.Close() })
+
+	store := &fakeStore{tokens: []secrets.Token{{
+		Email:    "test@example.com",
+		Services: []string{"drive"},
+		Scopes:   []string{"https://www.googleapis.com/auth/drive"},
+	}}}
+	ms := &ManageServer{
+		listener: ln,
+		opts: ManageServerOptions{
+			Services: []Service{ServiceGmail},
+			Readonly: true,
+		},
+		store: store,
+	}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/auth/upgrade?email=test@example.com", nil)
+	ms.handleAuthUpgrade(rr, req)
+
+	if rr.Code != http.StatusFound {
+		t.Fatalf("status: %d", rr.Code)
+	}
+
+	parsed, err := url.Parse(rr.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse location: %v", err)
+	}
+
+	scope := parsed.Query().Get("scope")
+	if !strings.Contains(scope, "https://www.googleapis.com/auth/gmail.readonly") {
+		t.Fatalf("missing gmail.readonly in %q", scope)
+	}
+
+	if strings.Contains(scope, "https://www.googleapis.com/auth/drive") {
+		t.Fatalf("existing write-capable Drive scope retained in %q", scope)
+	}
+}
+
 func TestManageServer_HandleAuthUpgrade_MissingEmail(t *testing.T) {
 	ms := &ManageServer{}
 	rr := httptest.NewRecorder()

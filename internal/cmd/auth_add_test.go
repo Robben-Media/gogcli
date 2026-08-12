@@ -676,6 +676,68 @@ func TestAuthAddCmd_PreservesExistingGrant(t *testing.T) {
 	}
 }
 
+func TestAuthAddCmd_ReadonlyDoesNotMergeExistingWriteScopes(t *testing.T) {
+	origAuth := authorizeGoogle
+	origOpen := openSecretsStore
+	origKeychain := ensureKeychainAccess
+	origFetch := fetchAuthorizedEmail
+	t.Cleanup(func() {
+		authorizeGoogle = origAuth
+		openSecretsStore = origOpen
+		ensureKeychainAccess = origKeychain
+		fetchAuthorizedEmail = origFetch
+	})
+
+	ensureKeychainAccess = func() error { return nil }
+	store := newMemSecretsStore()
+	if err := store.SetToken(config.DefaultClientName, "user@example.com", secrets.Token{
+		Email:        "user@example.com",
+		Services:     []string{"gmail"},
+		Scopes:       []string{"https://www.googleapis.com/auth/gmail.modify"},
+		RefreshToken: "old-rt",
+	}); err != nil {
+		t.Fatalf("SetToken: %v", err)
+	}
+	openSecretsStore = func() (secrets.Store, error) { return store, nil }
+
+	var gotOpts googleauth.AuthorizeOptions
+	authorizeGoogle = func(_ context.Context, opts googleauth.AuthorizeOptions) (string, error) {
+		gotOpts = opts
+		gotOpts.Services = append([]googleauth.Service(nil), opts.Services...)
+		gotOpts.Scopes = append([]string(nil), opts.Scopes...)
+		return "new-rt", nil
+	}
+	fetchAuthorizedEmail = func(context.Context, string, string, []string, time.Duration) (string, error) {
+		return "user@example.com", nil
+	}
+
+	_ = captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--readonly", "auth", "add", "user@example.com", "--services", "gmail"}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	if !containsStringInSlice(gotOpts.Scopes, "https://www.googleapis.com/auth/gmail.readonly") {
+		t.Fatalf("missing gmail.readonly in %v", gotOpts.Scopes)
+	}
+	if containsStringInSlice(gotOpts.Scopes, "https://www.googleapis.com/auth/gmail.modify") {
+		t.Fatalf("write-capable scope retained in %v", gotOpts.Scopes)
+	}
+	if !gotOpts.DisableIncludeGrantedScopes {
+		t.Fatalf("DisableIncludeGrantedScopes = false, want true")
+	}
+
+	stored, err := store.GetToken(config.DefaultClientName, "user@example.com")
+	if err != nil {
+		t.Fatalf("GetToken: %v", err)
+	}
+	if containsStringInSlice(stored.Scopes, "https://www.googleapis.com/auth/gmail.modify") {
+		t.Fatalf("stored write-capable scope retained in %v", stored.Scopes)
+	}
+}
+
 func TestAuthAddCmd_ReplaceScopesIsExplicit(t *testing.T) {
 	origAuth := authorizeGoogle
 	origOpen := openSecretsStore

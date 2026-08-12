@@ -539,7 +539,7 @@ func (c *AuthAddCmd) Run(ctx context.Context) error {
 		return fmt.Errorf("read existing token: %w", existingErr)
 	}
 
-	if hasExisting && !c.ReplaceScopes {
+	if hasExisting && !c.ReplaceScopes && !readonly {
 		services, scopes = googleauth.MergeAuthGrant(services, scopes, existing.Services, existing.Scopes)
 	}
 
@@ -1016,6 +1016,7 @@ func (c *AuthManageCmd) Run(ctx context.Context) error {
 		Timeout:      c.Timeout,
 		Services:     services,
 		ForceConsent: c.ForceConsent,
+		Readonly:     googleapi.ReadOnly(ctx),
 		Client:       authclient.ClientOverrideFromContext(ctx),
 	})
 }

@@ -1,6 +1,6 @@
 # Layer runtime read-only protection
 
-Runtime read-only mode is an opt-in, fail-closed outbound-request guard. When `--readonly` or `GOG_READONLY=1` is active, it permits GET, HEAD, OPTIONS, and a small reviewed allowlist of semantic-read POST endpoints; it blocks every other POST, PUT, PATCH, and DELETE before dispatch. The guard applies to shared Google API clients and service-account Keep clients.
+Runtime read-only mode is an opt-in, fail-closed outbound-request guard. When `--readonly` or `GOG_READONLY=1` is active, it permits GET, HEAD, OPTIONS, and a small reviewed allowlist of semantic-read POST endpoints; it blocks every other POST, PUT, PATCH, and DELETE before dispatch. BigQuery query POSTs are intentionally blocked because their payload can execute DML and DDL. The guard applies to shared Google API clients and service-account Keep clients.
 
 ## Consequences
 

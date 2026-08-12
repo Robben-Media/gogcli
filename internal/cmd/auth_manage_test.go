@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/steipete/gogcli/internal/googleapi"
 	"github.com/steipete/gogcli/internal/googleauth"
 )
 
@@ -30,6 +31,25 @@ func TestAuthManageCmd_ServicesAndOptions(t *testing.T) {
 	}
 	if len(got.Services) != 2 {
 		t.Fatalf("expected de-duped services, got %#v", got.Services)
+	}
+}
+
+func TestAuthManageCmd_ReadonlyPropagates(t *testing.T) {
+	orig := startManageServer
+	t.Cleanup(func() { startManageServer = orig })
+
+	var got googleauth.ManageServerOptions
+	startManageServer = func(_ context.Context, opts googleauth.ManageServerOptions) error {
+		got = opts
+		return nil
+	}
+
+	ctx := googleapi.WithReadOnly(context.Background(), true)
+	if err := runKong(t, &AuthManageCmd{}, []string{"--services", "gmail"}, ctx, nil); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if !got.Readonly {
+		t.Fatal("Readonly = false, want true")
 	}
 }
 

@@ -107,8 +107,6 @@ func readOnlyPOSTRequest(req *http.Request) bool {
 			strings.HasSuffix(path, ":runRealtimeReport") ||
 			strings.HasSuffix(path, ":query") ||
 			strings.HasSuffix(path, ":checkCompatibility")
-	case "bigquery.googleapis.com", "bigquery.mtls.googleapis.com":
-		return strings.HasPrefix(path, "/bigquery/v2/projects/") && strings.HasSuffix(path, "/queries")
 	case "mybusinessbusinessinformation.googleapis.com", "mybusinessbusinessinformation.mtls.googleapis.com":
 		return strings.HasSuffix(path, ":search")
 	default:
