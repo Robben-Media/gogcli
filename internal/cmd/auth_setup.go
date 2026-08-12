@@ -877,7 +877,7 @@ func (rt *setupRuntime) installCredentials(ctx context.Context, projectID string
 		RequireForceToReplace:        true,
 		Force:                        rt.force,
 		Confirm:                      confirmFn,
-		BeforeReplacement:            rt.invalidateClientTokens,
+		AfterReplacement:             rt.invalidateClientTokens,
 	})
 	if instErr != nil {
 		status, resumable := credentialInstallFailure(instErr)
@@ -914,8 +914,12 @@ func (rt *setupRuntime) installCredentials(ctx context.Context, projectID string
 		if err := config.WriteConfig(rt.cfg); err != nil {
 			return true, err
 		}
-		rt.setupRec = config.GetClientSetup(rt.cfg, rt.client)
 	}
+	cfg, cfgErr := config.ReadConfig()
+	if cfgErr != nil {
+		return true, cfgErr
+	}
+	rt.cfg, rt.setupRec = cfg, config.GetClientSetup(cfg, rt.client)
 	return false, nil
 }
 
@@ -990,6 +994,13 @@ func (rt *setupRuntime) appendCredentialsExisting(ctx context.Context, projectID
 
 func (rt *setupRuntime) runAccount(ctx context.Context) (stop bool, err error) {
 	email := strings.TrimSpace(rt.cmd.AccountEmail)
+	if rt.setupRec.ReauthorizationRequired {
+		if email == "" || rt.discover {
+			rt.appendStage(SetupStage{ID: stageAccount, Status: stageStatusMissing, ActionKind: actionCommand, Summary: "account reauthorization required after credential replacement", Blocker: "authorize an account with the replacement credentials", Resumable: true, Command: fmt.Sprintf("gog --client %s auth setup --project %s --email you@example.com", rt.client, rt.report.ProjectID)})
+			return false, nil
+		}
+		return rt.authorizeAccount(ctx, email)
+	}
 	satisfies, inspectErr := rt.accountTokenSatisfies(email)
 	if inspectErr != nil {
 		rt.appendStage(SetupStage{ID: stageAccount, Status: stageStatusFailed, ActionKind: actionCommand, Summary: "cannot inspect stored account tokens", Blocker: inspectErr.Error(), Command: rt.continueCmd(rt.report.ProjectID)})

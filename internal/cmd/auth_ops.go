@@ -18,8 +18,9 @@ import (
 )
 
 var (
-	errNoServicesSelected = errors.New("no services selected")
-	errAuthorizedEmail    = errors.New("authorized email mismatch")
+	errNoServicesSelected  = errors.New("no services selected")
+	errAuthorizedEmail     = errors.New("authorized email mismatch")
+	writeClientCredentials = config.WriteClientCredentialsFor
 )
 
 const (
@@ -62,10 +63,9 @@ type InstallCredentialsOptions struct {
 	// Confirm is called before replacing different credentials when interactive.
 	// If nil and replacement requires confirmation, the operation fails.
 	Confirm func(action string) error
-	// BeforeReplacement runs after a replacement has been confirmed but before the
-	// new credentials are stored. Setup uses it to invalidate tokens issued to the
-	// credentials being replaced.
-	BeforeReplacement func(client string) (invalidated int, err error)
+	// AfterReplacement runs only after new credentials have been durably stored.
+	// Setup uses it to invalidate tokens issued to the credentials being replaced.
+	AfterReplacement func(client string) (invalidated int, err error)
 }
 
 // InstallClientCredentials stores OAuth client credentials for a client
@@ -141,7 +141,7 @@ func InstallClientCredentials(opts InstallCredentialsOptions) (InstallCredential
 						client,
 					)
 				}
-				if confErr := opts.Confirm(fmt.Sprintf("replace OAuth credentials for client %q", client)); confErr != nil {
+				if confErr := opts.Confirm(fmt.Sprintf("replace OAuth credentials for client %q; this invalidates existing authorizations for that client", client)); confErr != nil {
 					return InstallCredentialsResult{}, confErr
 				}
 			}
@@ -153,29 +153,49 @@ func InstallClientCredentials(opts InstallCredentialsOptions) (InstallCredential
 	}
 
 	invalidatedTokens := 0
-	if replaced && opts.BeforeReplacement != nil {
-		invalidatedTokens, err = opts.BeforeReplacement(client)
-		if err != nil {
-			return InstallCredentialsResult{}, fmt.Errorf("invalidate tokens for replaced credentials: %w", err)
+	if replaced {
+		// Persist the guard before replacing credentials. If either the replacement
+		// or subsequent invalidation fails, surviving tokens cannot complete setup.
+		cfg, cfgErr := config.ReadConfig()
+		if cfgErr != nil {
+			return InstallCredentialsResult{}, cfgErr
+		}
+		guardErr := config.SetClientSetupReauthorizationRequired(&cfg, client, true)
+		if guardErr != nil {
+			return InstallCredentialsResult{}, guardErr
+		}
+		// A standalone overwrite also loses any prior project association.
+		if !opts.RequireInstalledClient {
+			associationErr := config.SetClientSetupCredentialsProjectAssociated(&cfg, client, false)
+			if associationErr != nil {
+				return InstallCredentialsResult{}, associationErr
+			}
+		}
+		writeConfigErr := config.WriteConfig(cfg)
+		if writeConfigErr != nil {
+			return InstallCredentialsResult{}, writeConfigErr
 		}
 	}
 	if !identical {
-		if err := config.WriteClientCredentialsFor(client, creds); err != nil {
+		credentialsErr := writeClientCredentials(client, creds)
+		if credentialsErr != nil {
+			return InstallCredentialsResult{}, credentialsErr
+		}
+	}
+	if replaced && opts.AfterReplacement != nil {
+		invalidatedTokens, err = opts.AfterReplacement(client)
+		if err != nil {
+			return InstallCredentialsResult{}, fmt.Errorf("credentials replaced but token invalidation incomplete; reauthorization remains required: %w", err)
+		}
+		cfg, cfgErr := config.ReadConfig()
+		if cfgErr != nil {
+			return InstallCredentialsResult{}, cfgErr
+		}
+		if err := config.SetClientSetupReauthorizationRequired(&cfg, client, false); err != nil {
 			return InstallCredentialsResult{}, err
 		}
-		// A standalone overwrite does not prove its project association remains
-		// valid. Guided setup will require confirmation again when needed.
-		if !opts.RequireInstalledClient {
-			cfg, cfgErr := config.ReadConfig()
-			if cfgErr != nil {
-				return InstallCredentialsResult{}, cfgErr
-			}
-			if err := config.SetClientSetupCredentialsProjectAssociated(&cfg, client, false); err != nil {
-				return InstallCredentialsResult{}, err
-			}
-			if err := config.WriteConfig(cfg); err != nil {
-				return InstallCredentialsResult{}, err
-			}
+		if err := config.WriteConfig(cfg); err != nil {
+			return InstallCredentialsResult{}, err
 		}
 	}
 
@@ -334,6 +354,17 @@ func AuthorizeAndStoreAccount(ctx context.Context, opts AuthorizeAccountOptions)
 		Scopes:       scopes,
 		RefreshToken: refreshToken,
 	}); err != nil {
+		return AuthorizeAccountResult{}, err
+	}
+	// A successful authorization proves the replacement credentials are usable.
+	cfg, cfgErr := config.ReadConfig()
+	if cfgErr != nil {
+		return AuthorizeAccountResult{}, cfgErr
+	}
+	if err := config.SetClientSetupReauthorizationRequired(&cfg, client, false); err != nil {
+		return AuthorizeAccountResult{}, err
+	}
+	if err := config.WriteConfig(cfg); err != nil {
 		return AuthorizeAccountResult{}, err
 	}
 	if strings.TrimSpace(override) != "" && !opts.SuppressClientMapping {

@@ -35,6 +35,9 @@ type ClientSetup struct {
 	// CredentialsProjectAssociated records explicit confirmation that credentials
 	// without project_id belong to ProjectID. It is not implied by pairing a target.
 	CredentialsProjectAssociated bool `json:"credentials_project_associated,omitempty"`
+	// ReauthorizationRequired prevents tokens issued to replaced credentials from
+	// satisfying setup until they have been invalidated or an account reauthorizes.
+	ReauthorizationRequired bool `json:"reauthorization_required,omitempty"`
 }
 
 // GetClientSetup returns the setup record for client, or a zero value.
@@ -78,6 +81,29 @@ func SetClientSetupProject(cfg *File, client, projectID string) error {
 	}
 
 	cur.ProjectID = projectID
+	cfg.ClientSetup[normalized] = cur
+
+	return nil
+}
+
+// SetClientSetupReauthorizationRequired records whether credential replacement
+// requires a fresh account authorization before setup can be complete.
+func SetClientSetupReauthorizationRequired(cfg *File, client string, required bool) error {
+	if cfg == nil {
+		return errNilConfig
+	}
+
+	normalized, err := NormalizeClientNameOrDefault(client)
+	if err != nil {
+		return err
+	}
+
+	if cfg.ClientSetup == nil {
+		cfg.ClientSetup = make(map[string]ClientSetup)
+	}
+
+	cur := cfg.ClientSetup[normalized]
+	cur.ReauthorizationRequired = required
 	cfg.ClientSetup[normalized] = cur
 
 	return nil

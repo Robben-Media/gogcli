@@ -98,13 +98,17 @@ func (c *AuthCredentialsSetCmd) Run(ctx context.Context) error {
 	}
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
-			"saved":  true,
-			"path":   result.Path,
-			"client": result.Client,
+			"saved":    true,
+			"path":     result.Path,
+			"client":   result.Client,
+			"replaced": result.Replaced,
 		}))
 	}
 	u.Out().Printf("path\t%s", result.Path)
 	u.Out().Printf("client\t%s", result.Client)
+	if result.Replaced {
+		u.Err().Println("WARNING: credentials replaced; existing authorizations for this client must be renewed before guided setup can complete")
+	}
 	return nil
 }
 

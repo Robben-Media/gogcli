@@ -438,8 +438,9 @@ func TestAuthSetup_ReplacingCredentialsInvalidatesOnlyClientTokens(t *testing.T)
 	}
 
 	store := newMemSecretsStore()
+	services := parseSetupServices(t, "gmail")
 	for client, email := range map[string]string{"work": "work@example.com", "other": "other@example.com"} {
-		if err := store.SetToken(client, email, secrets.Token{RefreshToken: client + "-token"}); err != nil {
+		if err := store.SetToken(client, email, secrets.Token{Services: authServiceNames(services), Scopes: accountScopes(services), RefreshToken: client + "-token"}); err != nil {
 			t.Fatalf("set %s token: %v", client, err)
 		}
 	}
