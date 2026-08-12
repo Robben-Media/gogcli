@@ -84,7 +84,7 @@ func readOnlyPOSTRequest(req *http.Request) bool {
 		return false
 	}
 	host := strings.ToLower(strings.TrimSuffix(req.URL.Hostname(), "."))
-	path := req.URL.Path
+	path := req.URL.EscapedPath()
 
 	switch host {
 	case "www.googleapis.com", "www.mtls.googleapis.com", "calendar-json.googleapis.com", "calendar-json.mtls.googleapis.com":

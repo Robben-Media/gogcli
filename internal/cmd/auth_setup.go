@@ -421,6 +421,10 @@ func (rt *setupRuntime) handleMissingGCloudAccount(ctx context.Context) (stop bo
 		return stopSetup()
 	}
 
+	if rt.readOnly {
+		return true, usage("--readonly cannot be combined with --gcloud-login")
+	}
+
 	rt.u.Err().Println("Running gcloud auth login (does not change gcloud default project/config beyond auth)…")
 	loginRes := rt.gc.Login(ctx)
 	if loginRes.ExitCode != 0 {

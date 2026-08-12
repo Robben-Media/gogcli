@@ -93,6 +93,8 @@ func TestReadOnlyPOSTRegistryRejectsNearMatchesAndOverrides(t *testing.T) {
 	for _, raw := range []string{
 		"https://www.googleapis.com/calendar/v3/freeBusy",
 		"https://searchconsole.mtls.googleapis.com/webmasters/v3/sites/example/searchAnalytics/query",
+		"https://searchconsole.googleapis.com/webmasters/v3/sites/https%3A%2F%2Fexample.com%2F/searchAnalytics/query",
+		"https://searchconsole.googleapis.com/webmasters/v3/sites/sc-domain%3Aexample.com/searchAnalytics/query",
 		"https://searchconsole.googleapis.com/v1/urlInspection/index:inspect",
 		"https://searchconsole.googleapis.com/v1/urlTestingTools/mobileFriendlyTest:run",
 		"https://sheets.mtls.googleapis.com/v4/spreadsheets/id:getByDataFilter",
@@ -124,6 +126,8 @@ func TestReadOnlyPOSTRegistryRejectsNearMatchesAndOverrides(t *testing.T) {
 		"https://example.test/calendar/v3/freeBusy",
 		"https://www.googleapis.com/unreviewed/calendar/v3/freeBusy",
 		"https://searchconsole.googleapis.com/unreviewed/webmasters/v3/sites/example/searchAnalytics/query",
+		"https://searchconsole.googleapis.com/unreviewed/webmasters/v3/sites/https%3A%2F%2Fexample.com%2F/searchAnalytics/query",
+		"https://searchconsole.googleapis.com/webmasters/v3/sites/prefix/https%3A%2F%2Fexample.com%2F/searchAnalytics/query",
 		"https://sheets.googleapis.com/v4/spreadsheets/id/anything:search",
 		"https://analyticsdata.googleapis.com/v9/properties/123:runReport",
 		"https://analyticsdata.googleapis.com/v1beta/properties/123/anything:query",

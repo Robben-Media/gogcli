@@ -260,6 +260,25 @@ func TestAuthSetup_ReadonlyDryRunDisplaysPlanWithoutSubprocess(t *testing.T) {
 	}
 }
 
+func TestAuthSetup_GCloudLogin_ReadonlyBlocksBeforeSubprocess(t *testing.T) {
+	r := &setupFakeRunner{}
+	rt := &setupRuntime{
+		cmd:         &AuthSetupCmd{GCloudLogin: true},
+		u:           mustSetupUI(t),
+		gc:          gcloud.New(r),
+		interactive: true,
+		readOnly:    true,
+	}
+
+	stop, err := rt.handleMissingGCloudAccount(context.Background())
+	if !stop || ExitCode(err) != 2 {
+		t.Fatalf("expected readonly usage stop, got stop=%t err=%v code=%d", stop, err, ExitCode(err))
+	}
+	if len(r.calls) != 0 {
+		t.Fatalf("readonly gcloud login must not run a subprocess: %#v", r.calls)
+	}
+}
+
 func TestAuthSetup_EnableAPIs_WithForce(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
