@@ -52,10 +52,10 @@ func (c *ClassroomGuardiansListCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"guardians":     resp.Guardians,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Guardians))
 	}
 
 	if len(resp.Guardians) == 0 {
@@ -111,7 +111,7 @@ func (c *ClassroomGuardiansGetCmd) Run(ctx context.Context, flags *RootFlags) er
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"guardian": guardian})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"guardian": guardian}, guardian))
 	}
 
 	u.Out().Printf("id\t%s", guardian.GuardianId)
@@ -156,11 +156,11 @@ func (c *ClassroomGuardiansDeleteCmd) Run(ctx context.Context, flags *RootFlags)
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"deleted":    true,
 			"studentId":  studentID,
 			"guardianId": guardianID,
-		})
+		}))
 	}
 	u.Out().Printf("deleted\ttrue")
 	u.Out().Printf("student_id\t%s", studentID)
@@ -216,10 +216,10 @@ func (c *ClassroomGuardianInvitesListCmd) Run(ctx context.Context, flags *RootFl
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"invitations":   resp.GuardianInvitations,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.GuardianInvitations))
 	}
 
 	if len(resp.GuardianInvitations) == 0 {
@@ -276,7 +276,7 @@ func (c *ClassroomGuardianInvitesGetCmd) Run(ctx context.Context, flags *RootFla
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"invitation": inv})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"invitation": inv}, inv))
 	}
 
 	u.Out().Printf("id\t%s", inv.InvitationId)
@@ -321,7 +321,7 @@ func (c *ClassroomGuardianInvitesCreateCmd) Run(ctx context.Context, flags *Root
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"invitation": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"invitation": created}, created))
 	}
 	u.Out().Printf("id\t%s", created.InvitationId)
 	u.Out().Printf("student_id\t%s", created.StudentId)

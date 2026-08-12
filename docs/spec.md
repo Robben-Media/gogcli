@@ -32,6 +32,8 @@ This replaces the existing separate CLIs (`gmcli`, `gccli`, `gdcli`) and the Pyt
 - Global flag:
   - `--color=auto|always|never` (default `auto`)
   - `--json` (JSON output to stdout)
+  - `--results-only` (emit the command's declared primary JSON result; requires `--json`)
+  - `--select <paths>` (project comma-separated dotted paths from JSON objects or arrays of objects; requires `--json`)
   - `--plain` (TSV output to stdout; stable/parseable; disables colors)
   - `--wrap-untrusted` (JSON only: wrap free-text Workspace fields with untrusted-content fences; default off; no-op without JSON; does not change plain/human output)
   - `--force` (skip confirmations for destructive commands)

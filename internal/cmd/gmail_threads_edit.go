@@ -44,10 +44,10 @@ func (c *GmailThreadDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"id":      threadID,
 			"deleted": true,
-		})
+		}))
 	}
 
 	u.Err().Printf("Thread %s permanently deleted", threadID)
@@ -82,11 +82,11 @@ func (c *GmailThreadTrashCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"id":       thread.Id,
 			"threadId": thread.Id,
 			"trashed":  true,
-		})
+		}))
 	}
 
 	u.Err().Printf("Thread %s moved to trash", thread.Id)
@@ -121,11 +121,11 @@ func (c *GmailThreadUntrashCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"id":        thread.Id,
 			"threadId":  thread.Id,
 			"untrashed": true,
-		})
+		}))
 	}
 
 	u.Err().Printf("Thread %s removed from trash", thread.Id)

@@ -42,6 +42,8 @@ type RootFlags struct {
 	EnableCommandPaths string `help:"Comma-separated list of enabled exact command paths (e.g. 'gmail search,calendar events'; restricts CLI)" default:"${enabled_command_paths}"`
 	JSON               bool   `help:"Output JSON to stdout (best for scripting)" default:"${json}"`
 	Plain              bool   `help:"Output stable, parseable text to stdout (TSV; no colors)" default:"${plain}"`
+	ResultsOnly        bool   `name:"results-only" help:"Output only the declared primary result (requires --json)"`
+	Select             string `name:"select" help:"Comma-separated fields to select from JSON output (requires --json)"`
 	WrapUntrusted      bool   `name:"wrap-untrusted" help:"Wrap free-text Workspace fields in JSON with untrusted-content fences (agents; requires --json / GOG_JSON; no-op otherwise)" default:"${wrap_untrusted}"`
 	Version            bool   `help:"Print version and exit"`
 	Force              bool   `help:"Skip confirmations for destructive commands"`
@@ -87,11 +89,15 @@ type exitPanic struct{ code int }
 
 func Execute(args []string) (err error) {
 	if hasVersionFlag(args) {
-		mode, innerErr := outputModeFromVersionArgs(args)
+		mode, jsonConfig, innerErr := outputModeFromVersionArgs(args)
 		if innerErr != nil {
 			return reportPreUIError(newUsageError(innerErr))
 		}
 		ctx := outfmt.WithMode(context.Background(), mode)
+		ctx, innerErr = outfmt.WithJSONConfig(ctx, jsonConfig)
+		if innerErr != nil {
+			return reportPreUIError(newUsageError(innerErr))
+		}
 		return (&VersionCmd{}).Run(ctx)
 	}
 
@@ -142,8 +148,16 @@ func Execute(args []string) (err error) {
 	if err != nil {
 		return reportPreUIError(newUsageError(err))
 	}
+	jsonConfig, err := jsonConfigFromFlags(mode, cli.ResultsOnly, cli.Select, hasSelectFlag(args))
+	if err != nil {
+		return reportPreUIError(newUsageError(err))
+	}
 	ctx := context.Background()
 	ctx = outfmt.WithMode(ctx, mode)
+	ctx, err = outfmt.WithJSONConfig(ctx, jsonConfig)
+	if err != nil {
+		return reportPreUIError(newUsageError(err))
+	}
 	ctx = authclient.WithClient(ctx, cli.Client)
 
 	uiColor := cli.Color
@@ -187,6 +201,22 @@ func Execute(args []string) (err error) {
 	}
 	_, _ = fmt.Fprintln(os.Stderr, errfmt.Format(err))
 	return err
+}
+
+func jsonConfigFromFlags(mode outfmt.Mode, resultsOnly bool, selectPaths string, selectSet bool) (outfmt.JSONConfig, error) {
+	selectPaths = strings.TrimSpace(selectPaths)
+	if !mode.JSON && (resultsOnly || selectSet) {
+		return outfmt.JSONConfig{}, errors.New("--results-only and --select require --json")
+	}
+	if selectSet && selectPaths == "" {
+		return outfmt.JSONConfig{}, errors.New("--select requires a value")
+	}
+
+	jsonOutput := outfmt.JSONConfig{ResultsOnly: resultsOnly}
+	if selectSet {
+		jsonOutput.Select = strings.Split(selectPaths, ",")
+	}
+	return jsonOutput, nil
 }
 
 func wrapParseError(err error) error {
@@ -319,13 +349,29 @@ func hasVersionFlag(args []string) bool {
 	return false
 }
 
-func outputModeFromVersionArgs(args []string) (outfmt.Mode, error) {
+func hasSelectFlag(args []string) bool {
+	for _, arg := range args {
+		if arg == "--" {
+			break
+		}
+		if arg == "--select" || strings.HasPrefix(arg, "--select=") {
+			return true
+		}
+	}
+	return false
+}
+
+func outputModeFromVersionArgs(args []string) (outfmt.Mode, outfmt.JSONConfig, error) {
 	envMode := outfmt.FromEnv()
 	jsonOut := envMode.JSON
 	plainOut := envMode.Plain
 	wrapOut := envMode.WrapUntrusted
+	resultsOnly := false
+	selectPaths := ""
+	selectSet := false
 
-	for _, arg := range args {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
 		if arg == "--" {
 			break
 		}
@@ -336,28 +382,54 @@ func outputModeFromVersionArgs(args []string) (outfmt.Mode, error) {
 			plainOut = true
 		case arg == "--wrap-untrusted":
 			wrapOut = true
+		case arg == "--results-only":
+			resultsOnly = true
+		case arg == "--select":
+			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
+				return outfmt.Mode{}, outfmt.JSONConfig{}, errors.New("--select requires a value")
+			}
+			i++
+			selectPaths = args[i]
+			selectSet = true
 		case strings.HasPrefix(arg, "--json="):
 			v, err := parseFlagBool(strings.TrimPrefix(arg, "--json="))
 			if err != nil {
-				return outfmt.Mode{}, err
+				return outfmt.Mode{}, outfmt.JSONConfig{}, err
 			}
 			jsonOut = v
 		case strings.HasPrefix(arg, "--plain="):
 			v, err := parseFlagBool(strings.TrimPrefix(arg, "--plain="))
 			if err != nil {
-				return outfmt.Mode{}, err
+				return outfmt.Mode{}, outfmt.JSONConfig{}, err
 			}
 			plainOut = v
 		case strings.HasPrefix(arg, "--wrap-untrusted="):
 			v, err := parseFlagBool(strings.TrimPrefix(arg, "--wrap-untrusted="))
 			if err != nil {
-				return outfmt.Mode{}, err
+				return outfmt.Mode{}, outfmt.JSONConfig{}, err
 			}
 			wrapOut = v
+		case strings.HasPrefix(arg, "--results-only="):
+			v, err := parseFlagBool(strings.TrimPrefix(arg, "--results-only="))
+			if err != nil {
+				return outfmt.Mode{}, outfmt.JSONConfig{}, err
+			}
+			resultsOnly = v
+		case strings.HasPrefix(arg, "--select="):
+			selectPaths = strings.TrimPrefix(arg, "--select=")
+			selectSet = true
 		}
 	}
 
-	return outfmt.FromFlagsFull(jsonOut, plainOut, wrapOut)
+	mode, err := outfmt.FromFlagsFull(jsonOut, plainOut, wrapOut)
+	if err != nil {
+		return outfmt.Mode{}, outfmt.JSONConfig{}, err
+	}
+	jsonOutput, err := jsonConfigFromFlags(mode, resultsOnly, selectPaths, selectSet)
+	if err != nil {
+		return outfmt.Mode{}, outfmt.JSONConfig{}, err
+	}
+	return mode, jsonOutput, nil
 }
 
 func parseFlagBool(value string) (bool, error) {

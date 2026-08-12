@@ -49,10 +49,10 @@ func (c *PolicyCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	saved, _ := config.GetPolicy(cfg, c.Name)
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"created": true,
 			"policy":  saved,
-		})
+		}, saved))
 	}
 	if outfmt.IsPlain(ctx) {
 		fmt.Fprintln(os.Stdout, "ACTION\tNAME\tACCOUNT\tCLIENT\tALLOW\tDENY\tREASON")
@@ -82,7 +82,7 @@ func (c *PolicyGetCmd) Run(ctx context.Context) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"policy": policy})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"policy": policy}, policy))
 	}
 	fmt.Fprintf(os.Stdout, "name\t%s\n", policy.Name)
 	if policy.Account != "" {
@@ -112,7 +112,7 @@ func (c *PolicyListCmd) Run(ctx context.Context) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"policies": cfg.Policies})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"policies": cfg.Policies}, cfg.Policies))
 	}
 	if len(cfg.Policies) == 0 && !outfmt.IsPlain(ctx) {
 		fmt.Fprintln(os.Stdout, "No policies")
@@ -148,10 +148,10 @@ func (c *PolicyDeleteCmd) Run(ctx context.Context) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"deleted": true,
 			"name":    c.Name,
-		})
+		}))
 	}
 	if outfmt.IsPlain(ctx) {
 		fmt.Fprintln(os.Stdout, "ACTION\tNAME\tACCOUNT\tCLIENT\tALLOW\tDENY\tREASON")

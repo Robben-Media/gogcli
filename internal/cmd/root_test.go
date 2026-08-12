@@ -90,6 +90,92 @@ func TestExecute_UnknownFlag(t *testing.T) {
 	}
 }
 
+func TestExecute_JSONTransformationsRequireJSON(t *testing.T) {
+	for _, args := range [][]string{
+		{"--results-only", "version"},
+		{"--select", "version,commit", "version"},
+		{"--plain", "--results-only", "version"},
+		{"--version", "--select", "version"},
+	} {
+		t.Run(strings.Join(args, "_"), func(t *testing.T) {
+			var execErr error
+			stdout := captureStdout(t, func() {
+				stderr := captureStderr(t, func() {
+					execErr = Execute(args)
+				})
+				if !strings.Contains(stderr, "require --json") {
+					t.Fatalf("expected require --json diagnostic, got %q", stderr)
+				}
+			})
+			if execErr == nil || ExitCode(execErr) != 2 {
+				t.Fatalf("expected usage error, got %v", execErr)
+			}
+			if stdout != "" {
+				t.Fatalf("unexpected partial output: %q", stdout)
+			}
+		})
+	}
+}
+
+func TestExecute_InvalidJSONSelectionReportsUsageError(t *testing.T) {
+	var execErr error
+	stdout := captureStdout(t, func() {
+		stderr := captureStderr(t, func() {
+			execErr = Execute([]string{"--json", "--select", "version,,commit", "version"})
+		})
+		if !strings.Contains(stderr, "invalid JSON selection path") {
+			t.Fatalf("unexpected stderr: %q", stderr)
+		}
+	})
+	if execErr == nil || ExitCode(execErr) != 2 {
+		t.Fatalf("expected usage error, got %v", execErr)
+	}
+	if stdout != "" {
+		t.Fatalf("unexpected partial output: %q", stdout)
+	}
+}
+
+func TestHasSelectFlagRetainsMatchBeforeDoubleDash(t *testing.T) {
+	if !hasSelectFlag([]string{"--select", "id", "--", "version"}) {
+		t.Fatal("expected --select before -- to be retained")
+	}
+}
+
+func TestExecute_ExplicitEmptySelectReportsUsageError(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		args       []string
+		diagnostic string
+	}{
+		{name: "parser equals", args: []string{"--json", "--select=", "version"}, diagnostic: "--select requires a value"},
+		{name: "parser whitespace", args: []string{"--json", "--select", " ", "version"}, diagnostic: "--select requires a value"},
+		{name: "parser empty still requires json", args: []string{"--select=", "version"}, diagnostic: "require --json"},
+		{name: "parser whitespace still requires json", args: []string{"--select", " ", "version"}, diagnostic: "require --json"},
+		{name: "version equals", args: []string{"--version", "--json", "--select="}, diagnostic: "--select requires a value"},
+		{name: "version whitespace", args: []string{"--version", "--json", "--select", " "}, diagnostic: "--select requires a value"},
+		{name: "version empty still requires json", args: []string{"--version", "--select="}, diagnostic: "require --json"},
+		{name: "version whitespace still requires json", args: []string{"--version", "--select", " "}, diagnostic: "require --json"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var execErr error
+			stdout := captureStdout(t, func() {
+				stderr := captureStderr(t, func() {
+					execErr = Execute(tc.args)
+				})
+				if !strings.Contains(stderr, tc.diagnostic) {
+					t.Fatalf("expected %q diagnostic, got %q", tc.diagnostic, stderr)
+				}
+			})
+			if execErr == nil || ExitCode(execErr) != 2 {
+				t.Fatalf("expected usage error, got %v", execErr)
+			}
+			if stdout != "" {
+				t.Fatalf("unexpected partial output: %q", stdout)
+			}
+		})
+	}
+}
+
 func TestExecute_ConflictingOutputModesReportsStderr(t *testing.T) {
 	errText := captureStderr(t, func() {
 		_ = captureStdout(t, func() {
@@ -104,6 +190,37 @@ func TestExecute_ConflictingOutputModesReportsStderr(t *testing.T) {
 	})
 	if !strings.Contains(errText, "invalid output mode") {
 		t.Fatalf("expected stderr diagnostic, got %q", errText)
+	}
+}
+
+func TestExecute_VersionSelectsJSONFields(t *testing.T) {
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--version", "--json", "--select", "version"}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+	if !strings.Contains(out, "\"version\"") || strings.Contains(out, "\"commit\"") {
+		t.Fatalf("unexpected selected version output: %q", out)
+	}
+}
+
+func TestExecute_VersionSelectRequiresValueBeforeVersionFlag(t *testing.T) {
+	var execErr error
+	stdout := captureStdout(t, func() {
+		stderr := captureStderr(t, func() {
+			execErr = Execute([]string{"--json", "--select", "--version"})
+		})
+		if !strings.Contains(stderr, "--select requires a value") {
+			t.Fatalf("unexpected stderr: %q", stderr)
+		}
+	})
+	if execErr == nil || ExitCode(execErr) != 2 {
+		t.Fatalf("expected usage error, got %v", execErr)
+	}
+	if stdout != "" {
+		t.Fatalf("unexpected stdout: %q", stdout)
 	}
 }
 

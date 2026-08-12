@@ -47,7 +47,7 @@ func (c *UpdateCmd) Run(ctx context.Context) error {
 		}
 
 		if outfmt.IsJSON(ctx) {
-			return outfmt.WriteJSON(ctx, os.Stdout, res)
+			return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(res))
 		}
 		if outfmt.IsPlain(ctx) {
 			fmt.Fprintln(os.Stdout, "CURRENT\tLATEST\tUPDATE\tASSET")

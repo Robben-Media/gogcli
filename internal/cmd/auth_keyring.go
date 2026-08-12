@@ -41,11 +41,11 @@ func (c *AuthKeyringCmd) Run(ctx context.Context) error {
 		}
 
 		if outfmt.IsJSON(ctx) {
-			return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+			return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 				"keyring_backend": info.Value,
 				"source":          info.Source,
 				"path":            path,
-			})
+			}))
 		}
 
 		if u == nil {
@@ -108,11 +108,11 @@ func (c *AuthKeyringCmd) Run(ctx context.Context) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"written":         true,
 			"path":            path,
 			"keyring_backend": backend,
-		})
+		}))
 	}
 
 	if u == nil {

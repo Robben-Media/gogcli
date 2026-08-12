@@ -647,7 +647,7 @@ func finalizeDoctorReport(checks []doctorCheck) doctorReport {
 
 func writeAuthDoctorReport(ctx context.Context, report doctorReport) error {
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, report)
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(report))
 	}
 
 	u := ui.FromContext(ctx)

@@ -62,10 +62,11 @@ func listCalendarEvents(ctx context.Context, svc *calendar.Service, calendarID, 
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
-			"events":        wrapEventsWithDays(resp.Items),
+		events := wrapEventsWithDays(resp.Items)
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
+			"events":        events,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, events))
 	}
 
 	if len(resp.Items) == 0 {
@@ -227,12 +228,12 @@ func listCalendarIDsEvents(ctx context.Context, svc *calendar.Service, calendarI
 	}
 
 	if outfmt.IsJSON(ctx) {
-		if err := outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		if err := outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"events":        all,
 			"errors":        failures,
 			"complete":      len(failures) == 0,
 			"nextPageToken": nextPageToken,
-		}); err != nil {
+		}, all)); err != nil {
 			return err
 		}
 		return resultErr

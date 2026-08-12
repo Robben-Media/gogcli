@@ -46,11 +46,11 @@ func (c *GmailHistoryCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	ids := collectHistoryMessageIDs(resp)
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"historyId":     formatHistoryID(resp.HistoryId),
 			"messages":      ids,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, ids))
 	}
 	if len(ids) == 0 {
 		u.Err().Println("No history")

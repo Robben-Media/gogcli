@@ -34,6 +34,8 @@ type schemaExitCode struct {
 type schemaAutomation struct {
 	JSON                bool               `json:"json"`
 	Plain               bool               `json:"plain"`
+	ResultsOnly         bool               `json:"results_only"`
+	Select              []string           `json:"select"`
 	WrapUntrusted       bool               `json:"wrap_untrusted"`
 	NoInput             bool               `json:"no_input"`
 	Force               bool               `json:"force"`
@@ -90,7 +92,7 @@ func (c *SchemaCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 	document := buildSchemaDocument(parser.Model.Node, flags)
-	return outfmt.WriteJSON(ctx, os.Stdout, document)
+	return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(document))
 }
 
 func buildSchemaDocument(root *kong.Node, flags *RootFlags) schemaDocument {
@@ -126,6 +128,8 @@ func buildSchemaAutomation(root *kong.Node, flags *RootFlags) schemaAutomation {
 	return schemaAutomation{
 		JSON:                flags.JSON,
 		Plain:               flags.Plain,
+		ResultsOnly:         flags.ResultsOnly,
+		Select:              schemaSelectPaths(flags.Select),
 		WrapUntrusted:       flags.WrapUntrusted,
 		NoInput:             flags.NoInput,
 		Force:               flags.Force,
@@ -137,6 +141,18 @@ func buildSchemaAutomation(root *kong.Node, flags *RootFlags) schemaAutomation {
 		EnabledCommandPaths: buildSchemaEnabledPathState(root, flags.EnableCommandPaths),
 		Policy:              buildSchemaPolicyState(cfg.Policies, resolvedAccount, resolvedClient, readErr, resolutionErr),
 	}
+}
+
+func schemaSelectPaths(input string) []string {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return []string{}
+	}
+	paths := strings.Split(input, ",")
+	for i := range paths {
+		paths[i] = strings.TrimSpace(paths[i])
+	}
+	return paths
 }
 
 func resolveSchemaSelection(cfg config.File, accountInput string, clientInput string, readErr error) (string, string, string) {

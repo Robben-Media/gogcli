@@ -160,7 +160,10 @@ func TestCalendarConflicts_SourceErrors_JSONIncompleteAndNonzero(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"calendars": map[string]any{
 					"primary": map[string]any{
-						"busy": []map[string]any{},
+						"busy": []map[string]any{{"start": "2024-12-13T10:00:00Z", "end": "2024-12-13T11:00:00Z"}},
+					},
+					"good@example.com": map[string]any{
+						"busy": []map[string]any{{"start": "2024-12-13T10:30:00Z", "end": "2024-12-13T11:30:00Z"}},
 					},
 					"bad@example.com": map[string]any{
 						"errors": []map[string]any{
@@ -186,15 +189,16 @@ func TestCalendarConflicts_SourceErrors_JSONIncompleteAndNonzero(t *testing.T) {
 	newCalendarService = func(context.Context, string) (*calendar.Service, error) { return svc, nil }
 
 	var execErr error
+	var jsonStderr string
 	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
+		jsonStderr = captureStderr(t, func() {
 			execErr = Execute([]string{
 				"--json",
 				"--account", "a@b.com",
 				"calendar", "conflicts",
 				"--from", "2024-12-13T09:00:00Z",
 				"--to", "2024-12-13T14:00:00Z",
-				"--calendars", "primary,bad@example.com",
+				"--calendars", "primary,good@example.com,bad@example.com",
 			})
 		})
 	})
@@ -203,6 +207,34 @@ func TestCalendarConflicts_SourceErrors_JSONIncompleteAndNonzero(t *testing.T) {
 	}
 	if ExitCode(execErr) == 0 {
 		t.Fatalf("expected nonzero exit code, got 0 (%v)", execErr)
+	}
+
+	var transformedErr error
+	var transformedStderr string
+	transformedOut := captureStdout(t, func() {
+		transformedStderr = captureStderr(t, func() {
+			transformedErr = Execute([]string{
+				"--json", "--results-only", "--select", "start,end",
+				"--account", "a@b.com",
+				"calendar", "conflicts",
+				"--from", "2024-12-13T09:00:00Z",
+				"--to", "2024-12-13T14:00:00Z",
+				"--calendars", "primary,good@example.com,bad@example.com",
+			})
+		})
+	})
+	if transformedErr == nil || ExitCode(transformedErr) != ExitCode(execErr) {
+		t.Fatalf("transformed error = %v, want exit code %d", transformedErr, ExitCode(execErr))
+	}
+	if transformedStderr != jsonStderr {
+		t.Fatalf("transformed stderr changed\ngot:  %q\nwant: %q", transformedStderr, jsonStderr)
+	}
+	var transformedConflicts []map[string]any
+	if err := json.Unmarshal([]byte(transformedOut), &transformedConflicts); err != nil {
+		t.Fatalf("transformed JSON parse: %v\nout=%q", err, transformedOut)
+	}
+	if len(transformedConflicts) != 1 || transformedConflicts[0]["start"] != "2024-12-13T10:30:00Z" || transformedConflicts[0]["end"] != "2024-12-13T11:00:00Z" {
+		t.Fatalf("unexpected transformed conflicts: %#v", transformedConflicts)
 	}
 
 	var parsed struct {
@@ -221,8 +253,8 @@ func TestCalendarConflicts_SourceErrors_JSONIncompleteAndNonzero(t *testing.T) {
 	if !parsed.Incomplete {
 		t.Fatalf("expected incomplete=true, out=%q", out)
 	}
-	if parsed.Count != 0 || len(parsed.Conflicts) != 0 {
-		t.Fatalf("expected no conflicts, got count=%d conflicts=%v", parsed.Count, parsed.Conflicts)
+	if parsed.Count != 1 || len(parsed.Conflicts) != 1 {
+		t.Fatalf("expected one primary conflict, got count=%d conflicts=%v", parsed.Count, parsed.Conflicts)
 	}
 	if len(parsed.Errors) != 1 {
 		t.Fatalf("expected 1 source error, got %+v (out=%q)", parsed.Errors, out)
@@ -243,7 +275,7 @@ func TestCalendarConflicts_SourceErrors_JSONIncompleteAndNonzero(t *testing.T) {
 				"calendar", "conflicts",
 				"--from", "2024-12-13T09:00:00Z",
 				"--to", "2024-12-13T14:00:00Z",
-				"--calendars", "primary,bad@example.com",
+				"--calendars", "primary,good@example.com,bad@example.com",
 			})
 		})
 	})
@@ -251,7 +283,8 @@ func TestCalendarConflicts_SourceErrors_JSONIncompleteAndNonzero(t *testing.T) {
 		t.Fatalf("plain execution error = %v, want nonzero incomplete result", plainErr)
 	}
 	wantPlain := "TYPE\tSTATUS\tCALENDAR\tERROR_DOMAIN\tERROR_REASON\tSTART\tEND\tCALENDARS\n" +
-		"error\tincomplete\tbad@example.com\tglobal\tnotFound\t\t\t\n"
+		"error\tincomplete\tbad@example.com\tglobal\tnotFound\t\t\t\n" +
+		"conflict\tincomplete\t\t\t\t2024-12-13T10:30:00Z\t2024-12-13T11:00:00Z\tgood@example.com, primary\n"
 	if plainOut != wantPlain {
 		t.Fatalf("plain output = %q, want %q", plainOut, wantPlain)
 	}

@@ -56,7 +56,7 @@ func (c *GmailLabelsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"label": l})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"label": l}, l))
 	}
 	u := ui.FromContext(ctx)
 	u.Out().Printf("id\t%s", l.Id)
@@ -101,7 +101,7 @@ func (c *GmailLabelsCreateCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"label": label})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"label": label}, label))
 	}
 	if outfmt.IsPlain(ctx) {
 		writePlainReceipt(ctx, []string{"ID", "NAME"}, []string{label.Id, label.Name})
@@ -138,7 +138,7 @@ func (c *GmailLabelsListCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"labels": resp.Labels})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"labels": resp.Labels}, resp.Labels))
 	}
 	if len(resp.Labels) == 0 {
 		u.Err().Println("No labels")
@@ -211,7 +211,7 @@ func (c *GmailLabelsModifyCmd) Run(ctx context.Context, flags *RootFlags) error 
 		}
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"results": results})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"results": results}, results))
 	}
 	return nil
 }
@@ -273,10 +273,10 @@ func (c *GmailLabelsDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"id":      id,
 			"deleted": true,
-		})
+		}))
 	}
 
 	u.Err().Printf("Label %q deleted", raw)
@@ -355,7 +355,7 @@ func (c *GmailLabelsPatchCmd) Run(ctx context.Context, kctx *kong.Context, flags
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"label": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"label": updated}, updated))
 	}
 
 	u.Out().Printf("id\t%s", updated.Id)
@@ -421,7 +421,7 @@ func (c *GmailLabelsUpdateCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"label": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"label": updated}, updated))
 	}
 
 	u.Out().Printf("id\t%s", updated.Id)

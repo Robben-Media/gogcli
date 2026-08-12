@@ -86,7 +86,7 @@ func parseTagManagerJSONObject[T any](flagName, value string) (*T, error) {
 
 func writeTagManagerDelete(ctx context.Context, resource, path string) error {
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"deleted": true, "path": path})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{"deleted": true, "path": path}))
 	}
 	if outfmt.IsPlain(ctx) {
 		w, flush := tableWriter(ctx)

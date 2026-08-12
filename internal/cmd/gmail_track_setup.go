@@ -168,7 +168,7 @@ func (c *GmailTrackSetupCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 	switch {
 	case outfmt.IsJSON(ctx):
-		if err := outfmt.WriteJSON(ctx, os.Stdout, result); err != nil {
+		if err := outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(result)); err != nil {
 			return err
 		}
 	case outfmt.IsPlain(ctx):

@@ -59,7 +59,7 @@ func (c *ChatNotificationSettingsGetCmd) Run(ctx context.Context, flags *RootFla
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"notificationSetting": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"notificationSetting": resp}, resp))
 	}
 
 	if resp.Name != "" {
@@ -117,7 +117,7 @@ func (c *ChatNotificationSettingsPatchCmd) Run(ctx context.Context, flags *RootF
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"notificationSetting": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"notificationSetting": resp}, resp))
 	}
 
 	if resp.Name != "" {
@@ -160,7 +160,7 @@ func (c *ChatThreadReadStateGetCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"threadReadState": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"threadReadState": resp}, resp))
 	}
 
 	if resp.Name != "" {
@@ -218,7 +218,7 @@ func (c *ChatSpaceReadStateUpdateCmd) Run(ctx context.Context, flags *RootFlags,
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"spaceReadState": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"spaceReadState": resp}, resp))
 	}
 
 	if resp.Name != "" {

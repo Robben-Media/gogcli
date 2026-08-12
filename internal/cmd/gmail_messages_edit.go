@@ -56,10 +56,10 @@ func (c *GmailMessagesImportCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"id":       imported.Id,
 			"threadId": imported.ThreadId,
-		})
+		}))
 	}
 
 	u.Out().Printf("id\t%s", imported.Id)
@@ -110,10 +110,10 @@ func (c *GmailMessagesInsertCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"id":       inserted.Id,
 			"threadId": inserted.ThreadId,
-		})
+		}))
 	}
 
 	u.Out().Printf("id\t%s", inserted.Id)
@@ -170,12 +170,12 @@ func (c *GmailMessagesModifyCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"id":            modified.Id,
 			"threadId":      modified.ThreadId,
 			"addedLabels":   addIDs,
 			"removedLabels": removeIDs,
-		})
+		}))
 	}
 
 	u.Out().Printf("id\t%s", modified.Id)
@@ -214,11 +214,11 @@ func (c *GmailMessagesTrashCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"id":       msg.Id,
 			"threadId": msg.ThreadId,
 			"trashed":  true,
-		})
+		}))
 	}
 
 	u.Err().Printf("Message %s moved to trash", msg.Id)
@@ -253,11 +253,11 @@ func (c *GmailMessagesUntrashCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"id":        msg.Id,
 			"threadId":  msg.ThreadId,
 			"untrashed": true,
-		})
+		}))
 	}
 
 	u.Err().Printf("Message %s removed from trash", msg.Id)

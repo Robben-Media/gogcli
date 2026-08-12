@@ -31,7 +31,7 @@ func (c *GmailTrackStatusCmd) Run(ctx context.Context, flags *RootFlags) error {
 		AdminConfigured: strings.TrimSpace(cfg.AdminKey) != "",
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, result)
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(result))
 	}
 	if outfmt.IsPlain(ctx) {
 		writeGmailTrackPlain(ctx, result)

@@ -72,7 +72,7 @@ func (c *ContactsSearchCmd) Run(ctx context.Context, flags *RootFlags) error {
 				Phone:    primaryPhone(p),
 			})
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"contacts": items})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"contacts": items}, items))
 	}
 	if len(resp.Results) == 0 {
 		u.Err().Println("No results")

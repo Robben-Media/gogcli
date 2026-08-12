@@ -66,10 +66,10 @@ func (c *ClassroomCoursesListCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"courses":       resp.Courses,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Courses))
 	}
 
 	if len(resp.Courses) == 0 {
@@ -122,7 +122,7 @@ func (c *ClassroomCoursesGetCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"course": course})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"course": course}, course))
 	}
 
 	u.Out().Printf("id\t%s", course.Id)
@@ -208,7 +208,7 @@ func (c *ClassroomCoursesCreateCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"course": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"course": created}, created))
 	}
 	u.Out().Printf("id\t%s", created.Id)
 	u.Out().Printf("name\t%s", created.Name)
@@ -285,7 +285,7 @@ func (c *ClassroomCoursesUpdateCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"course": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"course": updated}, updated))
 	}
 	u := ui.FromContext(ctx)
 	u.Out().Printf("id\t%s", updated.Id)
@@ -324,10 +324,10 @@ func (c *ClassroomCoursesDeleteCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"deleted":  true,
 			"courseId": courseID,
-		})
+		}))
 	}
 	u.Out().Printf("deleted\ttrue")
 	u.Out().Printf("course_id\t%s", courseID)
@@ -373,7 +373,7 @@ func updateCourseState(ctx context.Context, flags *RootFlags, courseID, state st
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"course": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"course": updated}, updated))
 	}
 	u.Out().Printf("id\t%s", updated.Id)
 	u.Out().Printf("state\t%s", updated.CourseState)
@@ -420,7 +420,7 @@ func (c *ClassroomCoursesJoinCmd) Run(ctx context.Context, flags *RootFlags) err
 			return wrapClassroomError(err)
 		}
 		if outfmt.IsJSON(ctx) {
-			return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"student": created})
+			return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"student": created}, created))
 		}
 		u.Out().Printf("user_id\t%s", created.UserId)
 		u.Out().Printf("email\t%s", profileEmail(created.Profile))
@@ -433,7 +433,7 @@ func (c *ClassroomCoursesJoinCmd) Run(ctx context.Context, flags *RootFlags) err
 			return wrapClassroomError(err)
 		}
 		if outfmt.IsJSON(ctx) {
-			return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"teacher": created})
+			return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"teacher": created}, created))
 		}
 		u.Out().Printf("user_id\t%s", created.UserId)
 		u.Out().Printf("email\t%s", profileEmail(created.Profile))
@@ -490,12 +490,12 @@ func (c *ClassroomCoursesLeaveCmd) Run(ctx context.Context, flags *RootFlags) er
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"removed":  true,
 			"courseId": courseID,
 			"userId":   userID,
 			"role":     role,
-		})
+		}))
 	}
 	u.Out().Printf("removed\ttrue")
 	u.Out().Printf("course_id\t%s", courseID)
@@ -532,7 +532,7 @@ func (c *ClassroomCoursesURLCmd) Run(ctx context.Context, flags *RootFlags) erro
 			}
 			urls = append(urls, map[string]string{"id": id, "url": link})
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"urls": urls})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"urls": urls}, urls))
 	}
 
 	for _, id := range c.CourseIDs {

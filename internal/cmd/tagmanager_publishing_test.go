@@ -60,7 +60,8 @@ func TestExecute_TagManagerWorkspacesCreateVersion(t *testing.T) {
 				"path": "accounts/111/containers/c1/versions/42",
 				"fingerprint": "fp-42"
 			},
-			"newWorkspacePath": "accounts/111/containers/c1/workspaces/8"
+			"newWorkspacePath": "accounts/111/containers/c1/workspaces/8",
+			"compilerError": true
 		}`))
 	}))
 
@@ -80,6 +81,7 @@ func TestExecute_TagManagerWorkspacesCreateVersion(t *testing.T) {
 		Path             string                       `json:"path"`
 		ContainerVersion *tagmanager.ContainerVersion `json:"containerVersion"`
 		NewWorkspacePath string                       `json:"newWorkspacePath"`
+		CompilerError    bool                         `json:"compilerError"`
 	}
 	if err := json.Unmarshal([]byte(out), &result); err != nil {
 		t.Fatalf("decode output: %v\nout=%q", err, out)
@@ -92,6 +94,9 @@ func TestExecute_TagManagerWorkspacesCreateVersion(t *testing.T) {
 	}
 	if result.NewWorkspacePath != "accounts/111/containers/c1/workspaces/8" {
 		t.Fatalf("newWorkspacePath = %q", result.NewWorkspacePath)
+	}
+	if !result.CompilerError {
+		t.Fatal("compilerError = false, want true")
 	}
 }
 
@@ -115,7 +120,8 @@ func TestExecute_TagManagerVersionsPublish(t *testing.T) {
 				"name": "Release 42",
 				"path": "accounts/111/containers/c1/versions/42",
 				"fingerprint": "fp-published"
-			}
+			},
+			"compilerError": true
 		}`))
 	}))
 
@@ -133,6 +139,7 @@ func TestExecute_TagManagerVersionsPublish(t *testing.T) {
 	var result struct {
 		Path             string                       `json:"path"`
 		ContainerVersion *tagmanager.ContainerVersion `json:"containerVersion"`
+		CompilerError    bool                         `json:"compilerError"`
 	}
 	if err := json.Unmarshal([]byte(out), &result); err != nil {
 		t.Fatalf("decode output: %v\nout=%q", err, out)
@@ -142,6 +149,65 @@ func TestExecute_TagManagerVersionsPublish(t *testing.T) {
 	}
 	if result.ContainerVersion == nil || result.ContainerVersion.Fingerprint != "fp-published" {
 		t.Fatalf("unexpected container version: %#v", result.ContainerVersion)
+	}
+	if !result.CompilerError {
+		t.Fatal("compilerError = false, want true")
+	}
+}
+
+func TestExecute_TagManagerPublishingResultsOnlyPreservesCompilerError(t *testing.T) {
+	setupTagManagerPublishingTest(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/tagmanager/v2/accounts/111/containers/c1/workspaces/7:create_version":
+			_, _ = w.Write([]byte(`{
+				"containerVersion": {"path": "accounts/111/containers/c1/versions/42"},
+				"newWorkspacePath": "accounts/111/containers/c1/workspaces/8",
+				"compilerError": true
+			}`))
+		case "/tagmanager/v2/accounts/111/containers/c1/versions/42:publish":
+			_, _ = w.Write([]byte(`{
+				"containerVersion": {"path": "accounts/111/containers/c1/versions/42"},
+				"compilerError": true
+			}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+
+	for _, tc := range []struct {
+		name string
+		args []string
+	}{
+		{
+			name: "create version",
+			args: []string{"--json", "--results-only", "--account", "admin@example.com", "gtm", "workspaces", "create-version", "accounts/111/containers/c1/workspaces/7"},
+		},
+		{
+			name: "publish",
+			args: []string{"--json", "--results-only", "--account", "admin@example.com", "gtm", "versions", "publish", "accounts/111/containers/c1/versions/42"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out := captureStdout(t, func() {
+				_ = captureStderr(t, func() {
+					if err := Execute(tc.args); err != nil {
+						t.Fatalf("Execute: %v", err)
+					}
+				})
+			})
+
+			var result map[string]any
+			if err := json.Unmarshal([]byte(out), &result); err != nil {
+				t.Fatalf("decode output: %v\nout=%q", err, out)
+			}
+			if compilerError, ok := result["compilerError"].(bool); !ok || !compilerError {
+				t.Fatalf("compilerError = %#v, want true", result["compilerError"])
+			}
+			if _, ok := result["containerVersion"]; !ok {
+				t.Fatalf("containerVersion missing from output: %#v", result)
+			}
+		})
 	}
 }
 

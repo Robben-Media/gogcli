@@ -252,7 +252,7 @@ func (c *TagManagerTriggersUpdateCmd) buildPatch(kctx *kong.Context) (func(*tagm
 
 func writeTagManagerTrigger(ctx context.Context, action string, trigger *tagmanager.Trigger) error {
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"trigger": trigger})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"trigger": trigger}, trigger))
 	}
 	if outfmt.IsPlain(ctx) {
 		w, flush := tableWriter(ctx)

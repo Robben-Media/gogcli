@@ -131,10 +131,10 @@ func (c *ContactsPhotoUpdateCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"person":       resp.Person,
 			"resourceName": resourceName,
-		})
+		}, resp.Person))
 	}
 
 	if outfmt.IsPlain(ctx) {

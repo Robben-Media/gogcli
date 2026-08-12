@@ -32,6 +32,8 @@ type decodedSchemaExitCode struct {
 type decodedSchemaAutomation struct {
 	JSON                bool                `json:"json"`
 	Plain               bool                `json:"plain"`
+	ResultsOnly         bool                `json:"results_only"`
+	Select              []string            `json:"select"`
 	WrapUntrusted       bool                `json:"wrap_untrusted"`
 	NoInput             bool                `json:"no_input"`
 	Force               bool                `json:"force"`
@@ -352,6 +354,22 @@ func TestExecuteSchemaReportsExitCodesAndEffectiveAutomationState(t *testing.T) 
 	}
 }
 
+func TestExecuteSchemaReportsJSONTransformAutomationState(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	const selection = "schema_version,automation.json,automation.results_only,automation.select"
+	document, _ := executeSchema(t, "--json", "--results-only", "--select", selection, "schema")
+	if document.SchemaVersion != schemaVersion {
+		t.Fatalf("schema version = %q, want %q", document.SchemaVersion, schemaVersion)
+	}
+	if !document.Automation.JSON || !document.Automation.ResultsOnly {
+		t.Fatalf("JSON transformation automation state = %+v", document.Automation)
+	}
+	if strings.Join(document.Automation.Select, ",") != selection {
+		t.Fatalf("select paths = %v", document.Automation.Select)
+	}
+}
+
 func TestExecuteSchemaReportsCanonicalAndUnrecognizedEnabledCommands(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
@@ -499,7 +517,7 @@ func TestSchemaV1ContractFingerprint(t *testing.T) {
 		t.Fatalf("marshal canonical schema: %v", err)
 	}
 	got := fmt.Sprintf("%x", sha256.Sum256(canonical))
-	const want = "36db6067e159f2531796850c45a03d8956770e8692c96b87cdde86edb4b8dc72"
+	const want = "f81a4eb2f44cf4fa5ab12825a1aed982b38201b3082d05b7ccda329522ae8f6f"
 	if got != want {
 		t.Fatalf("schema v1 contract fingerprint = %s, want %s; review the contract change and schema version", got, want)
 	}

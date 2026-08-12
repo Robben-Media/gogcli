@@ -69,11 +69,11 @@ func (c *BigqueryQueryCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"schema":    resp.Schema,
 			"rows":      resp.Rows,
 			"totalRows": resp.TotalRows,
-		})
+		}, resp.Rows))
 	}
 
 	if resp.Schema == nil || len(resp.Schema.Fields) == 0 {
@@ -147,10 +147,10 @@ func (c *BigqueryDatasetsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"datasets":      resp.Datasets,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Datasets))
 	}
 
 	if len(resp.Datasets) == 0 {
@@ -211,10 +211,10 @@ func (c *BigqueryTablesCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"tables":        resp.Tables,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Tables))
 	}
 
 	if len(resp.Tables) == 0 {
@@ -274,9 +274,9 @@ func (c *BigquerySchemaCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"schema": tbl.Schema,
-		})
+		}, tbl.Schema))
 	}
 
 	if tbl.Schema == nil || len(tbl.Schema.Fields) == 0 {
@@ -333,10 +333,10 @@ func (c *BigqueryJobsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"jobs":          resp.Jobs,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Jobs))
 	}
 
 	if len(resp.Jobs) == 0 {

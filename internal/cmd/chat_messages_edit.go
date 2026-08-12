@@ -44,7 +44,7 @@ func (c *ChatMessagesGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"message": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"message": resp}, resp))
 	}
 
 	if resp.Name != "" {
@@ -153,7 +153,7 @@ func (c *ChatMessagesPatchCmd) Run(ctx context.Context, flags *RootFlags, kctx *
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"message": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"message": resp}, resp))
 	}
 
 	if resp.Name != "" {
@@ -216,7 +216,7 @@ func (c *ChatMessagesUpdateCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"message": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"message": resp}, resp))
 	}
 
 	if resp.Name != "" {
@@ -267,7 +267,7 @@ func (c *ChatAttachmentsGetCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"attachment": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"attachment": resp}, resp))
 	}
 
 	if resp.Name != "" {

@@ -70,10 +70,10 @@ func (c *ContactsDirectoryListCmd) Run(ctx context.Context, flags *RootFlags) er
 				Email:    primaryEmail(p),
 			})
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"people":        items,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, items))
 	}
 
 	if len(resp.People) == 0 {
@@ -148,10 +148,10 @@ func (c *ContactsDirectorySearchCmd) Run(ctx context.Context, flags *RootFlags) 
 				Email:    primaryEmail(p),
 			})
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"people":        items,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, items))
 	}
 
 	if len(resp.People) == 0 {
@@ -226,10 +226,10 @@ func (c *ContactsOtherListCmd) Run(ctx context.Context, flags *RootFlags) error 
 				Phone:    primaryPhone(p),
 			})
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"contacts":      items,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, items))
 	}
 
 	if len(resp.OtherContacts) == 0 {
@@ -301,7 +301,7 @@ func (c *ContactsOtherSearchCmd) Run(ctx context.Context, flags *RootFlags) erro
 				Phone:    primaryPhone(p),
 			})
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"contacts": items})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"contacts": items}, items))
 	}
 
 	if len(resp.Results) == 0 {

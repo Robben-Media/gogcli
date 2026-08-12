@@ -49,10 +49,10 @@ func (c *DriveChangesGetStartPageTokCmd) Run(ctx context.Context, flags *RootFla
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"startPageToken": resp.StartPageToken,
 			"kind":           resp.Kind,
-		})
+		}))
 	}
 
 	u.Out().Printf("start_page_token\t%s", resp.StartPageToken)
@@ -108,12 +108,12 @@ func (c *DriveChangesListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"changes":           resp.Changes,
 			"changeCount":       len(resp.Changes),
 			"nextPageToken":     resp.NextPageToken,
 			"newStartPageToken": resp.NewStartPageToken,
-		})
+		}, resp.Changes))
 	}
 
 	if len(resp.Changes) == 0 {
@@ -216,10 +216,10 @@ func (c *DriveChangesWatchCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"channel":  resp,
 			"resource": resp.ResourceId,
-		})
+		}, resp))
 	}
 
 	u.Out().Printf("channel_id\t%s", resp.Id)

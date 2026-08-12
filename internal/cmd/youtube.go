@@ -62,10 +62,10 @@ func (c *YoutubeChannelsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"channels":      resp.Items,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Items))
 	}
 
 	if len(resp.Items) == 0 {
@@ -131,10 +131,10 @@ func (c *YoutubeVideosCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"videos":        resp.Items,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Items))
 	}
 
 	if len(resp.Items) == 0 {
@@ -195,7 +195,7 @@ func (c *YoutubeVideoCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	video := resp.Items[0]
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"video": video})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"video": video}, video))
 	}
 
 	u.Out().Printf("id\t%s", video.Id)
@@ -253,10 +253,10 @@ func (c *YoutubeSearchCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"results":       resp.Items,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Items))
 	}
 
 	if len(resp.Items) == 0 {
@@ -335,10 +335,10 @@ func (c *YoutubePlaylistsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"playlists":     resp.Items,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Items))
 	}
 
 	if len(resp.Items) == 0 {
@@ -399,10 +399,10 @@ func (c *YoutubePlaylistItemsCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"items":         resp.Items,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Items))
 	}
 
 	if len(resp.Items) == 0 {
@@ -466,10 +466,10 @@ func (c *YoutubeCommentsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"commentThreads": resp.Items,
 			"nextPageToken":  resp.NextPageToken,
-		})
+		}, resp.Items))
 	}
 
 	if len(resp.Items) == 0 {

@@ -93,10 +93,10 @@ func (c *ChatMembersListCmd) Run(ctx context.Context, flags *RootFlags) error {
 				State:    member.State,
 			})
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"memberships":   items,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, items))
 	}
 
 	if len(resp.Memberships) == 0 {
@@ -153,7 +153,7 @@ func (c *ChatMembersGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"membership": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"membership": resp}, resp))
 	}
 
 	if resp.Name != "" {
@@ -215,7 +215,7 @@ func (c *ChatMembersCreateCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"membership": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"membership": resp}, resp))
 	}
 
 	if resp.Name != "" {
@@ -314,7 +314,7 @@ func (c *ChatMembersPatchCmd) Run(ctx context.Context, flags *RootFlags, kctx *k
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"membership": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"membership": resp}, resp))
 	}
 
 	if resp.Name != "" {

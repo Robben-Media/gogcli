@@ -53,7 +53,7 @@ func (c *GmailCseIdentitiesListCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"cseIdentities": resp.CseIdentities})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"cseIdentities": resp.CseIdentities}, resp.CseIdentities))
 	}
 
 	if len(resp.CseIdentities) == 0 {
@@ -99,7 +99,7 @@ func (c *GmailCseIdentitiesGetCmd) Run(ctx context.Context, flags *RootFlags) er
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"cseIdentity": identity})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"cseIdentity": identity}, identity))
 	}
 
 	u.Out().Printf("email_address\t%s", identity.EmailAddress)
@@ -157,7 +157,7 @@ func (c *GmailCseIdentitiesCreateCmd) Run(ctx context.Context, flags *RootFlags)
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"cseIdentity": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"cseIdentity": created}, created))
 	}
 
 	if outfmt.IsPlain(ctx) {
@@ -207,10 +207,10 @@ func (c *GmailCseIdentitiesDeleteCmd) Run(ctx context.Context, flags *RootFlags)
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"success": true,
 			"email":   email,
-		})
+		}))
 	}
 
 	if outfmt.IsPlain(ctx) {
@@ -286,7 +286,7 @@ func (c *GmailCseIdentitiesPatchCmd) Run(ctx context.Context, kctx *kong.Context
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"cseIdentity": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"cseIdentity": updated}, updated))
 	}
 
 	if outfmt.IsPlain(ctx) {
@@ -334,7 +334,7 @@ func (c *GmailCseKeypairsListCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"cseKeyPairs": resp.CseKeyPairs})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"cseKeyPairs": resp.CseKeyPairs}, resp.CseKeyPairs))
 	}
 
 	if len(resp.CseKeyPairs) == 0 {
@@ -385,7 +385,7 @@ func (c *GmailCseKeypairsGetCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"cseKeyPair": kp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"cseKeyPair": kp}, kp))
 	}
 
 	u.Out().Printf("key_pair_id\t%s", kp.KeyPairId)
@@ -451,7 +451,7 @@ func (c *GmailCseKeypairsCreateCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"cseKeyPair": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"cseKeyPair": created}, created))
 	}
 
 	if outfmt.IsPlain(ctx) {
@@ -497,7 +497,7 @@ func (c *GmailCseKeypairsEnableCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"cseKeyPair": enabled})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"cseKeyPair": enabled}, enabled))
 	}
 
 	if outfmt.IsPlain(ctx) {
@@ -547,7 +547,7 @@ func (c *GmailCseKeypairsDisableCmd) Run(ctx context.Context, flags *RootFlags) 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"cseKeyPair": disabled})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"cseKeyPair": disabled}, disabled))
 	}
 
 	if outfmt.IsPlain(ctx) {
@@ -600,11 +600,11 @@ func (c *GmailCseKeypairsObliterateCmd) Run(ctx context.Context, flags *RootFlag
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"success":     true,
 			"keyPairId":   keyPairID,
 			"obliterated": true,
-		})
+		}))
 	}
 
 	if outfmt.IsPlain(ctx) {

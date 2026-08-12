@@ -114,12 +114,12 @@ func (c *AnalyticsReportCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"dimensionHeaders": resp.DimensionHeaders,
 			"metricHeaders":    resp.MetricHeaders,
 			"rows":             resp.Rows,
 			"rowCount":         resp.RowCount,
-		})
+		}, resp.Rows))
 	}
 
 	u := ui.FromContext(ctx)
@@ -211,12 +211,12 @@ func (c *AnalyticsRealtimeCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"dimensionHeaders": resp.DimensionHeaders,
 			"metricHeaders":    resp.MetricHeaders,
 			"rows":             resp.Rows,
 			"rowCount":         resp.RowCount,
-		})
+		}, resp.Rows))
 	}
 
 	u := ui.FromContext(ctx)
@@ -279,10 +279,10 @@ func (c *AnalyticsPropertiesCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"accountSummaries": resp.AccountSummaries,
 			"nextPageToken":    resp.NextPageToken,
-		})
+		}, resp.AccountSummaries))
 	}
 
 	u := ui.FromContext(ctx)
@@ -331,10 +331,10 @@ func (c *AnalyticsAccountsCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"accounts":      resp.Accounts,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Accounts))
 	}
 
 	u := ui.FromContext(ctx)
@@ -382,9 +382,9 @@ func (c *AnalyticsDimensionsCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"dimensions": resp.Dimensions,
-		})
+		}, resp.Dimensions))
 	}
 
 	u := ui.FromContext(ctx)
@@ -431,9 +431,9 @@ func (c *AnalyticsMetricsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"metrics": resp.Metrics,
-		})
+		}, resp.Metrics))
 	}
 
 	u := ui.FromContext(ctx)

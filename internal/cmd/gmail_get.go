@@ -99,7 +99,7 @@ func (c *GmailGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 				payload["attachments"] = attachmentOutputs(attachments)
 			}
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, payload)
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(payload, msg))
 	}
 
 	if outfmt.IsPlain(ctx) {

@@ -61,9 +61,9 @@ func (c *SearchConsoleSitesListCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"sites": resp.SiteEntry,
-		})
+		}, resp.SiteEntry))
 	}
 
 	if len(resp.SiteEntry) == 0 {
@@ -137,9 +137,9 @@ func (c *SearchConsoleQueryCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"rows": resp.Rows,
-		})
+		}, resp.Rows))
 	}
 
 	if len(resp.Rows) == 0 {
@@ -187,9 +187,9 @@ func (c *SearchConsoleSitemapsListCmd) Run(ctx context.Context, flags *RootFlags
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"sitemaps": resp.Sitemap,
-		})
+		}, resp.Sitemap))
 	}
 
 	if len(resp.Sitemap) == 0 {
@@ -284,9 +284,9 @@ func (c *SearchConsoleInspectCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"inspectionResult": resp.InspectionResult,
-		})
+		}, resp.InspectionResult))
 	}
 
 	result := resp.InspectionResult
@@ -318,7 +318,7 @@ func writeSearchConsoleMutationReceipt(ctx context.Context, action, siteURL, sit
 		if sitemapURL != "" {
 			payload["sitemapUrl"] = sitemapURL
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, payload)
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(payload))
 	}
 	if outfmt.IsPlain(ctx) {
 		writePlainReceipt(ctx,

@@ -36,11 +36,11 @@ type VersionCmd struct{}
 
 func (c *VersionCmd) Run(ctx context.Context) error {
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"version": strings.TrimSpace(version),
 			"commit":  strings.TrimSpace(commit),
 			"date":    strings.TrimSpace(date),
-		})
+		}))
 	}
 	fmt.Fprintln(os.Stdout, VersionString())
 	return nil

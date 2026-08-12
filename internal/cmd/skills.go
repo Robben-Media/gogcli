@@ -43,10 +43,10 @@ func (c *SkillsStatusCmd) Run(ctx context.Context) error {
 				RealPath: r.RealPath,
 			})
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"pack_version": VersionString(),
 			"skills":       out,
-		})
+		}, out))
 	}
 	if outfmt.IsPlain(ctx) {
 		for _, r := range rows {
@@ -109,7 +109,7 @@ func runSkillUpdate(ctx context.Context, force, install bool) error {
 
 func printSkillResults(ctx context.Context, results []skillpack.ApplyResult) error {
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"results": results})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"results": results}, results))
 	}
 
 	var updated, installed, dirty, current, missing []string

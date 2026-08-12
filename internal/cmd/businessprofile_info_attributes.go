@@ -73,10 +73,10 @@ func (c *BusinessProfileInfoAttributesListCmd) Run(ctx context.Context, flags *R
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"attributeMetadata": resp.AttributeMetadata,
 			"nextPageToken":     resp.NextPageToken,
-		})
+		}, resp.AttributeMetadata))
 	}
 
 	if len(resp.AttributeMetadata) == 0 {
@@ -122,10 +122,10 @@ func (c *BusinessProfileInfoLocationAttrsGetCmd) Run(ctx context.Context, flags 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"name":       resp.Name,
 			"attributes": resp.Attributes,
-		})
+		}, resp.Attributes))
 	}
 
 	u.Out().Printf("name\t%s", resp.Name)
@@ -171,10 +171,10 @@ func (c *BusinessProfileInfoLocationAttrsGetGoogleUpdatedCmd) Run(ctx context.Co
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"name":       resp.Name,
 			"attributes": resp.Attributes,
-		})
+		}, resp.Attributes))
 	}
 
 	u := ui.FromContext(ctx)
@@ -250,10 +250,10 @@ func (c *BusinessProfileInfoLocationAttrsUpdateCmd) Run(ctx context.Context, fla
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"name":       resp.Name,
 			"attributes": resp.Attributes,
-		})
+		}, resp.Attributes))
 	}
 
 	u.Out().Printf("name\t%s", resp.Name)

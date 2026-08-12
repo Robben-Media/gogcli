@@ -50,10 +50,10 @@ func (c *GmailBatchDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"deleted": c.MessageIDs,
 			"count":   len(c.MessageIDs),
-		})
+		}, c.MessageIDs))
 	}
 
 	if outfmt.IsPlain(ctx) {
@@ -106,12 +106,12 @@ func (c *GmailBatchModifyCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"modified":      c.MessageIDs,
 			"count":         len(c.MessageIDs),
 			"addedLabels":   addIDs,
 			"removedLabels": removeIDs,
-		})
+		}, c.MessageIDs))
 	}
 
 	if outfmt.IsPlain(ctx) {

@@ -53,10 +53,10 @@ func (c *ClassroomInvitationsListCmd) Run(ctx context.Context, flags *RootFlags)
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"invitations":   resp.Invitations,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Invitations))
 	}
 
 	if len(resp.Invitations) == 0 {
@@ -108,7 +108,7 @@ func (c *ClassroomInvitationsGetCmd) Run(ctx context.Context, flags *RootFlags) 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"invitation": inv})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"invitation": inv}, inv))
 	}
 
 	u.Out().Printf("id\t%s", inv.Id)
@@ -155,7 +155,7 @@ func (c *ClassroomInvitationsCreateCmd) Run(ctx context.Context, flags *RootFlag
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"invitation": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"invitation": created}, created))
 	}
 	u.Out().Printf("id\t%s", created.Id)
 	u.Out().Printf("course_id\t%s", created.CourseId)
@@ -189,10 +189,10 @@ func (c *ClassroomInvitationsAcceptCmd) Run(ctx context.Context, flags *RootFlag
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"accepted":     true,
 			"invitationId": invitationID,
-		})
+		}))
 	}
 	u.Out().Printf("accepted\ttrue")
 	u.Out().Printf("invitation_id\t%s", invitationID)
@@ -229,10 +229,10 @@ func (c *ClassroomInvitationsDeleteCmd) Run(ctx context.Context, flags *RootFlag
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"deleted":      true,
 			"invitationId": invitationID,
-		})
+		}))
 	}
 	u.Out().Printf("deleted\ttrue")
 	u.Out().Printf("invitation_id\t%s", invitationID)

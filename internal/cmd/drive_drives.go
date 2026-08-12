@@ -47,10 +47,10 @@ func (c *DriveDrivesCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"drives":        resp.Drives,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Drives))
 	}
 
 	if len(resp.Drives) == 0 {

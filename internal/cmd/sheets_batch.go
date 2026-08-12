@@ -74,10 +74,10 @@ func (c *SheetsBatchGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"spreadsheetId": resp.SpreadsheetId,
 			"valueRanges":   resp.ValueRanges,
-		})
+		}, resp.ValueRanges))
 	}
 	if outfmt.IsPlain(ctx) {
 		writeSheetsValueRangesPlain(ctx, resp.ValueRanges)
@@ -152,13 +152,13 @@ func (c *SheetsBatchUpdateCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"spreadsheetId":       resp.SpreadsheetId,
 			"totalUpdatedRows":    resp.TotalUpdatedRows,
 			"totalUpdatedColumns": resp.TotalUpdatedColumns,
 			"totalUpdatedCells":   resp.TotalUpdatedCells,
 			"totalUpdatedSheets":  resp.TotalUpdatedSheets,
-		})
+		}))
 	}
 	if outfmt.IsPlain(ctx) {
 		spreadsheetIDOut := sheetsMutationSpreadsheetID(id, resp.SpreadsheetId)

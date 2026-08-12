@@ -73,6 +73,27 @@ func TestExecute_CalendarCalendars_MaxAndPage_JSON(t *testing.T) {
 	if len(parsed.Calendars) != 1 || parsed.Calendars[0].ID != "c1" || parsed.NextPageToken != "npt" {
 		t.Fatalf("unexpected payload: %#v", parsed)
 	}
+
+	resultsOnly := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--json", "--results-only", "--select", "id,summary",
+				"--account", "a@b.com",
+				"calendar", "calendars", "list",
+				"--max", "1",
+				"--page", "p1",
+			}); err != nil {
+				t.Fatalf("Execute transformed: %v", err)
+			}
+		})
+	})
+	var calendars []map[string]any
+	if err := json.Unmarshal([]byte(resultsOnly), &calendars); err != nil {
+		t.Fatalf("results-only JSON parse: %v\nout=%q", err, resultsOnly)
+	}
+	if len(calendars) != 1 || len(calendars[0]) != 2 || calendars[0]["id"] != "c1" || calendars[0]["summary"] != "One" {
+		t.Fatalf("unexpected results-only payload: %#v", calendars)
+	}
 }
 
 func TestExecute_CalendarAcl_MaxAndPage_JSON(t *testing.T) {

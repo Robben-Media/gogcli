@@ -79,10 +79,10 @@ func (c *ClassroomSubmissionsListCmd) Run(ctx context.Context, flags *RootFlags)
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"submissions":   resp.StudentSubmissions,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.StudentSubmissions))
 	}
 
 	if len(resp.StudentSubmissions) == 0 {
@@ -147,7 +147,7 @@ func (c *ClassroomSubmissionsGetCmd) Run(ctx context.Context, flags *RootFlags) 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"submission": sub})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"submission": sub}, sub))
 	}
 
 	u.Out().Printf("id\t%s", sub.Id)
@@ -237,13 +237,13 @@ func submissionAction(ctx context.Context, flags *RootFlags, courseID, coursewor
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"ok":           true,
 			"courseId":     courseID,
 			"courseworkId": courseworkID,
 			"submissionId": submissionID,
 			"action":       action,
-		})
+		}))
 	}
 	u.Out().Printf("ok\ttrue")
 	u.Out().Printf("course_id\t%s", courseID)
@@ -313,7 +313,7 @@ func (c *ClassroomSubmissionsGradeCmd) Run(ctx context.Context, flags *RootFlags
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"submission": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"submission": updated}, updated))
 	}
 	u.Out().Printf("id\t%s", updated.Id)
 	u.Out().Printf("draft_grade\t%s", formatFloatValue(updated.DraftGrade))

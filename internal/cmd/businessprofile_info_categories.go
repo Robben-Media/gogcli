@@ -57,10 +57,10 @@ func (c *BusinessProfileInfoCategoriesListCmd) Run(ctx context.Context, flags *R
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"categories":    resp.Categories,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Categories))
 	}
 
 	if len(resp.Categories) == 0 {
@@ -113,9 +113,9 @@ func (c *BusinessProfileInfoCategoriesBatchGetCmd) Run(ctx context.Context, flag
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"categories": resp.Categories,
-		})
+		}, resp.Categories))
 	}
 
 	if len(resp.Categories) == 0 {

@@ -55,7 +55,7 @@ func (c *CalendarCalendarsGetCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"calendar": entry})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"calendar": entry}, entry))
 	}
 
 	u.Out().Printf("id\t%s", entry.Id)
@@ -141,7 +141,7 @@ func (c *CalendarCalendarsInsertCmd) Run(ctx context.Context, flags *RootFlags) 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"calendar": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"calendar": created}, created))
 	}
 
 	u.Out().Printf("id\t%s", created.Id)
@@ -235,7 +235,7 @@ func (c *CalendarCalendarsUpdateCmd) Run(ctx context.Context, flags *RootFlags) 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"calendar": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"calendar": updated}, updated))
 	}
 
 	u.Out().Printf("id\t%s", updated.Id)
@@ -347,7 +347,7 @@ func (c *CalendarCalendarsPatchCmd) Run(ctx context.Context, kctx *kong.Context,
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"calendar": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"calendar": updated}, updated))
 	}
 
 	u.Out().Printf("id\t%s", updated.Id)
@@ -390,10 +390,10 @@ func (c *CalendarCalendarsDeleteCmd) Run(ctx context.Context, flags *RootFlags) 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"id":      calendarID,
 			"deleted": true,
-		})
+		}))
 	}
 
 	u.Err().Printf("Calendar %q removed from your list", calendarID)
@@ -444,7 +444,7 @@ func (c *CalendarCalendarsWatchCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"channel": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"channel": resp}, resp))
 	}
 
 	u.Out().Printf("channel_id\t%s", resp.Id)
