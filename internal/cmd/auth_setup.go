@@ -579,6 +579,9 @@ func (rt *setupRuntime) createProject(ctx context.Context) (projectID string, cr
 	if strings.TrimSpace(rt.cmd.Project) == "" {
 		return "", false, usage("--create-project requires --project <id>")
 	}
+	if rt.readOnly {
+		return "", false, usage("--readonly cannot be combined with --create-project (use --dry-run to display the plan)")
+	}
 	if !rt.force && rt.interactive {
 		if confErr := confirmDestructive(ctx, rt.flags, fmt.Sprintf("create Google Cloud project %q", rt.cmd.Project)); confErr != nil {
 			return "", false, confErr

@@ -610,6 +610,47 @@ func TestAuthSetup_HelpRegistered(t *testing.T) {
 	}
 }
 
+func TestAuthSetup_ProjectPickerCreate_ReadonlyBlocksBeforeCreateSubprocess(t *testing.T) {
+	r := &setupFakeRunner{byArgs: map[string]struct {
+		stdout, stderr string
+		code           int
+		err            error
+	}{
+		"projects list --format=json --filter=lifecycleState:ACTIVE --limit 100": {stdout: `[]`},
+	}}
+	u := mustSetupUI(t)
+	origPrompt := setupPromptLine
+	responses := []string{"1", "new-project"}
+	setupPromptLine = func(context.Context, string) (string, error) {
+		response := responses[0]
+		responses = responses[1:]
+		return response, nil
+	}
+	t.Cleanup(func() { setupPromptLine = origPrompt })
+
+	rt := &setupRuntime{
+		cmd:         &AuthSetupCmd{ProjectLimit: 100},
+		flags:       &RootFlags{Force: true},
+		u:           u,
+		gc:          gcloud.New(r),
+		client:      config.DefaultClientName,
+		interactive: true,
+		force:       true,
+		readOnly:    true,
+		report:      SetupReport{Client: config.DefaultClientName},
+	}
+
+	_, err := rt.runProject(context.Background())
+	if ExitCode(err) != 2 {
+		t.Fatalf("expected readonly usage error, got %v code=%d", err, ExitCode(err))
+	}
+	for _, call := range r.calls {
+		if strings.Contains(strings.Join(call, " "), "projects create") {
+			t.Fatalf("readonly interactive create must not run gcloud create: %#v", r.calls)
+		}
+	}
+}
+
 func TestAuthSetup_ProjectPickerCreate_UsesEnteredIDWithoutChangingGCloudConfig(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

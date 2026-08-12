@@ -258,7 +258,7 @@ func (ms *ManageServer) handleAuthStart(w http.ResponseWriter, r *http.Request) 
 		Scopes:       scopes,
 	}
 
-	authURL := cfg.AuthCodeURL(state, authURLParams(ms.opts.ForceConsent, !ms.opts.ForceConsent)...)
+	authURL := cfg.AuthCodeURL(state, authURLParams(ms.opts.ForceConsent, !ms.opts.ForceConsent && !ms.opts.Readonly)...)
 	http.Redirect(w, r, authURL, http.StatusFound)
 }
 

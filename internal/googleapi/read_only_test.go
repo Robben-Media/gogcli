@@ -92,13 +92,22 @@ func TestReadOnlyTransportBlocksBigQueryMutations(t *testing.T) {
 func TestReadOnlyPOSTRegistryRejectsNearMatchesAndOverrides(t *testing.T) {
 	for _, raw := range []string{
 		"https://www.googleapis.com/calendar/v3/freeBusy",
-		"https://searchconsole.googleapis.com/webmasters/v3/sites/example/searchAnalytics/query",
+		"https://searchconsole.mtls.googleapis.com/webmasters/v3/sites/example/searchAnalytics/query",
+		"https://searchconsole.googleapis.com/v1/urlInspection/index:inspect",
 		"https://searchconsole.googleapis.com/v1/urlTestingTools/mobileFriendlyTest:run",
+		"https://sheets.mtls.googleapis.com/v4/spreadsheets/id:getByDataFilter",
+		"https://sheets.googleapis.com/v4/spreadsheets/id/developerMetadata:search",
 		"https://sheets.googleapis.com/v4/spreadsheets/id/values:batchGetByDataFilter",
+		"https://driveactivity.googleapis.com/v2/activity:query",
+		"https://analyticsdata.googleapis.com/v1beta/properties/123:runReport",
+		"https://analyticsdata.googleapis.com/v1beta/properties/123:batchRunReports",
+		"https://analyticsdata.googleapis.com/v1beta/properties/123:runPivotReport",
 		"https://analyticsdata.googleapis.com/v1beta/properties/123:batchRunPivotReports",
+		"https://analyticsdata.googleapis.com/v1beta/properties/123:runRealtimeReport",
 		"https://analyticsdata.googleapis.com/v1beta/properties/123:checkCompatibility",
-		"https://analyticsdata.googleapis.com/v1alpha/properties/123/audiences/456:query",
-		"https://mybusinessbusinessinformation.googleapis.com/v1/locations:search",
+		"https://analyticsdata.googleapis.com/v1beta/properties/123/audienceExports/456:query",
+		"https://mybusinessbusinessinformation.googleapis.com/v1/chains:search",
+		"https://mybusinessbusinessinformation.googleapis.com/v1/googleLocations:search",
 	} {
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, raw, nil)
 		if err != nil {
@@ -113,6 +122,12 @@ func TestReadOnlyPOSTRegistryRejectsNearMatchesAndOverrides(t *testing.T) {
 	for _, raw := range []string{
 		"http://www.googleapis.com/calendar/v3/freeBusy",
 		"https://example.test/calendar/v3/freeBusy",
+		"https://www.googleapis.com/unreviewed/calendar/v3/freeBusy",
+		"https://searchconsole.googleapis.com/unreviewed/webmasters/v3/sites/example/searchAnalytics/query",
+		"https://sheets.googleapis.com/v4/spreadsheets/id/anything:search",
+		"https://analyticsdata.googleapis.com/v9/properties/123:runReport",
+		"https://analyticsdata.googleapis.com/v1beta/properties/123/anything:query",
+		"https://mybusinessbusinessinformation.googleapis.com/v1/locations:search",
 		"https://www.googleapis.com/v2/activity:query",
 		"https://sheets.googleapis.com/v4/spreadsheets/id:batchUpdate",
 	} {

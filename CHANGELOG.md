@@ -4,6 +4,12 @@
 
 ### Added
 
+- Auth: add guided `gog auth setup` for project selection/creation, selected-project API enablement, Console-only OAuth client guidance, credential install, and first-account authorization (re-runnable; agent-friendly). (#158)
+- Auth: add `gog auth doctor` for unified read-only diagnostics of config, keyring, OAuth client credentials, stored identities, and refresh-token usability. (#157)
+- CLI: add `--results-only` and `--select` for concise, projected JSON output. (#156)
+- CLI: add `gog schema` for deterministic, versioned JSON discovery of commands, flags, exit codes, and effective automation safeguards. (#152)
+- CLI: add opt-in `--wrap-untrusted` / `GOG_WRAP_UNTRUSTED` JSON fences for external Workspace text used by agents. (#155)
+- CLI: add `--enable-command-paths` / `GOG_ENABLE_COMMAND_PATHS` for exact command-path allowlisting alongside top-level `--enable-commands`. (#153)
 - Safety: add fail-closed runtime `--readonly` mode that blocks mutating Google API requests while allowing reviewed read operations. (#154)
 - Search Console: add `--start-row` to `search-console query` for zero-based Search Analytics result windows. (#98)
 - Tag Manager: add workspace trigger and variable create/delete/get/revert/update commands plus built-in-variable management. (#12, #45, #46, #47)

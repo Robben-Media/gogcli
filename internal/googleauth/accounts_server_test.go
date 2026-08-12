@@ -503,6 +503,58 @@ func TestManageServer_HandleAuthStart(t *testing.T) {
 	}
 }
 
+func TestManageServer_HandleAuthStart_ReadonlyDisablesGrantedScopes(t *testing.T) {
+	origRead := readClientCredentials
+	origState := randomStateFn
+	origEndpoint := oauthEndpoint
+
+	t.Cleanup(func() {
+		readClientCredentials = origRead
+		randomStateFn = origState
+		oauthEndpoint = origEndpoint
+	})
+
+	readClientCredentials = func(string) (config.ClientCredentials, error) {
+		return config.ClientCredentials{ClientID: "id", ClientSecret: "secret"}, nil
+	}
+	randomStateFn = func() (string, error) { return "state123", nil }
+	oauthEndpoint = oauth2.Endpoint{AuthURL: "http://example.com/auth", TokenURL: "http://example.com/token"}
+
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+
+	t.Cleanup(func() { _ = ln.Close() })
+
+	ms := &ManageServer{listener: ln, opts: ManageServerOptions{Readonly: true, Services: []Service{ServiceGmail, ServiceDrive}}}
+	rr := httptest.NewRecorder()
+	ms.handleAuthStart(rr, httptest.NewRequest(http.MethodGet, "/auth/start", nil))
+
+	if rr.Code != http.StatusFound {
+		t.Fatalf("status: %d", rr.Code)
+	}
+
+	parsed, err := url.Parse(rr.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse redirect: %v", err)
+	}
+
+	if got := parsed.Query().Get("include_granted_scopes"); got != "" {
+		t.Fatalf("readonly auth must request exact scopes, got include_granted_scopes=%q", got)
+	}
+
+	if got := parsed.Query().Get("prompt"); got != "" {
+		t.Fatalf("readonly auth without force consent prompt=%q, want empty", got)
+	}
+
+	for _, want := range []string{"https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/drive.readonly"} {
+		if !strings.Contains(parsed.Query().Get("scope"), want) {
+			t.Fatalf("readonly scope missing %q: %q", want, parsed.Query().Get("scope"))
+		}
+	}
+}
+
 func TestManageServer_HandleAuthStart_CredentialsError(t *testing.T) {
 	origRead := readClientCredentials
 
