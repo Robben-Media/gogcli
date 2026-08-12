@@ -43,8 +43,8 @@ func (f *setupFakeRunner) Run(ctx context.Context, name string, args ...string) 
 	}
 	// Existing fixtures use the display limit; setup requests one extra item to
 	// determine whether that display is actually truncated.
-	if strings.HasPrefix(key, "projects list --format=json --limit ") {
-		if resp, ok := f.byArgs["projects list --format=json --limit 100"]; ok {
+	if strings.HasPrefix(key, "projects list --format=json --filter=lifecycleState:ACTIVE --limit ") {
+		if resp, ok := f.byArgs["projects list --format=json --filter=lifecycleState:ACTIVE --limit 100"]; ok {
 			return resp.stdout, resp.stderr, resp.code, resp.err
 		}
 	}
@@ -131,7 +131,7 @@ func TestAuthSetup_Discover_ProjectAndAPIs(t *testing.T) {
 		"auth list --filter=status:ACTIVE --format=json": {
 			stdout: `[{"account":"dev@example.com","status":"ACTIVE"}]`, code: 0,
 		},
-		"projects list --format=json --limit 100": {
+		"projects list --format=json --filter=lifecycleState:ACTIVE --limit 100": {
 			stdout: `[{"projectId":"demo-proj","name":"Demo","lifecycleState":"ACTIVE"}]`, code: 0,
 		},
 		"services list --enabled --project demo-proj --format=json": {
@@ -164,8 +164,8 @@ func TestAuthSetup_Discover_ProjectAndAPIs(t *testing.T) {
 	if report.GCloudAccount != "dev@example.com" {
 		t.Fatalf("account=%q", report.GCloudAccount)
 	}
-	if len(report.Projects) != 1 || report.Projects[0].ProjectID != "demo-proj" || report.Projects[0].Name != "Demo" {
-		t.Fatalf("projects=%#v", report.Projects)
+	if len(report.Projects) != 0 {
+		t.Fatalf("explicit discovery must validate directly, projects=%#v", report.Projects)
 	}
 	// drive should be missing
 	foundMissing := false
@@ -200,7 +200,7 @@ func TestAuthSetup_NonInteractive_CreateProjectRequiresForce(t *testing.T) {
 		"auth list --filter=status:ACTIVE --format=json": {
 			stdout: `[{"account":"dev@example.com","status":"ACTIVE"}]`, code: 0,
 		},
-		"projects list --format=json --limit 100": {stdout: `[]`, code: 0},
+		"projects list --format=json --filter=lifecycleState:ACTIVE --limit 100": {stdout: `[]`, code: 0},
 	}}
 	withSetupGCloud(t, r)
 
@@ -225,7 +225,7 @@ func TestAuthSetup_EnableAPIs_WithForce(t *testing.T) {
 		"auth list --filter=status:ACTIVE --format=json": {
 			stdout: `[{"account":"dev@example.com","status":"ACTIVE"}]`, code: 0,
 		},
-		"projects list --format=json --limit 100": {
+		"projects list --format=json --filter=lifecycleState:ACTIVE --limit 100": {
 			stdout: `[{"projectId":"demo-proj"}]`, code: 0,
 		},
 		// first missing check: only gmail
@@ -314,7 +314,7 @@ func TestAuthSetup_CredentialsProjectMismatch(t *testing.T) {
 		"auth list --filter=status:ACTIVE --format=json": {
 			stdout: `[{"account":"dev@example.com","status":"ACTIVE"}]`, code: 0,
 		},
-		"projects list --format=json --limit 100": {stdout: `[{"projectId":"demo-proj"}]`, code: 0},
+		"projects list --format=json --filter=lifecycleState:ACTIVE --limit 100": {stdout: `[{"projectId":"demo-proj"}]`, code: 0},
 		"services list --enabled --project demo-proj --format=json": {
 			stdout: `[{"name":"gmail.googleapis.com","state":"ENABLED"}]`, code: 0,
 		},
@@ -371,7 +371,7 @@ func TestAuthSetup_CredentialsInstallIdempotent(t *testing.T) {
 		"auth list --filter=status:ACTIVE --format=json": {
 			stdout: `[{"account":"dev@example.com","status":"ACTIVE"}]`, code: 0,
 		},
-		"projects list --format=json --limit 100": {stdout: `[{"projectId":"demo-proj"}]`, code: 0},
+		"projects list --format=json --filter=lifecycleState:ACTIVE --limit 100": {stdout: `[{"projectId":"demo-proj"}]`, code: 0},
 		"services list --enabled --project demo-proj --format=json": {
 			stdout: `[{"name":"gmail.googleapis.com","state":"ENABLED"}]`, code: 0,
 		},
@@ -380,7 +380,7 @@ func TestAuthSetup_CredentialsInstallIdempotent(t *testing.T) {
 
 	// preinstall identical credentials
 	if err := config.WriteClientCredentialsFor("default", config.ClientCredentials{
-		ClientID: "id", ClientSecret: "sec", ProjectID: "demo-proj",
+		ClientID: "id", ClientSecret: "sec", ProjectID: "demo-proj", ClientType: config.OAuthClientTypeInstalled,
 	}); err != nil {
 		t.Fatalf("prewrite: %v", err)
 	}
@@ -463,8 +463,8 @@ func TestAuthSetup_ProjectPickerCreate_UsesEnteredIDWithoutChangingGCloudConfig(
 		code           int
 		err            error
 	}{
-		"projects list --format=json --limit 100":   {stdout: `[]`},
-		"projects create new-project --format=json": {stdout: `{"projectId":"new-project"}`},
+		"projects list --format=json --filter=lifecycleState:ACTIVE --limit 100": {stdout: `[]`},
+		"projects create new-project --format=json":                              {stdout: `{"projectId":"new-project"}`},
 	}}
 	u, err := ui.New(ui.Options{Color: "never"})
 	if err != nil {
@@ -643,7 +643,7 @@ func TestAuthSetup_ExistingCredentialMakesDesktopStageNonBlocking(t *testing.T) 
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg-config"))
-	if err := config.WriteClientCredentialsFor("default", config.ClientCredentials{ClientID: "id", ClientSecret: "secret", ProjectID: "demo"}); err != nil {
+	if err := config.WriteClientCredentialsFor("default", config.ClientCredentials{ClientID: "id", ClientSecret: "secret", ProjectID: "demo", ClientType: config.OAuthClientTypeInstalled}); err != nil {
 		t.Fatal(err)
 	}
 	u, _ := ui.New(ui.Options{Color: "never"})
@@ -679,10 +679,10 @@ func TestAuthSetup_StoppedRunHasFullDeferredInventoryWithoutDownstreamCalls(t *t
 		code           int
 		err            error
 	}{
-		"version --format=json":                                {stdout: `{}`},
-		"auth list --filter=status:ACTIVE --format=json":       {stdout: `[{"account":"dev@example.com"}]`},
-		"projects list --format=json --limit 100":              {stdout: `[{"projectId":"demo"}]`},
-		"services list --enabled --project demo --format=json": {stdout: `[]`},
+		"version --format=json":                                                  {stdout: `{}`},
+		"auth list --filter=status:ACTIVE --format=json":                         {stdout: `[{"account":"dev@example.com"}]`},
+		"projects list --format=json --filter=lifecycleState:ACTIVE --limit 100": {stdout: `[{"projectId":"demo"}]`},
+		"services list --enabled --project demo --format=json":                   {stdout: `[]`},
 	}}
 	withSetupGCloud(t, r)
 	var exit error

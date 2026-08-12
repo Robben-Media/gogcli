@@ -18,7 +18,15 @@ type ClientCredentials struct {
 	// ProjectID is the Google Cloud project_id from the downloaded OAuth client
 	// JSON when present. Optional for backwards compatibility.
 	ProjectID string `json:"project_id,omitempty"`
+	// ClientType records the original OAuth JSON envelope (installed or web).
+	// Empty is a legacy compact credential whose type is intentionally unknown.
+	ClientType string `json:"client_type,omitempty"`
 }
+
+const (
+	OAuthClientTypeInstalled = "installed"
+	OAuthClientTypeWeb       = "web"
+)
 
 type googleCredentialsFile struct {
 	Installed *struct {
@@ -50,18 +58,18 @@ func parseGoogleOAuthClientJSON(b []byte, requireInstalled bool) (ClientCredenti
 		return ClientCredentials{}, fmt.Errorf("decode credentials json: %w", err)
 	}
 
-	var clientID, clientSecret, projectID string
+	var clientID, clientSecret, projectID, clientType string
 	if f.Installed != nil {
-		clientID, clientSecret, projectID = f.Installed.ClientID, f.Installed.ClientSecret, f.Installed.ProjectID
+		clientID, clientSecret, projectID, clientType = f.Installed.ClientID, f.Installed.ClientSecret, f.Installed.ProjectID, OAuthClientTypeInstalled
 	} else if !requireInstalled && f.Web != nil {
-		clientID, clientSecret, projectID = f.Web.ClientID, f.Web.ClientSecret, f.Web.ProjectID
+		clientID, clientSecret, projectID, clientType = f.Web.ClientID, f.Web.ClientSecret, f.Web.ProjectID, OAuthClientTypeWeb
 	}
 
 	if clientID == "" || clientSecret == "" {
 		return ClientCredentials{}, errInvalidCredentials
 	}
 
-	return ClientCredentials{ClientID: clientID, ClientSecret: clientSecret, ProjectID: projectID}, nil
+	return ClientCredentials{ClientID: clientID, ClientSecret: clientSecret, ProjectID: projectID, ClientType: clientType}, nil
 }
 
 func WriteClientCredentials(c ClientCredentials) error {
@@ -150,7 +158,7 @@ func ClientCredentialsExists(client string) (bool, error) {
 // SameClientCredentials reports whether two stored credential sets match for
 // idempotent install (client id/secret/project).
 func SameClientCredentials(a, b ClientCredentials) bool {
-	return a.ClientID == b.ClientID && a.ClientSecret == b.ClientSecret && a.ProjectID == b.ProjectID
+	return a.ClientID == b.ClientID && a.ClientSecret == b.ClientSecret && a.ProjectID == b.ProjectID && a.ClientType == b.ClientType
 }
 
 type CredentialsMissingError struct {

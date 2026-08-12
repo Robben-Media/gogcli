@@ -151,6 +151,20 @@ func InstallClientCredentials(opts InstallCredentialsOptions) (InstallCredential
 		if err := config.WriteClientCredentialsFor(client, creds); err != nil {
 			return InstallCredentialsResult{}, err
 		}
+		// A standalone overwrite does not prove its project association remains
+		// valid. Guided setup will require confirmation again when needed.
+		if !opts.RequireInstalledClient {
+			cfg, cfgErr := config.ReadConfig()
+			if cfgErr != nil {
+				return InstallCredentialsResult{}, cfgErr
+			}
+			if err := config.SetClientSetupCredentialsProjectAssociated(&cfg, client, false); err != nil {
+				return InstallCredentialsResult{}, err
+			}
+			if err := config.WriteConfig(cfg); err != nil {
+				return InstallCredentialsResult{}, err
+			}
+		}
 	}
 
 	outPath, _ := config.ClientCredentialsPathFor(client)

@@ -302,9 +302,14 @@ func openKeyringWithTimeout(cfg keyring.Config, timeout time.Duration) (keyring.
 // OpenDefaultNoInput opens the token store without permitting a file-backend
 // password prompt. It is appropriate for inspection paths controlled by --no-input.
 func OpenDefaultNoInput() (Store, error) {
-	if info, err := ResolveKeyringBackendInfo(); err != nil {
+	info, err := ResolveKeyringBackendInfo()
+	if err != nil {
 		return nil, err
-	} else if info.Value == "file" && os.Getenv(keyringPasswordEnv) == "" {
+	}
+	// On Linux without D-Bus, auto resolves to the file backend. Reject it
+	// before OpenDefault so a TTY never triggers TerminalPrompt under --no-input.
+	usesFile := info.Value == "file" || shouldForceFileBackend(runtime.GOOS, info, os.Getenv("DBUS_SESSION_BUS_ADDRESS"))
+	if usesFile && os.Getenv(keyringPasswordEnv) == "" {
 		return nil, errNoInputFilePassword
 	}
 

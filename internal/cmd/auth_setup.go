@@ -165,6 +165,11 @@ func (c *AuthSetupCmd) Run(ctx context.Context, flags *RootFlags) error {
 			return rt.emit(ctx)
 		}
 	}
+	// Discovery is read-only, but still reports every setup stage. The local
+	// credential and token stages are deliberately unavailable rather than read.
+	if rt.discover {
+		rt.appendDeferredStages()
+	}
 
 	return rt.emit(ctx)
 }
@@ -303,6 +308,10 @@ func (rt *setupRuntime) continueCmd(projectID string) string {
 	return continueSetupCmd(rt.client, rt.cmd, projectID, rt.force)
 }
 
+func (rt *setupRuntime) setupCommand(projectID string, extra ...string) string {
+	return buildSetupCommand(rt.client, rt.cmd, projectID, rt.force, extra...)
+}
+
 func (rt *setupRuntime) runGCloudInstall(ctx context.Context) (stop bool, err error) {
 	installed, installRes := rt.gc.Installed(ctx)
 	if !installed {
@@ -428,7 +437,9 @@ func (rt *setupRuntime) handleMissingGCloudAccount(ctx context.Context) (stop bo
 
 func (rt *setupRuntime) runProject(ctx context.Context) (stop bool, err error) {
 	projectID := rt.report.ProjectID
-	needList := rt.discover || projectID == "" && rt.interactive && !rt.discover
+	// An explicit (or saved) target is validated directly, including under
+	// --discover, so projects.list permission is never a prerequisite.
+	needList := projectID == "" && (rt.discover || rt.interactive && !rt.discover)
 	var projects []gcloud.Project
 	if needList {
 		// Request one extra item so truncation means an item was actually omitted.
@@ -438,9 +449,11 @@ func (rt *setupRuntime) runProject(ctx context.Context) (stop bool, err error) {
 			rt.appendStage(SetupStage{ID: stageProject, Status: status, ActionKind: actionCommand, Summary: "failed to list projects", Blocker: listErr.Error(), Resumable: resumable, Command: rt.continueCmd(projectID)})
 			return stopSetup()
 		}
+		// ListProjects filters ACTIVE server-side. Retain the defensive filter in
+		// case a gcloud implementation returns a non-active row regardless.
 		projects = filterActiveProjects(listed)
-		truncated := len(projects) > rt.cmd.ProjectLimit
-		if truncated {
+		truncated := len(listed) > rt.cmd.ProjectLimit
+		if len(projects) > rt.cmd.ProjectLimit {
 			projects = projects[:rt.cmd.ProjectLimit]
 		}
 		if rt.discover {
@@ -456,6 +469,9 @@ func (rt *setupRuntime) runProject(ctx context.Context) (stop bool, err error) {
 			return stopSetup()
 		}
 		projectID = createdID
+		// The project now exists. Continuations must validate it read-only instead
+		// of attempting creation again.
+		rt.cmd.CreateProject = false
 	}
 	if projectID == "" && rt.interactive && !rt.discover {
 		picked, create, pickErr := rt.pickProjectInteractive(ctx, projects)
@@ -478,6 +494,10 @@ func (rt *setupRuntime) runProject(ctx context.Context) (stop bool, err error) {
 		} else {
 			projectID = picked
 		}
+	}
+	if projectID == "" && rt.discover {
+		rt.appendStage(SetupStage{ID: stageProject, Status: stageStatusOK, ActionKind: actionNone, Summary: "ACTIVE projects discovered"})
+		return false, nil
 	}
 	if projectID == "" {
 		active, _, _ := rt.gc.ActiveProjectID(ctx)
@@ -544,7 +564,7 @@ func (rt *setupRuntime) createProject(ctx context.Context) (projectID string, cr
 		// Creation can succeed remotely before gcloud receives its final response.
 		// Verify the explicit ID rather than treating an idempotent rerun as failure.
 		existing, _, describeErr := rt.gc.DescribeProject(ctx, rt.cmd.Project)
-		if describeErr == nil {
+		if describeErr == nil && (existing.LifecycleState == "" || strings.EqualFold(existing.LifecycleState, "ACTIVE")) {
 			return existing.ProjectID, true, nil
 		}
 	}
@@ -603,6 +623,10 @@ func (rt *setupRuntime) pickProjectInteractive(ctx context.Context, projects []g
 
 func (rt *setupRuntime) runAPIs(ctx context.Context) (stop bool, err error) {
 	projectID := rt.report.ProjectID
+	if projectID == "" && rt.discover {
+		rt.appendStage(SetupStage{ID: stageAPIs, Status: stageStatusUnavailable, ActionKind: actionNone, Summary: "not inspected; no project selected during discovery", Blocker: "pass --project to inspect enabled APIs"})
+		return false, nil
+	}
 	missing, _, missRes, missErr := rt.gc.MissingServices(ctx, projectID, rt.usageIDs)
 	if missErr != nil {
 		status, resumable := gcloudFailureStage(missRes.Kind)
@@ -743,11 +767,11 @@ func (rt *setupRuntime) runManualStages(ctx context.Context) (stop bool, err err
 
 	rt.appendStage(
 		manualStage(stageBranding, "OAuth branding / consent screen", rt.setupRec.AcknowledgedBranding,
-			projectConsoleURL(projectID, "auth/branding"), fmt.Sprintf("gog --client %s auth setup --project %s --ack-branding", rt.client, projectID)),
+			projectConsoleURL(projectID, "auth/branding"), rt.setupCommand(projectID, "--ack-branding")),
 		manualStage(stageAudience, "OAuth audience / test users", rt.setupRec.AcknowledgedAudience,
-			projectConsoleURL(projectID, "auth/audience"), fmt.Sprintf("gog --client %s auth setup --project %s --ack-audience", rt.client, projectID)),
+			projectConsoleURL(projectID, "auth/audience"), rt.setupCommand(projectID, "--ack-audience")),
 		manualStage(stageDataAccess, "OAuth data access / scopes", rt.setupRec.AcknowledgedDataAccess,
-			projectConsoleURL(projectID, "auth/scopes"), fmt.Sprintf("gog --client %s auth setup --project %s --ack-data-access", rt.client, projectID)),
+			projectConsoleURL(projectID, "auth/scopes"), rt.setupCommand(projectID, "--ack-data-access")),
 	)
 	if !rt.setupRec.AcknowledgedBranding || !rt.setupRec.AcknowledgedAudience || !rt.setupRec.AcknowledgedDataAccess {
 		return stopSetup()
@@ -768,7 +792,9 @@ func (rt *setupRuntime) runManualStages(ctx context.Context) (stop bool, err err
 		Command: fmt.Sprintf("gog --client %s auth setup --project %s --credentials ~/Downloads/client_secret.json", rt.client, projectID),
 	}
 	if credsExist {
-		desktopClientStage = SetupStage{ID: stageDesktopClient, Status: stageStatusOK, ActionKind: actionNone, Summary: "Desktop OAuth client inferred from stored credentials"}
+		if stored, err := config.ReadClientCredentialsFor(rt.client); err == nil && stored.ClientType == config.OAuthClientTypeInstalled {
+			desktopClientStage = SetupStage{ID: stageDesktopClient, Status: stageStatusOK, ActionKind: actionNone, Summary: "Desktop OAuth client inferred from stored credentials"}
+		}
 	}
 	rt.appendStage(desktopClientStage)
 	return false, nil
@@ -803,7 +829,7 @@ func (rt *setupRuntime) runCredentials(ctx context.Context) (stop bool, err erro
 		Summary:    "OAuth client credentials not installed",
 		Blocker:    "download Desktop client JSON and pass --credentials",
 		Resumable:  true,
-		Command:    fmt.Sprintf("gog --client %s auth setup --project %s --credentials <path>", rt.client, projectID),
+		Command:    rt.setupCommand(projectID, "--credentials", "<path>"),
 		ConsoleURL: projectConsoleURL(projectID, "auth/clients"),
 	})
 
@@ -883,6 +909,15 @@ func (rt *setupRuntime) appendCredentialsExisting(ctx context.Context, projectID
 		})
 		return false
 	}
+	if stored.ClientType != config.OAuthClientTypeInstalled {
+		rt.appendStage(SetupStage{
+			ID: stageCredentials, Status: stageStatusBlocked, ActionKind: actionCommand,
+			Summary:   "stored credentials are not confirmed Desktop OAuth credentials",
+			Blocker:   "install a Desktop app OAuth client JSON with --credentials",
+			Resumable: true, Command: rt.setupCommand(projectID, "--credentials", "<new.json>"),
+		})
+		return false
+	}
 	if stored.ProjectID != "" && stored.ProjectID != projectID {
 		rt.appendStage(SetupStage{
 			ID:         stageCredentials,
@@ -929,6 +964,9 @@ func (rt *setupRuntime) runAccount(ctx context.Context) (stop bool, err error) {
 		return stopSetup()
 	}
 	if satisfies {
+		if !rt.repairExplicitAccountMapping(ctx, email) {
+			return stopSetup()
+		}
 		summary := "authorized account token present for requested services"
 		if email != "" {
 			summary = "account authorized: " + email
@@ -967,6 +1005,39 @@ func (rt *setupRuntime) runAccount(ctx context.Context) (stop bool, err error) {
 	})
 
 	return false, nil
+}
+
+func (rt *setupRuntime) repairExplicitAccountMapping(ctx context.Context, email string) bool {
+	if rt.clientOverride == "" || strings.TrimSpace(email) == "" {
+		return true
+	}
+	mapped, exists := config.AccountClient(rt.cfg, email)
+	if exists && mapped == rt.client {
+		return true
+	}
+	if !rt.force && !rt.interactive {
+		rt.appendStage(SetupStage{
+			ID: stageAccount, Status: stageStatusBlocked, ActionKind: actionCommand,
+			Summary: "account mapping does not select the requested client", Blocker: "re-run with --force or confirm interactively to repair the account mapping", Resumable: true,
+			Command: rt.continueCmd(rt.report.ProjectID),
+		})
+		return false
+	}
+	if !rt.force {
+		if err := confirmDestructive(ctx, rt.flags, fmt.Sprintf("map account %q to client %q", email, rt.client)); err != nil {
+			rt.appendStage(SetupStage{ID: stageAccount, Status: stageStatusBlocked, ActionKind: actionCommand, Summary: "account mapping needs confirmation", Blocker: err.Error(), Resumable: true, Command: rt.continueCmd(rt.report.ProjectID)})
+			return false
+		}
+	}
+	if err := config.SetAccountClient(&rt.cfg, email, rt.client); err != nil {
+		rt.appendStage(SetupStage{ID: stageAccount, Status: stageStatusFailed, ActionKind: actionCommand, Summary: "cannot repair account mapping", Blocker: err.Error(), Command: rt.continueCmd(rt.report.ProjectID)})
+		return false
+	}
+	if err := config.WriteConfig(rt.cfg); err != nil {
+		rt.appendStage(SetupStage{ID: stageAccount, Status: stageStatusFailed, ActionKind: actionCommand, Summary: "cannot repair account mapping", Blocker: err.Error(), Command: rt.continueCmd(rt.report.ProjectID)})
+		return false
+	}
+	return true
 }
 
 func (rt *setupRuntime) authorizeAccount(ctx context.Context, email string) (stop bool, err error) {
@@ -1225,6 +1296,12 @@ func shellQuote(value string) string {
 }
 
 func continueSetupCmd(client string, c *AuthSetupCmd, projectID string, force bool) string {
+	return buildSetupCommand(client, c, projectID, force)
+}
+
+// buildSetupCommand emits the canonical shell-safe setup command, retaining all
+// non-secret retry inputs. Extra arguments are used for stage-specific actions.
+func buildSetupCommand(client string, c *AuthSetupCmd, projectID string, force bool, extra ...string) string {
 	parts := []string{"gog"}
 	if client != "" && client != config.DefaultClientName {
 		parts = append(parts, "--client", client)
@@ -1277,6 +1354,7 @@ func continueSetupCmd(client string, c *AuthSetupCmd, projectID string, force bo
 	if c.ProjectLimit != 0 && c.ProjectLimit != 100 {
 		parts = append(parts, "--project-limit", strconv.Itoa(c.ProjectLimit))
 	}
+	parts = append(parts, extra...)
 	for i, part := range parts {
 		parts[i] = shellQuote(part)
 	}

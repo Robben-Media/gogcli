@@ -269,7 +269,8 @@ func (c *Client) ListProjects(ctx context.Context, limit int) ([]Project, Result
 		return nil, Result{Kind: BlockerInvalidInput}, errProjectListLimit
 	}
 
-	res := c.run(ctx, "projects", "list", "--format=json", "--limit", fmt.Sprint(limit))
+	// Filter before limiting so deleted/pending projects do not consume the caller's display budget.
+	res := c.run(ctx, "projects", "list", "--format=json", "--filter=lifecycleState:ACTIVE", "--limit", fmt.Sprint(limit))
 	if res.ExitCode != 0 {
 		return nil, res, fmt.Errorf("%w: projects list exit %d: %s", errGCloudCommand, res.ExitCode, res.Stderr)
 	}

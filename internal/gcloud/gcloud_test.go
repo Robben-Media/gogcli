@@ -113,7 +113,7 @@ func TestListProjects_Parses(t *testing.T) {
 		code           int
 		err            error
 	}{
-		"projects list --format=json --limit 100": {
+		"projects list --format=json --filter=lifecycleState:ACTIVE --limit 100": {
 			stdout: `[{"projectId":"p1","name":"One"},{"projectId":"p2","name":"Two"}]`,
 			code:   0,
 		},
@@ -317,7 +317,7 @@ func TestListProjectsUsesBoundedLimit(t *testing.T) {
 		code           int
 		err            error
 	}{
-		"projects list --format=json --limit 2": {stdout: `[]`},
+		"projects list --format=json --filter=lifecycleState:ACTIVE --limit 2": {stdout: `[]`},
 	}}
 	if _, _, err := New(r).ListProjects(context.Background(), 2); err != nil {
 		t.Fatal(err)
@@ -334,14 +334,14 @@ func TestNeverUsesConfigSet(t *testing.T) {
 		code           int
 		err            error
 	}{
-		"projects list --format=json --limit 100":           {stdout: "[]", code: 0},
-		"auth list --filter=status:ACTIVE --format=json":    {stdout: "[]", code: 0},
-		"config get-value project --format=json":            {stdout: "null", code: 0},
-		"services list --enabled --project p --format=json": {stdout: "[]", code: 0},
-		"version --format=json":                             {stdout: `{"Google Cloud SDK":"1"}`, code: 0},
-		"projects create p --format=json":                   {stdout: `{"projectId":"p"}`, code: 0},
-		"services enable --project p gmail.googleapis.com":  {code: 0},
-		"auth login --brief":                                {code: 0},
+		"projects list --format=json --filter=lifecycleState:ACTIVE --limit 100": {stdout: "[]", code: 0},
+		"auth list --filter=status:ACTIVE --format=json":                         {stdout: "[]", code: 0},
+		"config get-value project --format=json":                                 {stdout: "null", code: 0},
+		"services list --enabled --project p --format=json":                      {stdout: "[]", code: 0},
+		"version --format=json":                                                  {stdout: `{"Google Cloud SDK":"1"}`, code: 0},
+		"projects create p --format=json":                                        {stdout: `{"projectId":"p"}`, code: 0},
+		"services enable --project p gmail.googleapis.com":                       {code: 0},
+		"auth login --brief":                                                     {code: 0},
 	}}
 	c := New(r)
 	ctx := context.Background()
