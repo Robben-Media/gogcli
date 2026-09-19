@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Native Google MCP implementation plan</title>
+  <style>
+    :root { color-scheme: light; --ink:#172b36; --muted:#52636b; --line:#cbd4d6; --accent:#075d59; --paper:#fffefa; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#edf1ef; color:var(--ink); font:16px/1.65 system-ui,sans-serif; }
+    main { max-width:1160px; margin:32px auto; padding:48px; background:var(--paper); border:1px solid var(--line); }
+    h1,h2,h3 { line-height:1.2; text-wrap:balance; }
+    h1 { font-size:clamp(2rem,5vw,3.3rem); max-width:850px; margin:12px 0 24px; }
+    h2 { font-size:1.65rem; margin-top:52px; padding-top:24px; border-top:2px solid var(--ink); }
+    h3 { font-size:1.15rem; margin-top:28px; }
+    p,li { max-width:94ch; }
+    a { color:var(--accent); text-underline-offset:3px; }
+    a:focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
+    code,pre { font:0.88em/1.6 ui-monospace,monospace; }
+    code { overflow-wrap:anywhere; }
+    pre { padding:16px; background:#eef3f1; overflow:auto; border:1px solid var(--line); }
+    .meta { color:var(--muted); font-size:.9rem; }
+    .lead { font-size:1.2rem; max-width:76ch; }
+    .callout { border-left:4px solid var(--accent); padding:12px 20px; background:#eff6f1; margin:24px 0; }
+    nav { display:flex; flex-wrap:wrap; gap:8px 22px; padding:20px 0; border-block:1px solid var(--line); }
+    .table-wrap { overflow-x:auto; margin:20px 0; }
+    table { border-collapse:collapse; width:100%; min-width:680px; font-size:.92rem; }
+    th,td { text-align:left; vertical-align:top; padding:12px; border-bottom:1px solid var(--line); }
+    th { background:#eaf0ed; font-weight:650; }
+    caption { text-align:left; margin-bottom:10px; color:var(--muted); }
+    .flow { display:flex; flex-wrap:wrap; gap:10px; list-style:none; padding:0; }
+    .flow li { border:1px solid var(--line); padding:12px 16px; background:#f6f8f4; }
+    details { margin:18px 0; }
+    summary { cursor:pointer; color:var(--accent); }
+    @media (max-width:700px) { main { margin:0; padding:24px 18px; border:0; } h2 { margin-top:36px; } }
+    @media print { body { background:white; } main { margin:0; padding:0; border:0; max-width:none; } nav { display:none; } table { min-width:0; } .table-wrap { overflow:visible; } h2,h3 { break-after:avoid; } tr { break-inside:avoid; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="meta">Robben Media · Architecture and execution plan · 18 September 2026</p>
+    <h1>Native Google MCP</h1>
+    <p class="lead">Give agents typed Google tools backed by direct API calls. Optimize completed workflows for speed, correctness, and useful results. Keep language and code-reuse choices subordinate to those measurements.</p>
+    <p class="meta">Owner: Robben Media project maintainer, with the primary agent responsible for integration. Baseline: <code>e81e585</code>, release <code>v0.10.0</code>. This document is the authoritative MCP migration plan. It describes intended behavior, not an implemented or deployed server.</p>
+  </header>
+  <nav aria-label="Plan sections">
+    <a href="#business">Outcome and scope</a><a href="#security">Access and data</a><a href="#design">Architecture</a><a href="#execution">Delegated work</a><a href="#verification">Acceptance</a><a href="#risks">Risks</a><a href="#assumptions">Assumptions and sources</a>
+  </nav>
+
+  <section id="business">
+    <h2>Business posture</h2>
+    <p>The desired path is <code>agent → MCP server → Google APIs</code>. Tool execution must not spawn <code>gog</code>, invoke a shell, parse terminal output, or depend on loading a CLI instruction skill. Go is the proposed runtime because it supports inexpensive concurrent I/O, persistent connection pools, and a deployable binary. No language-level speed advantage over alternatives has been measured for these workloads.</p>
+    <p>Success means the same representative work finishes correctly with fewer avoidable agent round trips and no material latency regression. A shorter tool list, faster empty request, or lower token count alone is insufficient.</p>
+    <ul>
+      <li>Deliver a useful read-only vertical slice first: email retrieval, Drive/Docs lookup, Calendar lookup, and GA4/Search Console/Sheets reporting.</li>
+      <li>Support multiple connected Google accounts from the first release, including personal Gmail and Google Workspace. The user-facing setup is browser OAuth sign-in for each account, with no service-account key or per-account Cloud project.</li>
+      <li>Add deliberate write operations after identity, policy, and retry behavior pass tests. Existing Google credentials remain outside the repository and outside model context.</li>
+      <li>Build a parity ledger for implemented CLI operations. Migrate remaining operations by actual consumer need. The 588-method API-gap backlog in <a href="../../specs/README.md">the existing specs</a> is not an MCP implementation commitment.</li>
+      <li>Publish workflow instructions with the service where clients support them. Replace local skill installation only after the receiving client proves it can discover and activate those instructions.</li>
+      <li>Retain existing CLI consumers and administrative authentication commands during migration. CLI retirement is a consumer-by-consumer outcome, not a prerequisite for native MCP.</li>
+    </ul>
+    <div class="callout">
+      <p>Current execution boundary: detailed planning and delegated source investigations. Implementation is divided into reviewable packages below. Production endpoints, profile changes, live sends, shared-document edits, and CLI removal are later rollout actions with named targets and verification.</p>
+    </div>
+  </section>
+
+  <section id="security">
+    <h2>Security posture</h2>
+    <p>Security control: existing OAuth and service-account plumbing, secret storage, and persisted command policies provide reusable building blocks. Their CLI behavior does not establish correctness inside a concurrent server.</p>
+    <p>Security control: policy is currently applied in <a href="../../internal/cmd/policy_enforcement.go"><code>internal/cmd/policy_enforcement.go</code></a>. Native handlers must use a shared policy evaluator before acquiring data or issuing an API request. Directly calling current handlers would bypass their normal entry-point checks.</p>
+    <p>Accepted risk: this plan records no new acceptance of data exposure or unsafe writes. Compatibility limits and provisional performance targets remain engineering decisions to verify.</p>
+    <h3>Required controls</h3>
+    <ul>
+      <li>Derive the caller from trusted startup configuration for stdio or validated server authentication for HTTP. MCP client names, request metadata, and tool arguments are not authenticated identities.</li>
+      <li>Bind each caller to allowed Google accounts, OAuth client buckets, and operations. Every Google tool requires an <code>account_id</code> obtained from the caller-filtered account catalog. Selection narrows this grant; it never widens it. Reject unknown accounts, guessed email addresses used as authority, and ambiguous defaults.</li>
+      <li>Keep Google OAuth credentials separate from MCP client authentication. Do not pass client-supplied Google bearer tokens through to arbitrary upstream endpoints.</li>
+      <li>Apply existing policy specificity and deny semantics consistently, then intersect them with the MCP server's explicit operation allowlist. Hidden tools must also be denied when invoked by name.</li>
+      <li>Keep credentials, content, and private resource IDs out of routine logs. Record operation, opaque principal identifier, elapsed time, upstream call count, error category, and trace identifier.</li>
+      <li>Default to bounded reads. Enable write tools through trusted configuration. Tool annotations describe behavior; server authorization enforces it.</li>
+      <li>Make downloads explicit and size-bounded. Start with text/metadata tools; later binary transfers use authenticated, expiring handles or MCP resources, not arbitrary filesystem paths or unrestricted URLs.</li>
+      <li>Rewrite MCP workflow examples without embedded account-specific credentials, shell grants, or automatic updater instructions. Preserve user-edited local skills until a verified replacement is in use.</li>
+    </ul>
+  </section>
+
+  <section id="design">
+    <h2>Design</h2>
+    <h3>C4 context</h3>
+    <ol class="flow" aria-label="Request flow">
+      <li>1. Agent host</li><li>2. Native Google MCP</li><li>3. Google Workspace and reporting APIs</li>
+    </ol>
+    <details><summary>Context diagram source</summary><pre>flowchart LR
+  Human[Jeremy and authorized workflows] --> Host[Agent host]
+  Host -->|MCP tools and resources| Server[Native Google MCP]
+  Server -->|Google API requests| Google[Workspace and reporting APIs]
+  Server --> Secrets[Existing protected credential store]</pre></details>
+    <div class="table-wrap"><table>
+      <caption>System responsibilities</caption>
+      <thead><tr><th>Name</th><th>Type</th><th>Description</th><th>Responsibilities</th><th>Security controls</th></tr></thead>
+      <tbody>
+        <tr><td>Agent host</td><td>External application</td><td>Runs the model and MCP client.</td><td>Tool discovery, workflow loading, model calls, approval UX.</td><td>Preserve origin of remote instructions; apply granted permissions.</td></tr>
+        <tr><td>Native Google MCP</td><td>Go application</td><td>One service with thin transport adapters.</td><td>Validate, authorize, execute, bound, and structure results.</td><td>Account isolation and operation policy on every call.</td></tr>
+        <tr><td>Google APIs</td><td>External services</td><td>Workspace and marketing/reporting systems of record.</td><td>Store data, enforce Google scopes, execute API operations.</td><td>OAuth, service-account grants, API quotas.</td></tr>
+        <tr><td>Credential store</td><td>Protected local dependency</td><td>Existing keyring or encrypted-file configuration.</td><td>Supply credentials to the server process.</td><td>Keep secrets out of model output and Git; noninteractive failure when unavailable.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>C4 container</h3>
+    <p>Use one Go binary, provisionally <code>cmd/gog-mcp</code>. A transport adapter converts MCP requests to typed operations; operation code calls Google's Go clients directly. Shared policy and authentication live below both interfaces. One process supports multiple user-connected accounts. Each request resolves a permitted <code>account_id</code> to an immutable account/client identity; there is no process-global active account. A profile can be restricted to only work, only personal, or an explicit set of accounts. Do not introduce a queue, remote cache, or microservices for the read-only pilot; reuse protected local credential storage and a minimal account registry.</p>
+    <details><summary>Container diagram source</summary><pre>flowchart TB
+  Host[Agent host] --> Adapter[MCP adapter: stdio or HTTP]
+  subgraph Process[Single Go server process]
+    Adapter --> Access[Caller and operation authorization]
+    Access --> Ops[Typed Google operations]
+    Ops --> Clients[Shared Google client provider]
+    Adapter --> Resources[Versioned workflow resources]
+  end
+  Clients --> Google[Google APIs]
+  Clients --> Store[Credential store]</pre></details>
+    <div class="table-wrap"><table>
+      <caption>Proposed package ownership and contracts</caption>
+      <thead><tr><th>Name</th><th>Type</th><th>Description</th><th>Responsibilities</th><th>Security controls</th></tr></thead>
+      <tbody>
+        <tr><td><code>cmd/gog-mcp</code>, <code>internal/mcpserver</code></td><td>Entrypoint and adapter</td><td>Official Go MCP SDK; pin a released version.</td><td>Startup validation, tools/resources, schemas, transport, lifecycle, errors.</td><td>No command runner; protocol-only stdout; bounded request bodies.</td></tr>
+        <tr><td><code>internal/access</code></td><td>Shared Go package</td><td>Transport-independent caller grants and existing policy semantics.</td><td>Resolve a permitted identity and authorize canonical action IDs.</td><td>Deny before execution; no mutable process-global active account.</td></tr>
+        <tr><td><code>internal/googleops</code></td><td>Typed operation packages</td><td>Subpackages per service.</td><td>Queries, projections, pagination, composition, partial results.</td><td>Known API endpoints; bounded limits; explicit mutation semantics.</td></tr>
+        <tr><td><code>internal/googleapi</code></td><td>Shared client provider</td><td>Evolve existing API constructors as needed.</td><td>Connection/token reuse, refresh, deadlines, quota admission, safe retries.</td><td>Identity-scoped caches; correct credential invalidation.</td></tr>
+        <tr><td>Embedded MCP workflow resources</td><td>Read-only data</td><td>Service-owned instructions distinct from legacy CLI examples.</td><td>Explain multi-tool workflows and parameter conventions.</td><td>Sanitized content; stable URI and digest; no implicit execution permissions.</td></tr>
+      </tbody>
+    </table></div>
+    <p>The primary agent owns shared interfaces, the operation catalog, <code>go.mod</code>/<code>go.sum</code>, and final registration wiring. Service workers implement against agreed interfaces. Do not let parallel workers each invent account resolution, output envelopes, or retry rules.</p>
+
+    <h3>Google OAuth and multiple accounts</h3>
+    <p>User requirement: connecting personal Gmail and Workspace must feel like signing into a normal Google integration. The product owns OAuth application setup once. Users connect their accounts through Google's browser consent screen; they do not create service-account JSON keys, enable domain-wide delegation, or create a Cloud project per mailbox.</p>
+    <ol>
+      <li>Provide a small account-management page with "Connect Google account", the connected account list, granted capabilities, reconnect, and disconnect. Connecting another account uses Google's account chooser and adds a connection without replacing the previous one.</li>
+      <li>Configure an app-owned Google Cloud project with an External OAuth audience so both consumer Gmail and Workspace accounts are eligible. Enable the required APIs there. Use appropriately registered desktop/loopback or web OAuth clients for the deployment; never embed a confidential web-client secret in downloadable frontend code.</li>
+      <li>Use authorization code flow with state bound to the initiating user, exact redirect validation, PKCE where supported, and verified Google identity. Derive the account from verified provider data, not an email typed by an agent. Bind records to the stable Google subject and retain verified email and a user-editable display label.</li>
+      <li>Request offline access and store each account's refresh token in the existing protected store. Never return tokens through MCP. Reuse an existing refresh token when Google's response omits a new one; persist rotations safely. Normal access-token expiry refreshes automatically.</li>
+      <li>Request permissions by capability. The read-only email pilot needs Gmail read access; sending/drafts and other services require their appropriate additional scopes. Check scopes actually granted and prompt to extend access when necessary. An OIDC sign-in alone does not grant mailbox access.</li>
+      <li>Expose <code>accounts_list</code> as a local metadata tool returning only connections granted to the caller, their stable account IDs, labels, and capability status. Every Google tool uses the selected ID. Replies and writes retain the selected mailbox identity; never fall back to another account after an error.</li>
+      <li>Implement reconnect and disconnect. Revoke the affected app grant where appropriate, evict its token/client caches, and remove its local connection while preserving other accounts. Revocation must clearly describe whether it affects other deployments using the same Google grant.</li>
+    </ol>
+    <p>Google OAuth application credentials and service-account keys are different. The application still needs a one-time OAuth client configuration; that belongs to deployment administration, not mailbox onboarding. The existing CLI already has user OAuth code to adapt, but new explicitly OAuth-connected accounts must not be silently overridden by an existing service-account configuration.</p>
+    <p>The connection registry holds the opaque account ID, stable Google subject, verified email, label, owning principal, OAuth client reference, explicit <code>auth_mode=oauth</code>, actual granted scopes, update time, and credential generation. Keep refresh tokens in the protected store, which already separates tokens by client and email. Adapt legacy records explicitly instead of changing their account/client association. An optional future service-account mode requires its own explicit configuration and is not part of Gmail onboarding.</p>
+    <p>Plan a production-ready OAuth consent configuration. Google's External apps in Testing generally receive refresh tokens that expire after seven days for these scopes. Gmail read access is a restricted scope, so publishing/verification requirements must be checked for the actual deployment and audience. Workspace administrators can restrict third-party applications. These are deployment gates; do not present a weekly re-consent test setup as finished sign-in support.</p>
+
+    <h3>Request, result, and performance contract</h3>
+    <ol>
+      <li>Validate typed inputs and resource syntax; resolve the permitted account/client; authorize the canonical action; establish the request deadline; acquire bounded quota/concurrency capacity.</li>
+      <li>Use cached clients and token sources keyed by account, OAuth client, credential mode, scopes, and credential generation. Share safe connection pools. A cached token source must not retain the first tool request's cancelable context.</li>
+      <li>Issue Google calls with the current request context. Bound fan-out, page sizes, fetched bytes, and total duration. Use API field masks and summary views before introducing response caching.</li>
+      <li>Return typed structured content and an explicit next-page token. Include account alias, source IDs/links as appropriate, date range/timezone, truncation, freshness, and partial failures where relevant. Output schema must match actual results.</li>
+      <li>Map errors to actionable categories: invalid input, forbidden operation, authentication required, insufficient Google scope, not found, quota exhausted, deadline exceeded, upstream failure, and unknown write outcome. Avoid leaking raw secrets or treating partial success as full success.</li>
+    </ol>
+    <p>Use metadata/token caching first. Any later data cache must have an account-bound key, documented freshness, refresh behavior, and invalidation after writes. Never share mail, Drive content, or reporting results across callers just because their query text matches.</p>
+    <p>Open the secret store at controlled startup, with a clear noninteractive error on failure. The existing keyring timeout helper explicitly assumes a short-lived CLI; do not repeatedly leak its blocked goroutines inside a server. Test rotated refresh-token persistence without overwriting unrelated token metadata. Define explicit cache invalidation after credential changes and an atomic policy snapshot/reload path; do not silently retain revoked grants indefinitely.</p>
+    <p>P0 gives every operation an explicit retry class: <code>safe_read</code>, <code>provider_keyed_write</code>, or <code>non_replayable_write</code>. Pass this classification to the API layer through typed call options, not a guessed HTTP method. Read-only POST operations such as reporting can be safe to retry. Unknown operations fail closed to no automatic replay. If shared transport changes affect CLI writes, document and test that intentional behavior change.</p>
+    <p>For a write without a Google-supported idempotency mechanism, an ambiguous failure returns <code>outcome_unknown</code>, <code>retryable=false</code>, and reconciliation guidance. Test both transport and host behavior: the MCP client must not replay that tool automatically on 429, disconnect, or a generic error. Neither MCP request IDs nor email Message-ID headers guarantee deduplication. A local receipt cannot make a remote side effect exactly-once after a crash.</p>
+    <p>Before enabling a write, require the intersection of authenticated caller account grant, trusted server operation enablement, applicable policy, and any action-specific approval required by the host/user. A model-supplied confirmation flag grants nothing. Keep any circuit breaker deliberately scoped per account and upstream service, or disable it initially; one failing mailbox must not block unrelated accounts.</p>
+
+    <h3>First tool set</h3>
+    <p>Proposed public names below are transport names, not CLI aliases. Final schemas and exact canonical policy IDs are frozen in package P0 before parallel implementation. The pilot has 16 Google read tools plus <code>accounts_list</code>, for 17 tools total. The browser account-management flow is a separate control surface. Start with typed primitives; add a reporting composite only if evaluation shows a useful reduction in agent work.</p>
+    <div class="table-wrap"><table>
+      <caption>Read-only pilot and later write boundary</caption>
+      <thead><tr><th>Area</th><th>Proposed tools</th><th>Required behavior</th><th>Acceptance evidence</th></tr></thead>
+      <tbody>
+        <tr><td>Gmail</td><td><code>gmail_search</code>, <code>gmail_get_message</code>, <code>gmail_get_thread</code></td><td>Explicit thread/message semantics; metadata-first search; bounded body retrieval and pagination.</td><td>Fixtures covering MIME bodies, missing messages, labels, pages, and forbidden account access.</td></tr>
+        <tr><td>Drive and Docs</td><td><code>drive_search</code>, <code>drive_get_file</code>, <code>docs_get_text</code></td><td>Deterministic projections; bounded text extraction; honest truncation; permissions errors preserved.</td><td>Shared-drive cases, document structure, empty search, size limits, resource ownership.</td></tr>
+        <tr><td>Calendar</td><td><code>calendar_list</code>, <code>calendar_list_events</code>, <code>calendar_freebusy</code></td><td>Timezones, all-day events, recurrence, pagination, and per-calendar errors.</td><td>DST boundaries and mixed-success free/busy fixtures.</td></tr>
+        <tr><td>GA4</td><td><code>analytics_list_properties</code>, <code>analytics_metadata</code>, <code>analytics_report</code></td><td>Valid dimensions/metrics; bounded rows; property timezone and date semantics; quota errors.</td><td>Invalid metric recovery, pagination, totals, scope failures.</td></tr>
+        <tr><td>Search Console</td><td><code>searchconsole_list_sites</code>, <code>searchconsole_query</code></td><td>Correct property identifiers, date ranges, filters, row limits, and pagination.</td><td>Domain/URL-prefix properties; distinguish zero rows from access failure.</td></tr>
+        <tr><td>Sheets</td><td><code>sheets_get_metadata</code>, <code>sheets_read_range</code></td><td>A1 range handling, render options, sparse rows, bounded output.</td><td>Empty cells, formulas vs values, quoted sheet names, large ranges.</td></tr>
+        <tr><td>Later writes</td><td>Draft creation; approved send; event create/update; Sheets update; Drive sharing only when needed.</td><td>Separate grants, operation-specific retry rules, clear scope and result reporting.</td><td>Duplicate-call, timeout-after-commit, concurrent-call, and denied-call tests before live rollout.</td></tr>
+      </tbody>
+    </table></div>
+
+    <details open><summary>Pilot tool to existing policy/source mapping</summary>
+    <p>The registry must hold these mappings explicitly. Public names may differ from CLI command names; deriving authorization from a guessed tool-name conversion is not acceptable. Search returns messages in this pilot. A future thread-search tool would use the separate <code>gmail:search</code> action.</p>
+    <p>Required normalization correction in P1: Kong derives <code>search-console</code> from the current root field, while the policy aliases use <code>searchconsole</code>. The target IDs below standardize on <code>searchconsole</code>. Preserve both historical spellings through one canonicalizer and test canonical and alias invocations plus stored allow/deny patterns before claiming compatibility. Check the same dashed-name issue for Tag Manager and Business Profile during their parity work. This is a planned correction, not current CLI behavior.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Proposed tool</th><th>Canonical policy action</th><th>Existing source behavior</th></tr></thead>
+      <tbody>
+        <tr><td><code>gmail_search</code></td><td><code>gmail:messages.search</code></td><td><code>GmailMessagesSearchCmd</code>, <code>internal/cmd/gmail_messages.go</code></td></tr>
+        <tr><td><code>gmail_get_message</code></td><td><code>gmail:get</code></td><td><code>GmailGetCmd</code>, <code>internal/cmd/gmail_get.go</code></td></tr>
+        <tr><td><code>gmail_get_thread</code></td><td><code>gmail:thread.get</code></td><td><code>GmailThreadGetCmd</code>, <code>internal/cmd/gmail_thread.go</code></td></tr>
+        <tr><td><code>drive_search</code></td><td><code>drive:search</code></td><td><code>DriveSearchCmd</code>, <code>internal/cmd/drive.go</code></td></tr>
+        <tr><td><code>drive_get_file</code></td><td><code>drive:get</code></td><td><code>DriveGetCmd</code>, <code>internal/cmd/drive.go</code></td></tr>
+        <tr><td><code>docs_get_text</code></td><td><code>docs:cat</code></td><td><code>DocsCatCmd</code> and text extraction, <code>internal/cmd/docs.go</code></td></tr>
+        <tr><td><code>calendar_list</code></td><td><code>calendar:calendars.list</code></td><td><code>CalendarCalendarsListCmd</code>, <code>internal/cmd/calendar.go</code></td></tr>
+        <tr><td><code>calendar_list_events</code></td><td><code>calendar:events</code></td><td><code>CalendarEventsCmd</code>, <code>internal/cmd/calendar.go</code></td></tr>
+        <tr><td><code>calendar_freebusy</code></td><td><code>calendar:freebusy</code></td><td><code>CalendarFreeBusyCmd</code>, <code>internal/cmd/calendar_freebusy.go</code></td></tr>
+        <tr><td><code>analytics_list_properties</code></td><td><code>analytics:properties</code></td><td><code>AnalyticsPropertiesCmd</code>, <code>internal/cmd/analytics.go</code></td></tr>
+        <tr><td><code>analytics_metadata</code></td><td><code>analytics:dimensions</code> or <code>analytics:metrics</code></td><td>Corresponding dimensions/metrics command in <code>internal/cmd/analytics.go</code>. Required <code>kind</code> selects one authorized projection; requesting both requires both grants. List the tool if any kind is permitted, but validate and authorize the requested kind before execution and project only that authorized data.</td></tr>
+        <tr><td><code>analytics_report</code></td><td><code>analytics:report</code></td><td><code>AnalyticsReportCmd</code>, <code>internal/cmd/analytics.go</code></td></tr>
+        <tr><td><code>searchconsole_list_sites</code></td><td><code>searchconsole:sites.list</code></td><td><code>SearchConsoleSitesListCmd</code>, <code>internal/cmd/searchconsole.go</code></td></tr>
+        <tr><td><code>searchconsole_query</code></td><td><code>searchconsole:query</code></td><td><code>SearchConsoleQueryCmd</code>, <code>internal/cmd/searchconsole.go</code></td></tr>
+        <tr><td><code>sheets_get_metadata</code></td><td><code>sheets:metadata</code></td><td><code>SheetsMetadataCmd</code>, <code>internal/cmd/sheets.go</code></td></tr>
+        <tr><td><code>sheets_read_range</code></td><td><code>sheets:get</code></td><td><code>SheetsGetCmd</code>, <code>internal/cmd/sheets.go</code></td></tr>
+      </tbody>
+    </table></div>
+    </details>
+
+    <h3>C4 deployment</h3>
+    <p>Begin with local stdio to prove the application contract without introducing a network service. Implement authenticated Streamable HTTP using the same handlers when cross-machine consumers are ready. Compare both transports locally before attributing a network regression to the language or MCP.</p>
+    <details><summary>Deployment diagram source</summary><pre>flowchart LR
+  subgraph Local[Development and local pilot]
+    HostA[Agent host] -->|stdio| Binary[Native Go MCP binary]
+    Binary --> LocalSecrets[Protected credentials]
+  end
+  subgraph Shared[Later private deployment]
+    HostB[Authorized fleet client] -->|HTTPS| Ingress[Authenticated ingress]
+    Ingress --> HTTP[Same binary: Streamable HTTP]
+    HTTP --> SharedSecrets[Service-owned protected credentials]
+  end
+  Binary --> Google[Google APIs]
+  HTTP --> Google</pre></details>
+    <div class="table-wrap"><table>
+      <caption>Deployment stages</caption>
+      <thead><tr><th>Name</th><th>Type</th><th>Description</th><th>Responsibilities</th><th>Security controls</th></tr></thead>
+      <tbody>
+        <tr><td>Local pilot</td><td>Host child process</td><td>One scoped server configuration per agent profile.</td><td>Validate end-to-end tools, cancellation, discovery, and result quality.</td><td>Explicit startup grants; no interactive keyring prompts; no stdout log noise.</td></tr>
+        <tr><td>Private HTTP service</td><td>Long-running process</td><td>Host and endpoint selected during rollout, not assumed here.</td><td>Serve multiple permitted clients; reuse pools; enforce per-principal quotas.</td><td>TLS, authentication, Origin checks, authorization on every request, no public unauthenticated bind.</td></tr>
+        <tr><td>Agent consumers</td><td>Existing profiles</td><td>Migrate one named consumer at a time.</td><td>Discover tools, use supported workflow delivery, retain rollback config.</td><td>No broad profile rewrites; validate account mapping before enablement.</td></tr>
+      </tbody>
+    </table></div>
+    <p>Stateless protocol requests do not require sticky sessions. Authentication stores, token caches, and any write-reconciliation records still have lifecycles. Multiple replicas are deferred until load requires them and any durable state has a defined sharing model.</p>
+
+    <h3>Protocol, skills, and client compatibility</h3>
+    <p>The current <a href="https://modelcontextprotocol.io/specification/2026-07-28/changelog">2026-07-28 protocol</a> removes protocol sessions and the initialization handshake. The official Go module proxy publishes <code>v1.8.0</code>; its tagged README lists support for this revision and older clients. Pin and exercise that released SDK rather than implementing the wire protocol ourselves.</p>
+    <p>The <a href="https://modelcontextprotocol.io/extensions/skills/overview">Skills extension</a> is Final, but the <a href="https://github.com/modelcontextprotocol/ext-skills/blob/main/docs/implementations.md">implementation list</a> still marks Go SDK support as in progress. Core MCP support does not establish Skills extension support.</p>
+    <ul>
+      <li>Publish concise tool descriptions and optional standard resources/prompts first. These support instruction retrieval but do not claim automatic native skill activation.</li>
+      <li>Add <code>skills/list</code>, <code>skills/get</code>, manifests/digests, and resource reads only through a verified implementation of the released extension. Prefer a released SDK; if unavailable, evaluate a narrow adapter and its conformance cost before scheduling it.</li>
+      <li>Advertise only implemented capabilities. A client that cannot activate MCP skills must still use the core tools without requiring a CLI skill.</li>
+      <li>Keep the tool catalog stable for an authorized principal/configuration. Progressive discovery, tool search, and code-mode composition depend on the host; a server alone cannot promise those benefits.</li>
+    </ul>
+    <div class="table-wrap"><table>
+      <caption>Evidence checked during planning, not a live interoperability result</caption>
+      <thead><tr><th>Component</th><th>Observed evidence</th><th>Required next proof</th></tr></thead>
+      <tbody>
+        <tr><td>Go server SDK</td><td>Released <code>v1.8.0</code> and tagged protocol support documentation; Go requirement 1.25.</td><td>Pin dependency; test discovery/call/cancellation through stdio and HTTP, including legacy compatibility.</td></tr>
+        <tr><td>Installed Hermes source</td><td><code>pyproject.toml</code> declares MCP 2.0.0; transport code handles the new protocol. Targeted source search did not establish native Skills extension activation.</td><td>Fresh isolated client session with the installed runtime. Verify discovery, execution, errors, resources, and whether skills enter model context.</td></tr>
+        <tr><td>Other agent hosts</td><td>No installed-client interoperability test performed.</td><td>Record actual versions and run the same isolated smoke workflow before migration.</td></tr>
+        <tr><td>Go toolchain</td><td>Repository requests Go 1.26.0. Installed Go 1.27.1 runs; the default mise shim has no selected version.</td><td>Use an explicit toolchain invocation for builds; verify the supported minimum in CI without changing global runtime settings.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="execution">
+    <h2>Delegated execution plan</h2>
+    <p>The authenticated gateway catalog maps <code>zai-coding/glm-5.3</code> to <code>zai-coding</code> and <code>grok-4.6</code> to <code>xai</code>. These are the requested routes. GLM owns bounded service/tool packages; Grok owns the concurrent runtime and access boundary. The primary agent owns scope, contracts, dependency integration, and acceptance.</p>
+    <p>Completed planning delegation: GLM inspected implemented commands, reusable helpers, source/action mappings, and existing CLI/skill consumers. Grok inspected the client/token lifecycle, retries, policy coupling, transport rollout, and benchmark design. Both returned source-backed reports through the requested models. No implementation work was assigned in this planning pass.</p>
+    <p>Integration decisions: use a separate MCP entrypoint to avoid the CLI execution path; support the user's personal and Workspace accounts through browser OAuth and explicit per-call identity; keep read-only reporting in the pilot; classify retries by operation semantics. The multi-account requirement supersedes the initial worker suggestion of one account per process. Do not adopt a blanket retry after transport errors or treat a model-supplied <code>confirm=true</code> as authorization.</p>
+    <p>Workers use separate branches/worktrees once implementation starts. Each assignment names allowed paths, prerequisites, tests, and a fixed review base. Shared-file changes go through the primary agent. Follow the machine delegation guidance by assigning independent Sol review to implementation bundles; review findings are resolved before acceptance.</p>
+    <div class="table-wrap"><table>
+      <caption>Packages, ownership, dependencies, and evidence</caption>
+      <thead><tr><th>ID / owner</th><th>Deliverable and owned paths</th><th>Depends on</th><th>Acceptance</th></tr></thead>
+      <tbody>
+        <tr><td>P0 · Primary, both workers consult</td><td>Freeze typed account identity, OAuth connection record, operation catalog/action mapping, retry classes, input/output/error contracts, 17-tool pilot, and benchmark fixtures. Own dependency/build files and integration wiring.</td><td>Planning findings</td><td>Each pilot tool maps to source behavior and canonical action, or caller-scoped local account metadata. No command parser or output capture in the design. Existing CLI baseline recorded.</td></tr>
+        <tr><td>P0a · Grok 4.6 / xAI</td><td><code>internal/accountconnect/**</code>: browser OAuth controller, protected multi-account registry, callback validation, grant/reconnect/disconnect lifecycle. Coordinate existing auth/config changes with primary.</td><td>P0</td><td>Mock provider proves two accounts coexist, verified identity binding, state/PKCE rejection, missing/rotated refresh-token handling, scope deficits, and disconnect isolation. Real personal/Workspace consent tested at rollout.</td></tr>
+        <tr><td>P1 · Grok 4.6 / xAI</td><td><code>internal/access/**</code>; minimal CLI policy delegation refactor, Search Console name normalization, and policy tests.</td><td>P0</td><td>Legacy specificity/deny semantics preserved; documented dashed/canonical normalization correction tested against stored patterns; new server grants cannot widen access; forbidden calls make zero upstream requests.</td></tr>
+        <tr><td>P2 · Grok 4.6 / xAI</td><td><code>internal/googleapi/**</code> client provider, safe operation-aware retry, refresh, cancellation, bounds.</td><td>P0; integrate P1 identity contract and P0a credentials</td><td>Concurrent personal/work identity and refresh tests; no first-request context capture; bounded retry/deadline behavior; classified fake writes prove ambiguous outcomes are not replayed; circuit-breaker isolation.</td></tr>
+        <tr><td>P3 · Grok 4.6 / xAI</td><td><code>cmd/gog-mcp/**</code>, server lifecycle and stdio adapter in <code>internal/mcpserver</code>, <code>accounts_list</code> adapter.</td><td>P0; integrate P0a/P1/P2</td><td>First prove protocol behavior with a fake typed operation. Accept the real vertical slice as P3+P4 together. Logs stay off stdout; errors, cancellation, limits, and shutdown verified. No subprocess bridge.</td></tr>
+        <tr><td>P4 · GLM 5.3 / Z.ai Coding</td><td><code>internal/googleops/gmail/**</code>, <code>internal/mcpserver/tools_gmail*</code>.</td><td>P0 contract; integrate P1–P3</td><td>Three Gmail read tools, fixture-driven MIME/paging tests, exact account/action mapping, bounded search hydration.</td></tr>
+        <tr><td>P5 · GLM 5.3 / Z.ai Coding</td><td><code>internal/googleops/drive/**</code>, <code>docs/**</code>, <code>sheets/**</code> beneath googleops; corresponding service tool files.</td><td>P0 contract; integrate P1–P3</td><td>Five content tools; safe field projections, sparse ranges, text limits, no arbitrary host-file access.</td></tr>
+        <tr><td>P6 · GLM 5.3 / Z.ai Coding</td><td><code>internal/googleops/calendar/**</code>, <code>analytics/**</code>, <code>searchconsole/**</code>; corresponding service tool files.</td><td>P0 contract; integrate P1–P3</td><td>Eight tools; date/time semantics, metadata validation, pagination and partial failures tested.</td></tr>
+        <tr><td>P7 · GLM 5.3 / Z.ai Coding</td><td>MCP-specific embedded workflow resources and resource adapter tests. Legacy <code>skills/pack</code> stays separately supported.</td><td>P4–P6 stable schemas</td><td>Workflow examples execute against fixtures; no secrets/shell dependence; no false Skills capability advertisement. Native extension is a separate compatibility gate.</td></tr>
+        <tr><td>P7a · GLM 5.3 / Z.ai Coding</td><td>Small account-management page and sign-in status/error copy under <code>internal/accountconnect/web/**</code>, without editing OAuth controller logic.</td><td>P0a controller contract</td><td>Connect second account, identify personal/work, reconnect, and disconnect are usable without CLI instructions. No tokens in page content or browser storage; keyboard-accessible controls.</td></tr>
+        <tr><td>P8a · Grok 4.6 / xAI</td><td>HTTP adapter and authenticated caller-to-account grant mapping.</td><td>Read-only pilot accepted</td><td>Unauthorized/Origin/identity tests; transport parity; bounded concurrency; no new write capabilities implied by HTTP enablement.</td></tr>
+        <tr><td>P8b · Grok 4.6 / xAI</td><td>Targeted write operations and their action-specific grants/reconciliation behavior.</td><td>Read-only pilot and P2 retry gate; independent of HTTP</td><td>Wrong-account send denied; ambiguous outcome not replayed by transport or host; trusted write grants checked; fixture verification before live enablement.</td></tr>
+        <tr><td>P9 · Primary, independent Sol review</td><td>Benchmark harness/results, bundle integration, documentation, consumer compatibility and release/cutover procedure.</td><td>Each related implementation bundle</td><td>Required checks pass; findings resolved; correctness and performance gates met. Live claims supported by live evidence.</td></tr>
+        <tr><td>P10 · Primary assigns by service</td><td>Remaining implemented CLI parity: Chat, Tasks, Contacts/People, Classroom, Groups, Keep, Slides, YouTube, BigQuery, Tag Manager, Business Profile, and additional operations in pilot families.</td><td>Measured pilot and consumer inventory</td><td>Every in-scope operation classified as native, deferred with reason, or administrative CLI-only. No unreviewed generic API proxy.</td></tr>
+      </tbody>
+    </table></div>
+    <p>Parallel schedule: P0 first. Grok builds P0a/P1–P3 while GLM develops P4–P6 against the frozen interfaces and fake clients, then P7a against the OAuth controller contract. Accept P3+P4 as the first real vertical slice with two mock accounts. P7 follows stable tools. P8a and P8b are separate packages after the read-only acceptance gate. Review each coherent bundle instead of waiting for a large final diff.</p>
+    <p>First implementation checkpoint: create the feature branch/worktrees from the reviewed plan, then record the unchanged CLI test baseline using the explicit installed toolchain. This command has not been run during planning:</p>
+    <pre>mise exec go@1.27.1 -- go test ./...</pre>
+    <p>After integrating a code bundle, run focused checks and the repository gate with <code>mise exec go@1.27.1 -- make ci</code>. A failure in the baseline is investigated before attributing it to MCP. Only the primary agent changes shared dependencies or build wiring.</p>
+    <p>Checkpoints: each worker reports its route/model, changed paths, behavior delivered, exact focused checks, unresolved findings, and integration dependencies. An unavailable requested route is reported; do not silently switch providers. Work estimates are deferred until P0 establishes the actual extraction cost and SDK/client compatibility.</p>
+  </section>
+
+  <section id="implementation">
+    <h2>Local implementation evidence</h2>
+    <p>Implementation branch: <code>feat/native-google-mcp</code>, based on <code>e81e585</code>. Existing planning changes remain preserved. The unchanged baseline passed on 18 September 2026 with <code>mise exec go@1.27.1 -- go test ./...</code>. The authenticated gateway catalog and tool-call probes verified <code>zai-coding/glm-5.3</code> through <code>zai-coding</code> and <code>grok-4.6</code> through <code>xai</code>.</p>
+    <p>P0 contracts live in <a href="../../internal/mcpcontract/contract.go"><code>internal/mcpcontract/contract.go</code></a> and the explicit <a href="../../internal/mcpcontract/catalog.go">operation catalog</a>. Account selection uses opaque IDs. <code>ClientName</code> identifies the protected credential bucket, distinct from Google's OAuth client ID. Every Google read operation has a fixed policy mapping, read scope, and <code>safe_read</code> classification. Analytics metadata narrows its actions by the required <code>kind</code> field. Typed Go inputs and outputs generate the published schemas.</p>
+    <p>The source-derived <a href="../mcp-cli-parity.json">CLI parity ledger</a> classifies all 531 implemented command leaves: 17 policy actions map to the 16 native read tools, 38 remain administrative/local CLI operations, and 476 remain deferred pending consumer need. Regenerate with <code>mise exec go@1.27.1 -- go run ./scripts/mcp-parity &gt; docs/mcp-cli-parity.json</code>. Mapping an action does not promise every historical flag or output shape in MCP.</p>
+    <p>The five deterministic workflow definitions and expected facts are in <a href="../../internal/mcpcontract/testdata/workflows.json"><code>internal/mcpcontract/testdata/workflows.json</code></a>. <a href="../../scripts/compare-mcp-benchmarks.py"><code>scripts/compare-mcp-benchmarks.py</code></a> analyzes paired measurement JSONL, rejects mismatched model/reasoning/fixture/concurrency settings, and reports latency, correctness, and available cost metrics. Synthetic analyzer checks are not performance measurements. Live OAuth, actual host compatibility, and production speed remain separate gates.</p>
+  </section>
+
+  <section id="verification">
+    <h2>Verification and acceptance</h2>
+    <h3>Representative workflows</h3>
+    <ol>
+      <li>Find recent client emails and retrieve the relevant thread with correct account, message order, and content.</li>
+      <li>Find a client document, extract the requested facts, and return source IDs/links with honest truncation.</li>
+      <li>Find calendar availability over a DST boundary without treating all-day events or partial calendar errors as free time.</li>
+      <li>Read a GA4 report and Search Console query for the same requested reporting period; preserve their different metric meanings and timezone/date conventions.</li>
+      <li>Read a sparse spreadsheet range and compute a checkable summary. Later, update a designated test sheet with a bounded write and verified readback.</li>
+    </ol>
+    <h3>Measurement design</h3>
+    <ul>
+      <li>Compare baseline CLI plus its existing instructions with native MCP using the same model, reasoning setting, task wording, data fixtures, output requirements, and concurrency. Measure discovery/skill loading as part of end-to-end work.</li>
+      <li>Separate cold startup, warm tool overhead, Google latency, token-refresh events, and total task completion. Compare stdio with HTTP on the same machine before adding fleet network distance.</li>
+      <li>Use deterministic fake Google endpoints for repeatable server timings and failures. Use paired live read-only trials later to establish real behavior; mocks do not prove Google latency or account authorization.</li>
+      <li>Record p50/p95 latency, upstream request count, retries, prompt/output tokens, agent tool calls, peak memory, and task correctness. Include failure and recovery outcomes, not just successful calls.</li>
+      <li>For microbenchmarks collect enough repeated samples to show variance, initially 100 warm calls and 20 cold starts per case. For agent evaluation begin with at least 10 paired runs per workflow and randomize order. These are screening runs; gather at least 50 paired runs for any workflow whose p95 drives acceptance, and more if variance leaves the result inconclusive. Keep live API volume bounded and respect quotas.</li>
+    </ul>
+    <h3>Release gates</h3>
+    <div class="table-wrap"><table>
+      <caption>Targets are provisional until the baseline is recorded; none is a measured result</caption>
+      <thead><tr><th>Gate</th><th>Requirement</th></tr></thead>
+      <tbody>
+        <tr><td>Correctness</td><td>All deterministic expected-result cases pass. No denied-account leakage, duplicate side effects in tested failure modes, or silent partial-success conversion. Agent task success must not fall below the baseline.</td></tr>
+        <tr><td>Speed</td><td>Aim for at least 20% lower median end-to-end time on multi-call workflows, with no reproducible p95 regression over 10% on any pilot workflow. Investigate variance rather than accepting a noisy aggregate win.</td></tr>
+        <tr><td>Effectiveness</td><td>Target fewer corrective calls and lower context consumption while preserving all requested facts and sources. Do not trade correctness for an arbitrary token-reduction percentage.</td></tr>
+        <tr><td>Architecture</td><td>Native request path contains no shell/subprocess execution and no stdout interception. API calls use request deadlines; caches and pools isolate identity.</td></tr>
+        <tr><td>Account onboarding</td><td>Connect one personal Gmail and one Workspace account through browser OAuth without service-account keys, separate per-mailbox projects, or replacing the first connection. Verify account-specific reads, missing scopes, reconnect, and disconnect. Production OAuth setup is part of this gate.</td></tr>
+        <tr><td>Client compatibility</td><td>Actual target host completes account/tool discovery, account-specific reads, cross-account denial, cancellation, and instruction retrieval. Claim skill replacement only after native activation is demonstrated.</td></tr>
+        <tr><td>Checks</td><td>Focused service tests during development; race tests for shared client/policy state; <code>make ci</code> for the completed bundle. Add MCP stdio/HTTP integration fixtures. Full live integration suites require review of side effects and named test resources.</td></tr>
+      </tbody>
+    </table></div>
+    <p>Planning verification is limited to source inspection, public SDK/protocol evidence, provider-route checks, and document validation. No application test suite or live Google operation was run for this plan.</p>
+    <h3>Cutover and recovery</h3>
+    <ol>
+      <li>Inventory actual CLI callers and local skills. Select one low-risk profile and record its current configuration outside Git.</li>
+      <li>Enable read-only MCP for that profile, verify account grants, and run the representative tasks. Preserve the old CLI route as a recoverable fallback.</li>
+      <li>Enable specific writes only after their local failure tests and target-specific live verification. A retry after an unknown outcome requires reconciliation.</li>
+      <li>Expand to other named consumers and, if justified, the private HTTP service. Verify actual host skill support before removing local instructions.</li>
+      <li>Remove an old consumer path only after use has moved and rollback is documented. Reverting configuration can restore routing; it cannot undo email delivery or external writes.</li>
+    </ol>
+  </section>
+
+  <section id="risks">
+    <h2>Risk assessment</h2>
+    <p>The critical processes are client email, scheduling, document access, and accurate marketing reports. The protected data includes OAuth secrets, private communications, client documents, contact details, and business performance data. Existing source and fixture evidence cannot establish the live permissions of any account.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Risk</th><th>Evidence / implication</th><th>Response</th></tr></thead>
+      <tbody>
+        <tr><td>Blindly reusing CLI handlers</td><td>Handlers mix API calls with output; policies run at CLI entry.</td><td>Extract typed operation functions and shared authorization. Do not call <code>cmd.Execute</code> from MCP.</td></tr>
+        <tr><td>Unsafe automatic retry</td><td>Current retry transport handles 429/5xx without operation semantics.</td><td>Classify retry safety per operation before writes; report ambiguous outcomes.</td></tr>
+        <tr><td>Credential refresh and connection churn</td><td>Current constructors build token sources and HTTP transports for command calls.</td><td>Reuse identity-scoped clients in a long-running service; test refresh and cancellation lifetimes.</td></tr>
+        <tr><td>Skills adoption gap</td><td>Final extension, but official SDK/host implementation remains incomplete.</td><td>Ship useful tools independently; keep a separate tested gate for native skill delivery.</td></tr>
+        <tr><td>Scope explosion</td><td>Large existing command surface and a separate API-gap backlog.</td><td>Sixteen Google read tools plus caller-scoped account discovery first; source-derived parity ledger; no automatic promise of every Google API method.</td></tr>
+        <tr><td>Misleading performance claims</td><td>No benchmark exists for the proposed server.</td><td>Paired workloads and clear attribution of model, transport, Google, and server latency.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="assumptions">
+    <h2>Questions and assumptions</h2>
+    <ul>
+      <li>Initial consumer assumption: the existing Hermes workflow is a pilot candidate. No profile is selected or modified by this plan.</li>
+      <li>Deployment assumption: local stdio first, private authenticated HTTP later. The machine, public/private hostname, and service identity must be selected before deployment.</li>
+      <li>Product requirement: personal Gmail and Workspace can be connected simultaneously through user OAuth. Requests select the account explicitly, and caller grants keep them separate. No dependency on whichever CLI account happens to be the default.</li>
+      <li>Deployment decision before live sign-in: select the app-owned Cloud project, consent branding/audience, registered redirect URI, and production publishing/verification path. This is one-time application administration; mailbox onboarding remains browser sign-in.</li>
+      <li>Scope assumption: direct native MCP is the destination; existing useful internals can be reused. A new language, full rewrite, and CLI deletion require evidence of benefit rather than being goals themselves.</li>
+      <li>Open measurement question: which composites improve actual reporting tasks? Start with primitives and let paired evaluations choose additions.</li>
+      <li>Open compatibility question: when can each target host activate the released Skills extension? Keep local workflow instructions until that is demonstrated.</li>
+    </ul>
+    <h3>Sources and source boundaries</h3>
+    <ul>
+      <li><a href="https://modelcontextprotocol.io/specification/2026-07-28/changelog">MCP 2026-07-28 changelog</a>: stateless requests, discovery, session removal, and compatibility changes.</li>
+      <li><a href="https://modelcontextprotocol.io/docs/2026-07-28/develop/clients/client-best-practices">MCP client guidance</a>: host-side progressive discovery and programmatic tool calling.</li>
+      <li><a href="https://github.com/modelcontextprotocol/go-sdk/blob/v1.8.0/README.md">Go SDK v1.8.0 README</a> and <a href="https://proxy.golang.org/github.com/modelcontextprotocol/go-sdk/@v/v1.8.0.mod">published module</a>: version availability and compatibility, not project integration proof.</li>
+      <li><a href="https://modelcontextprotocol.io/extensions/skills/overview">Skills extension overview</a>, <a href="https://github.com/modelcontextprotocol/ext-skills/blob/main/docs/implementations.md">implementation status</a>, and <a href="https://modelcontextprotocol.io/extensions/client-matrix">client matrix</a>: distinguish finalized design from shipped host support.</li>
+      <li><a href="https://developers.google.com/identity/protocols/oauth2/web-server">Google user OAuth flow</a>, <a href="https://developers.google.com/identity/protocols/oauth2">token lifecycle and Testing restrictions</a>, and <a href="https://developers.google.com/workspace/gmail/api/auth/scopes">Gmail scopes</a>: browser consent, offline refresh, and scope/deployment requirements.</li>
+      <li>Project source: <a href="../../internal/cmd/root.go">CLI entry</a>, <a href="../../internal/cmd/policy_enforcement.go">policy evaluation</a>, <a href="../../internal/googleapi/client.go">client construction</a>, <a href="../../internal/googleapi/transport.go">retry transport</a>, and <a href="../../skills/pack">companion skill pack</a>.</li>
+    </ul>
+    <p class="meta">Planning evidence checked 18 September 2026. Implementation ownership is specified above; completion requires integrated changes and verification, not worker reports alone.</p>
+  </section>
+</main>
+</body>
+</html>

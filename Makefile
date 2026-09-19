@@ -4,7 +4,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := build
 
 .PHONY: build gog gogcli gog-help gogcli-help help fmt fmt-check lint test ci tools
-.PHONY: worker-ci
+.PHONY: worker-ci build-mcp
 
 BIN_DIR := $(CURDIR)/bin
 BIN := $(BIN_DIR)/gog
@@ -31,6 +31,10 @@ endif
 build:
 	@mkdir -p $(BIN_DIR)
 	@go build -ldflags "$(LDFLAGS)" -o $(BIN) $(CMD)
+
+build-mcp:
+	@mkdir -p $(BIN_DIR)
+	@go build -o $(BIN_DIR)/gog-mcp ./cmd/gog-mcp
 
 gog: build
 	@if [ -n "$(RUN_ARGS)" ]; then \
@@ -61,8 +65,8 @@ help: gog-help
 tools:
 	@mkdir -p $(TOOLS_DIR)
 	@GOBIN=$(TOOLS_DIR) go install mvdan.cc/gofumpt@v0.9.2
-	@GOBIN=$(TOOLS_DIR) go install golang.org/x/tools/cmd/goimports@v0.41.0
-	@GOBIN=$(TOOLS_DIR) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0
+	@GOBIN=$(TOOLS_DIR) go install golang.org/x/tools/cmd/goimports@v0.50.0
+	@GOBIN=$(TOOLS_DIR) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
 
 fmt: tools
 	@$(GOIMPORTS) -local github.com/steipete/gogcli -w .

@@ -5,6 +5,8 @@
 
 Fast, script-friendly CLI for Gmail, Calendar, Chat, Classroom, Drive, Docs, Slides, Sheets, Contacts, Tasks, People, Groups (Workspace), and Keep (Workspace-only). JSON-first output, multiple accounts, and least-privilege auth built in.
 
+The [native Google MCP implementation plan](docs/plans/native-google-mcp.html) describes the planned direct-API agent interface, delegated work, performance evaluation, and migration gates. MCP is not implemented in this release.
+
 ## Features
 
 - **Gmail** - search threads and messages, send emails, view attachments, manage labels/drafts/filters/delegation/vacation settings, history, and watch (Pub/Sub push)
