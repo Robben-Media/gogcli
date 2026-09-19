@@ -6,9 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"net/url"
-	"path"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -25,13 +22,14 @@ const (
 	pacificTimezone  = "America/Los_Angeles"
 )
 
-var (
-	hostnamePattern = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$`)
-	errInvalidDate  = errors.New("invalid date")
-)
+var errInvalidDate = errors.New("invalid date")
 
-var allowedDimensions = map[string]struct{}{
-	"query": {}, "page": {}, "country": {}, "device": {}, "date": {},
+var allowedGroupDimensions = map[string]struct{}{
+	"query": {}, "page": {}, "country": {}, "device": {}, "date": {}, "search_appearance": {},
+}
+
+var allowedFilterDimensions = map[string]struct{}{
+	"query": {}, "page": {}, "country": {}, "device": {}, "search_appearance": {},
 }
 
 type listSitesInput struct {
@@ -40,18 +38,18 @@ type listSitesInput struct {
 
 type queryInput struct {
 	mcpcontract.Selection
-	SiteURL    string   `json:"site_url"`
+	SiteURL    string   `json:"site_url" jsonschema:"Exact opaque property identifier returned by searchconsole_list_sites"`
 	StartDate  string   `json:"start_date"`
 	EndDate    string   `json:"end_date"`
-	Dimensions []string `json:"dimensions,omitempty"`
-	Filters    []filter `json:"filters,omitempty"`
-	RowLimit   int64    `json:"row_limit,omitempty"`
+	Dimensions []string `json:"dimensions,omitempty" jsonschema:"Grouping dimensions: query, page, country, device, date, or search_appearance"`
+	Filters    []filter `json:"filters,omitempty" jsonschema:"Filters ANDed together; dimensions support query, page, country, device, and search_appearance, and operators support equals, contains, and not_contains"`
+	RowLimit   int64    `json:"row_limit,omitempty" jsonschema:"Maximum rows returned; one additional row is requested only to detect truncation"`
 	StartRow   int64    `json:"start_row,omitempty"`
 }
 
 type filter struct {
-	Dimension  string `json:"dimension"`
-	Operator   string `json:"operator"`
+	Dimension  string `json:"dimension" jsonschema:"query, page, country, device, or search_appearance"`
+	Operator   string `json:"operator" jsonschema:"equals, contains, or not_contains"`
 	Expression string `json:"expression"`
 }
 
@@ -133,7 +131,7 @@ func Operations(provider mcpcontract.ClientProvider) []mcpcontract.Operation {
 
 			req := &searchconsoleapi.SearchAnalyticsQueryRequest{
 				StartDate: in.StartDate, EndDate: in.EndDate, Dimensions: make([]string, 0, len(in.Dimensions)),
-				RowLimit: in.RowLimit, StartRow: in.StartRow,
+				RowLimit: in.RowLimit + 1, StartRow: in.StartRow,
 			}
 			for _, dimension := range in.Dimensions {
 				req.Dimensions = append(req.Dimensions, strings.ToUpper(dimension))
@@ -165,7 +163,14 @@ func Operations(provider mcpcontract.ClientProvider) []mcpcontract.Operation {
 				out.Data.FirstIncompleteDate = resp.Metadata.FirstIncompleteDate
 			}
 
-			for _, row := range resp.Rows {
+			upstreamRows := resp.Rows
+
+			hasDefiniteNextPage := int64(len(upstreamRows)) > in.RowLimit
+			if hasDefiniteNextPage {
+				upstreamRows = upstreamRows[:in.RowLimit]
+			}
+
+			for _, row := range upstreamRows {
 				if row == nil {
 					continue
 				}
@@ -175,7 +180,7 @@ func Operations(provider mcpcontract.ClientProvider) []mcpcontract.Operation {
 				})
 			}
 
-			if int64(len(resp.Rows)) == in.RowLimit {
+			if hasDefiniteNextPage {
 				next := in.StartRow + in.RowLimit
 				out.NextPageToken = strconv.FormatInt(next, 10)
 				out.Truncated = true
@@ -195,23 +200,23 @@ func validateQueryInput(in queryInput) error {
 		return err
 	}
 
-	seenDimensions := make(map[string]struct{}, len(in.Dimensions)+len(in.Filters))
+	seenGroupDimensions := make(map[string]struct{}, len(in.Dimensions))
 	for _, dimension := range in.Dimensions {
 		normalized := strings.ToLower(dimension)
-		if _, ok := allowedDimensions[normalized]; !ok {
-			return invalid("dimensions supports query, page, country, device, and date")
+		if _, ok := allowedGroupDimensions[normalized]; !ok {
+			return invalid("dimensions supports query, page, country, device, date, and search_appearance")
 		}
 
-		if _, exists := seenDimensions[normalized]; exists {
+		if _, exists := seenGroupDimensions[normalized]; exists {
 			return invalid("dimensions must be unique")
 		}
-		seenDimensions[normalized] = struct{}{}
+		seenGroupDimensions[normalized] = struct{}{}
 	}
 
 	for _, item := range in.Filters {
 		normalized := strings.ToLower(item.Dimension)
-		if _, ok := allowedDimensions[normalized]; !ok {
-			return invalid("filter dimension must be query, page, country, device, or date")
+		if _, ok := allowedFilterDimensions[normalized]; !ok {
+			return invalid("filter dimension must be query, page, country, device, or search_appearance")
 		}
 
 		switch item.Operator {
@@ -233,7 +238,12 @@ func validateQueryInput(in queryInput) error {
 		return invalid("start_row must be a non-negative integer")
 	}
 
-	if in.StartRow > math.MaxInt64-in.RowLimit {
+	rowLimit := in.RowLimit
+	if rowLimit == 0 {
+		rowLimit = queryDefaultRows
+	}
+
+	if in.StartRow > math.MaxInt64-rowLimit {
 		return invalid("start_row is too large")
 	}
 
@@ -241,53 +251,31 @@ func validateQueryInput(in queryInput) error {
 }
 
 func validateSiteURL(value string) error {
-	if value == "" || value != strings.TrimSpace(value) {
+	if strings.TrimSpace(value) == "" {
 		return invalid("site_url is required and must not contain surrounding whitespace")
 	}
 
-	if strings.ContainsAny(value, "\\\r\n\t") || strings.Contains(strings.ToLower(value), "%2f") || strings.Contains(strings.ToLower(value), "%5c") {
-		return invalid("site_url contains an unsupported escape or path separator")
+	if len(value) > 2048 {
+		return invalid("site_url must be at most 2048 characters")
 	}
 
 	if domain, ok := strings.CutPrefix(value, "sc-domain:"); ok {
-		if !hostnamePattern.MatchString(domain) || strings.Contains(domain, "/") {
-			return invalid("domain properties must use sc-domain:{registrable-domain} without a path")
+		if strings.TrimSpace(domain) == "" {
+			return invalid("sc-domain property identifiers must include the domain")
 		}
 
 		return nil
 	}
 
-	parsed, err := url.Parse(value)
-	if err != nil || !parsed.IsAbs() {
-		return invalid("site_url must be an http(s) URL-prefix property or sc-domain:{registrable-domain}")
-	}
-
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return invalid("URL-prefix properties must use http or https")
-	}
-
-	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.RawFragment != "" || parsed.Port() != "" {
-		return invalid("URL-prefix properties must not include credentials, a port, query, or fragment")
-	}
-
-	if !hostnamePattern.MatchString(parsed.Hostname()) {
-		return invalid("URL-prefix properties must use a valid hostname")
-	}
-
-	if parsed.Path == "" {
+	if rest, ok := strings.CutPrefix(value, "https://"); ok && strings.TrimSpace(rest) != "" {
 		return nil
 	}
 
-	if strings.Contains(parsed.Path, "%") || strings.Contains(parsed.Path, ";") || strings.Contains(parsed.Path, "//") {
-		return invalid("URL-prefix property paths may not contain encoded or repeated path separators")
+	if rest, ok := strings.CutPrefix(value, "http://"); ok && strings.TrimSpace(rest) != "" {
+		return nil
 	}
 
-	cleanPath := path.Clean(parsed.Path)
-	if cleanPath == "." || cleanPath == ".." || parsed.Path != cleanPath && parsed.Path != cleanPath+"/" {
-		return invalid("URL-prefix property paths must be canonical")
-	}
-
-	return nil
+	return invalid("site_url must be an http(s) URL-prefix property or sc-domain:{domain}")
 }
 
 func validateDateRange(startValue, endValue string) error {

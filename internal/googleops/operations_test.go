@@ -38,11 +38,11 @@ func TestFrozenPilotSchemas(t *testing.T) {
 
 	path := filepath.Join("testdata", "tool-schemas.json")
 	if os.Getenv("UPDATE_MCP_SCHEMAS") == "1" {
-		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		if err = os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 			t.Fatal(err)
 		}
 
-		if err := os.WriteFile(path, data, 0o600); err != nil {
+		if err = os.WriteFile(path, data, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}

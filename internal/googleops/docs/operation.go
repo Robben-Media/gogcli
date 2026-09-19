@@ -15,16 +15,26 @@ import (
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 
+	nativegoogleapi "github.com/steipete/gogcli/internal/googleapi"
 	"github.com/steipete/gogcli/internal/mcpcontract"
 )
 
 const (
 	defaultMaxBytes = 262144
 	hardMaxBytes    = 1024 * 1024
-	// Docs JSON and metadata overhead can exceed the extracted text limit.
-	// This outer response cap prevents a document from consuming unbounded memory.
+	// Field masks cannot express arbitrary recursion through tabs, tables, and
+	// tables of contents. Table and TOC branches therefore retain nested content,
+	// while paragraphs project only text runs. This cap bounds that retained
+	// nested structure.
 	maxUpstreamBytes = 8 * hardMaxBytes
 )
+
+const documentFields = "documentId,title,revisionId," +
+	"tabs.tabProperties.tabId,tabs.tabProperties.title,tabs.tabProperties.parentTabId," +
+	"tabs.tabProperties.index,tabs.tabProperties.nestingLevel," +
+	"tabs.documentTab.body.content.paragraph.elements.textRun.content," +
+	"tabs.documentTab.body.content.table,tabs.documentTab.body.content.tableOfContents," +
+	"tabs.childTabs"
 
 var errResponseLimit = errors.New("response exceeds bounded read limit")
 
@@ -98,18 +108,18 @@ func getText(ctx context.Context, provider mcpcontract.ClientProvider, identity 
 
 	client, err := provider.HTTPClient(ctx, identity, mcpcontract.CallOptions{Operation: "docs_get_text", Retry: mcpcontract.SafeRead})
 	if err != nil {
-		return GetTextData{}, setupError(err)
+		return GetTextData{}, nativegoogleapi.NativePublicError(err)
 	}
 	client = boundedClient(client, maxUpstreamBytes)
 
 	svc, err := docs.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
-		return GetTextData{}, setupError(err)
+		return GetTextData{}, nativegoogleapi.NativePublicError(err)
 	}
 
 	doc, err := svc.Documents.Get(documentID).
 		IncludeTabsContent(true).
-		Fields(googleapi.Field("documentId,title,revisionId,body,tabs")).
+		Fields(googleapi.Field(documentFields)).
 		Context(ctx).
 		Do()
 	if err != nil {
@@ -129,7 +139,10 @@ func getText(ctx context.Context, provider mcpcontract.ClientProvider, identity 
 		}
 		body = tab.DocumentTab.Body
 	} else {
-		body = doc.Body
+		if tab := firstDocumentTab(doc.Tabs); tab != nil {
+			tabID = tab.TabProperties.TabId
+			body = tab.DocumentTab.Body
+		}
 	}
 
 	extracted := extractBody(body, maxBytes)
@@ -275,7 +288,7 @@ func extractBody(body *docs.Body, maxBytes int) extraction {
 	return result
 }
 
-func extractElements(elements []*docs.StructuralElement, writer *textWriter, result *extraction) {
+func extractElements(elements []*docs.StructuralElement, writer *textWriter, result *extraction) bool {
 	for _, element := range elements {
 		if element == nil {
 			continue
@@ -288,53 +301,53 @@ func extractElements(elements []*docs.StructuralElement, writer *textWriter, res
 			for _, item := range element.Paragraph.Elements {
 				if item != nil && item.TextRun != nil {
 					if !writer.add(item.TextRun.Content) {
-						return
-					}
-				}
-			}
-
-			if !writer.add("\n") {
-				return
-			}
-		case element.Table != nil:
-			result.tables++
-			if !extractTable(element.Table, writer, result) {
-				return
-			}
-		case element.TableOfContents != nil:
-			extractElements(element.TableOfContents.Content, writer, result)
-		}
-	}
-}
-
-func extractTable(table *docs.Table, writer *textWriter, result *extraction) bool {
-	for rowIndex, row := range table.TableRows {
-		if rowIndex > 0 && !writer.add("\n") {
-			return false
-		}
-
-		for cellIndex, cell := range row.TableCells {
-			if cellIndex > 0 && !writer.add("\t") {
-				return false
-			}
-
-			for _, element := range cell.Content {
-				if element == nil || element.Paragraph == nil {
-					continue
-				}
-
-				result.paragraphs++
-
-				for _, item := range element.Paragraph.Elements {
-					if item != nil && item.TextRun != nil && !writer.add(item.TextRun.Content) {
 						return false
 					}
 				}
 			}
+		case element.Table != nil:
+			result.tables++
+			if !extractTable(element.Table, writer, result) {
+				return false
+			}
+		case element.TableOfContents != nil:
+			if !extractElements(element.TableOfContents.Content, writer, result) {
+				return false
+			}
 		}
 	}
 
-	return writer.add("\n")
+	return true
+}
+
+func extractTable(table *docs.Table, writer *textWriter, result *extraction) bool {
+	for _, row := range table.TableRows {
+		if row == nil {
+			continue
+		}
+
+		for _, cell := range row.TableCells {
+			if cell == nil {
+				continue
+			}
+
+			if !extractElements(cell.Content, writer, result) {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+func firstDocumentTab(tabs []*docs.Tab) *docs.Tab {
+	for _, tab := range tabs {
+		if tab != nil && tab.DocumentTab != nil && tab.TabProperties != nil {
+			return tab
+		}
+	}
+
+	return nil
 }
 
 func projectTabs(tabs []*docs.Tab) []DocumentTab {
@@ -398,44 +411,12 @@ func mapGoogleError(operation string, err error) error {
 		return nil
 	}
 
-	var apiErr *googleapi.Error
-	if errors.As(err, &apiErr) {
-		out := &mcpcontract.Error{Message: fmt.Sprintf("%s failed with Google status %d", operation, apiErr.Code), Retryable: apiErr.Code == http.StatusTooManyRequests || apiErr.Code >= 500}
-		switch apiErr.Code {
-		case http.StatusBadRequest:
-			out.Category = mcpcontract.InvalidInput
-		case http.StatusUnauthorized:
-			out.Category = mcpcontract.AuthRequired
-		case http.StatusForbidden:
-			out.Category = mcpcontract.Forbidden
-		case http.StatusNotFound:
-			out.Category = mcpcontract.NotFound
-		case http.StatusTooManyRequests:
-			out.Category = mcpcontract.QuotaExhausted
-		default:
-			out.Category = mcpcontract.UpstreamFailure
-		}
-
-		return out
-	}
-
-	if errors.Is(err, context.DeadlineExceeded) {
-		return &mcpcontract.Error{Category: mcpcontract.DeadlineExceeded, Message: operation + " exceeded its deadline"}
-	}
-
-	message := operation + " failed"
 	if errors.Is(err, errResponseLimit) {
-		message = operation + " response exceeded the bounded read limit"
+		return &mcpcontract.Error{
+			Category: mcpcontract.UpstreamFailure,
+			Message:  operation + " response exceeded the bounded read limit",
+		}
 	}
 
-	return &mcpcontract.Error{Category: mcpcontract.UpstreamFailure, Message: message}
-}
-
-func setupError(err error) error {
-	var public *mcpcontract.Error
-	if errors.As(err, &public) {
-		return public
-	}
-
-	return &mcpcontract.Error{Category: mcpcontract.UpstreamFailure, Message: "docs_get_text client setup failed"}
+	return nativegoogleapi.NativePublicError(err)
 }

@@ -2,15 +2,133 @@
   "version": 1,
   "owner": "native Google MCP benchmark suite",
   "accounts": [
-    {"account_id": "personal-fixture", "email": "personal@example.test", "label": "Personal"},
-    {"account_id": "work-fixture", "email": "work@example.test", "label": "Work"}
+    {
+      "account_id": "personal-fixture",
+      "email": "personal@example.test",
+      "label": "Personal"
+    },
+    {
+      "account_id": "work-fixture",
+      "email": "work@example.test",
+      "label": "Work"
+    }
   ],
   "workflows": [
-    {"id": "mail_thread", "task": "Find the recent Acme project email and read its thread in the Work account.", "tools": ["gmail_search", "gmail_get_thread"], "expected": {"account_id": "work-fixture", "thread_id": "thread-acme", "message_order": ["message-first", "message-second"], "facts": ["Review is Friday", "Budget is 2500 USD"]}},
-    {"id": "document_facts", "task": "Find the Acme brief and report its launch date with a source.", "tools": ["drive_search", "docs_get_text"], "expected": {"document_id": "doc-acme", "launch_date": "2026-10-01", "source_required": true, "truncation_required": true}},
-    {"id": "calendar_dst", "task": "Report availability across the Chicago DST transition; identify calendars whose availability could not be read.", "tools": ["calendar_list_events", "calendar_freebusy"], "expected": {"time_min": "2026-11-01T00:00:00-05:00", "time_max": "2026-11-02T00:00:00-06:00", "duration_hours": 25, "all_day_busy": true, "failed_calendar_is_free": false}},
-    {"id": "marketing_period", "task": "Report GA4 sessions and Search Console clicks for September 1 through September 7, 2026, preserving date and timezone meanings.", "tools": ["analytics_report", "searchconsole_query"], "expected": {"start_date": "2026-09-01", "end_date": "2026-09-07", "ga4_timezone": "America/Chicago", "search_console_timezone": "America/Los_Angeles", "sessions": 120, "clicks": 40}},
-    {"id": "sparse_sheet", "task": "Read 'Client Budget'!A1:C4 and sum numeric amounts while preserving blank cells.", "tools": ["sheets_read_range"], "expected": {"range": "'Client Budget'!A1:C4", "rows": [["Item", "Owner", "Amount"], ["Design", "", 100], [], ["Build", "Team", 250]], "sum": 350}}
+    {
+      "id": "mail_thread",
+      "task": "Find the recent Acme project email and read its thread in the Work account.",
+      "tools": [
+        "gmail_search",
+        "gmail_get_thread"
+      ],
+      "expected": {
+        "account_id": "work-fixture",
+        "thread_id": "thread-acme",
+        "message_order": [
+          "message-first",
+          "message-second"
+        ],
+        "facts": [
+          "Review is Friday",
+          "Budget is 2500 USD"
+        ]
+      }
+    },
+    {
+      "id": "document_facts",
+      "task": "Find the Acme brief and report its launch date with a source.",
+      "tools": [
+        "drive_search",
+        "docs_get_text"
+      ],
+      "expected": {
+        "document_id": "doc-acme",
+        "launch_date": "2026-10-01",
+        "source_required": true,
+        "truncation_required": true
+      }
+    },
+    {
+      "id": "calendar_dst",
+      "task": "Report availability across the Chicago DST transition; identify calendars whose availability could not be read.",
+      "tools": [
+        "calendar_list_events",
+        "calendar_freebusy"
+      ],
+      "expected": {
+        "time_min": "2026-11-01T00:00:00-05:00",
+        "time_max": "2026-11-02T00:00:00-06:00",
+        "duration_hours": 25,
+        "all_day_busy": true,
+        "failed_calendar_is_free": false
+      }
+    },
+    {
+      "id": "marketing_period",
+      "task": "Report GA4 sessions and Search Console clicks for September 1 through September 7, 2026, preserving date and timezone meanings.",
+      "tools": [
+        "analytics_report",
+        "searchconsole_query"
+      ],
+      "expected": {
+        "start_date": "2026-09-01",
+        "end_date": "2026-09-07",
+        "ga4_timezone": "America/Chicago",
+        "search_console_timezone": "America/Los_Angeles",
+        "sessions": 120,
+        "clicks": 40
+      }
+    },
+    {
+      "id": "sparse_sheet",
+      "task": "Read 'Client Budget'!A1:C4 and sum numeric amounts while preserving blank cells.",
+      "tools": [
+        "sheets_read_range"
+      ],
+      "expected": {
+        "range": "'Client Budget'!A1:C4",
+        "rows": [
+          [
+            "Item",
+            "Owner",
+            "Amount"
+          ],
+          [
+            "Design",
+            "",
+            100
+          ],
+          [
+            null,
+            null,
+            null
+          ],
+          [
+            "Build",
+            "Team",
+            250
+          ]
+        ],
+        "sum": 350
+      }
+    }
   ],
-  "measurement": {"warm_calls": 100, "cold_starts": 20, "initial_paired_agent_runs": 10, "p95_paired_agent_runs": 50, "metrics": ["p50_ms", "p95_ms", "upstream_calls", "retries", "prompt_tokens", "output_tokens", "tool_calls", "peak_memory_bytes", "correctness"], "live_trials_authorized": false}
+  "measurement": {
+    "warm_calls": 100,
+    "cold_starts": 20,
+    "initial_paired_agent_runs": 10,
+    "p95_paired_agent_runs": 50,
+    "metrics": [
+      "p50_ms",
+      "p95_ms",
+      "upstream_calls",
+      "retries",
+      "prompt_tokens",
+      "output_tokens",
+      "tool_calls",
+      "peak_memory_bytes",
+      "correctness"
+    ],
+    "live_trials_authorized": false
+  }
 }

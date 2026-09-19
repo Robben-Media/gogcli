@@ -64,7 +64,9 @@ func TestReadRangePreservesSparseValuesAndQuotedSheets(t *testing.T) {
 	result := resultAny.(mcpcontract.Result[ReadRangeData])
 
 	data := result.Data
-	if len(data.Rows) != 2 || data.Rows[0][0] != "Name" || data.Rows[1][1] != float64(42) || data.CellCount != 4 {
+	if len(data.Rows) != 2 || len(data.Rows[0]) != 3 || len(data.Rows[1]) != 3 ||
+		data.Rows[0][0] != "Name" || data.Rows[0][2] != nil ||
+		data.Rows[1][1] != float64(42) || data.Rows[1][2] != nil || data.CellCount != 6 {
 		t.Fatalf("unexpected values %#v", data.Rows)
 	}
 
@@ -98,6 +100,8 @@ func TestReadRangeRejectsUnsafeInputsBeforeProvider(t *testing.T) {
 		`{"account_id":"a","spreadsheet_id":"s","range":"Sheet1!C2:A1","major_dimension":"ROWS","value_render_option":"FORMULA"}`,
 		`{"account_id":"a","spreadsheet_id":"s","range":"Sheet1!A1:C2","major_dimension":"BAD","value_render_option":"FORMULA"}`,
 		`{"account_id":"a","spreadsheet_id":"s","range":"Sheet1!A1:C2","major_dimension":"ROWS","value_render_option":"BAD"}`,
+		`{"account_id":"a","spreadsheet_id":"s","range":"Sheet1!not-a-cell","major_dimension":"ROWS","value_render_option":"FORMULA"}`,
+		`{"account_id":"a","spreadsheet_id":"s","range":"Sheet1!A1:B2","major_dimension":"ROWS","value_render_option":"FORMULA","max_cells":3}`,
 	} {
 		if _, err := readOp.Decode(json.RawMessage(raw)); err == nil {
 			t.Fatalf("accepted %s", raw)
@@ -106,6 +110,48 @@ func TestReadRangeRejectsUnsafeInputsBeforeProvider(t *testing.T) {
 
 	if len(provider.options) != 0 {
 		t.Fatalf("invalid input acquired a provider: %#v", provider.options)
+	}
+}
+
+func TestReadRangeNormalizesColumnsIntoRows(t *testing.T) {
+	provider := &fakeProvider{
+		identity: mcpcontract.Identity{AccountID: "opaque-a"},
+		client: &http.Client{Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+			return jsonResponse(`{
+				"range": "Sheet1!A1:B3",
+				"majorDimension": "COLUMNS",
+				"values": [["Name"], ["Invoice", 42]]
+			}`), nil
+		})},
+	}
+
+	call, err := Operations(provider)[1].Decode(json.RawMessage(`{
+		"account_id":"opaque-a", "spreadsheet_id":"sheet-1", "range":"Sheet1!A1:B3",
+		"major_dimension":"COLUMNS", "value_render_option":"UNFORMATTED_VALUE"
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resultAny, err := call.Run(context.Background(), provider.identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := resultAny.(mcpcontract.Result[ReadRangeData])
+	data := result.Data
+	expected := [][]any{{"Name", "Invoice"}, {nil, float64(42)}, {nil, nil}}
+
+	if len(data.Rows) != 3 || len(data.Rows[0]) != 2 || data.CellCount != 6 || result.Truncated {
+		t.Fatalf("unexpected shape %#v", data)
+	}
+
+	for row := range expected {
+		for column := range expected[row] {
+			if data.Rows[row][column] != expected[row][column] {
+				t.Fatalf("values = %#v, want %#v", data.Rows, expected)
+			}
+		}
 	}
 }
 
@@ -121,16 +167,39 @@ func TestBoundedA1CellsAcceptsLowercaseReferences(t *testing.T) {
 	}
 }
 
+func TestReadRangeRejectsRangeLargerThanEffectiveMaxCells(t *testing.T) {
+	provider := &fakeProvider{}
+
+	call, err := Operations(provider)[1].Decode(json.RawMessage(`{
+		"account_id":"opaque-a", "spreadsheet_id":"sheet-1", "range":"Sheet1!A1:B2",
+		"major_dimension":"ROWS", "value_render_option":"FORMATTED_VALUE", "max_cells":3
+	}`))
+	_ = call
+
+	if err == nil {
+		t.Fatal("accepted a range larger than the effective cell limit")
+	}
+
+	var public *mcpcontract.Error
+	if !errors.As(err, &public) || public.Category != mcpcontract.InvalidInput {
+		t.Fatalf("unexpected error %#v", err)
+	}
+
+	if len(provider.options) != 0 {
+		t.Fatalf("oversized range acquired a provider: %#v", provider.options)
+	}
+}
+
 func TestReadRangeTruncatesUnexpectedUpstreamExcess(t *testing.T) {
 	provider := &fakeProvider{
 		identity: mcpcontract.Identity{AccountID: "opaque-a"},
 		client: &http.Client{Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
-			return jsonResponse(`{"range":"Sheet1!A1:B3","values":[["a","b"],["c","d"],["e","f"]]}`), nil
+			return jsonResponse(`{"range":"Sheet1!A1:A3","values":[["a","b"],["c","d"],["e","f"]]}`), nil
 		})},
 	}
 
 	call, err := Operations(provider)[1].Decode(json.RawMessage(`{
-		"account_id":"opaque-a","spreadsheet_id":"s","range":"Sheet1!A1:B3",
+		"account_id":"opaque-a","spreadsheet_id":"s","range":"Sheet1!A1:A3",
 		"major_dimension":"ROWS","value_render_option":"FORMATTED_VALUE","max_cells":3
 	}`))
 	if err != nil {
@@ -143,7 +212,8 @@ func TestReadRangeTruncatesUnexpectedUpstreamExcess(t *testing.T) {
 	}
 
 	result := resultAny.(mcpcontract.Result[ReadRangeData])
-	if len(result.Data.Rows) != 2 || result.Data.CellCount != 3 || !result.Truncated {
+	if len(result.Data.Rows) != 3 || len(result.Data.Rows[0]) != 1 || result.Data.CellCount != 3 ||
+		result.Data.Rows[0][0] != "a" || !result.Truncated {
 		t.Fatalf("unexpected result %#v", result.Data)
 	}
 }
@@ -187,6 +257,41 @@ func TestGetMetadataProjection(t *testing.T) {
 
 	if data.URL != "https://example.invalid/sheet" {
 		t.Fatalf("unexpected URL %q", data.URL)
+	}
+}
+
+func TestReadRangeMapsTypedGoogleErrors(t *testing.T) {
+	tests := []struct {
+		reason   string
+		category mcpcontract.ErrorCategory
+	}{
+		{"insufficientAuthenticationScopes", mcpcontract.InsufficientScope},
+		{"insufficientPermissions", mcpcontract.InsufficientScope},
+		{"quotaExceeded", mcpcontract.QuotaExhausted},
+	}
+
+	for _, test := range tests {
+		provider := &fakeProvider{
+			identity: mcpcontract.Identity{AccountID: "opaque-a"},
+			client: &http.Client{Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+				body := `{"error":{"code":403,"message":"denied","errors":[{"reason":"` + test.reason + `"}]}}`
+				return &http.Response{StatusCode: http.StatusForbidden, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(body))}, nil
+			})},
+		}
+
+		call, err := Operations(provider)[1].Decode(json.RawMessage(`{
+			"account_id":"opaque-a","spreadsheet_id":"s","range":"Sheet1!A1:B2",
+			"major_dimension":"ROWS","value_render_option":"FORMULA"
+		}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = call.Run(context.Background(), provider.identity)
+
+		var public *mcpcontract.Error
+		if !errors.As(err, &public) || public.Category != test.category || strings.Contains(public.Error(), "denied") {
+			t.Fatalf("%s: unexpected error %#v", test.reason, err)
+		}
 	}
 }
 

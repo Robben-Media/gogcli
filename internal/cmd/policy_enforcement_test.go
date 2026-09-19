@@ -199,6 +199,20 @@ func TestPolicyCommandsBypassPolicyEnforcement(t *testing.T) {
 	}
 }
 
+func TestCommandActionID_SearchConsoleCanonical(t *testing.T) {
+	parser, _, err := newParser("test")
+	if err != nil {
+		t.Fatalf("newParser: %v", err)
+	}
+	kctx, err := parser.Parse([]string{"search-console", "sites", "list"})
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if got := commandActionID(kctx); got != "searchconsole:sites.list" {
+		t.Fatalf("unexpected action id: %q", got)
+	}
+}
+
 func TestPolicyActionMatches(t *testing.T) {
 	tests := []struct {
 		pattern string
@@ -211,6 +225,8 @@ func TestPolicyActionMatches(t *testing.T) {
 		{pattern: "gmail:read", action: "gmail:url", match: true},
 		{pattern: "gmail:read", action: "gmail:send", match: false},
 		{pattern: "gmail:settings.*", action: "gmail:settings.watch.stop", match: true},
+		{pattern: "search-console:query", action: "searchconsole:query", match: true},
+		{pattern: "gsc:sites.list", action: "search-console:sites.list", match: true},
 	}
 	for _, tt := range tests {
 		got := policyActionMatches(normalizePolicyAction(tt.pattern), normalizePolicyAction(tt.action))

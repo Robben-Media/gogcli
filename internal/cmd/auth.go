@@ -358,7 +358,7 @@ func (c *AuthTokensExportCmd) Run(ctx context.Context) error {
 	enc := json.NewEncoder(f)
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "  ")
-	if encErr := enc.Encode(export{
+	if encErr := enc.Encode(export{ //nolint:gosec // This command exists to export a refresh token after an explicit user request.
 		Email:        tok.Email,
 		Client:       client,
 		Services:     tok.Services,
@@ -1035,10 +1035,10 @@ func (c *AuthKeepCmd) Run(ctx context.Context) error {
 		return err
 	}
 
-	if err := os.WriteFile(destPath, data, 0o600); err != nil {
+	if err := os.WriteFile(destPath, data, 0o600); err != nil { //nolint:gosec // Destination filename is base64url-encoded by config.KeepServiceAccountPath.
 		return fmt.Errorf("write service account: %w", err)
 	}
-	if err := os.WriteFile(genericPath, data, 0o600); err != nil {
+	if err := os.WriteFile(genericPath, data, 0o600); err != nil { //nolint:gosec // Destination filename is base64url-encoded by config.ServiceAccountPath.
 		return fmt.Errorf("write service account: %w", err)
 	}
 

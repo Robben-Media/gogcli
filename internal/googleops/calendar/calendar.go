@@ -80,9 +80,9 @@ type Event struct {
 	Start            EventTime  `json:"start"`
 	End              EventTime  `json:"end"`
 	AllDay           bool       `json:"all_day"`
-	Recurrence       []string   `json:"recurrence,omitempty"`
-	RecurringEventID string     `json:"recurring_event_id,omitempty"`
-	OriginalStart    *EventTime `json:"original_start,omitempty"`
+	Recurrence       []string   `json:"recurrence,omitempty" jsonschema:"Recurrence rules; absent from expanded instances returned with single_events"`
+	RecurringEventID string     `json:"recurring_event_id,omitempty" jsonschema:"Recurring-series ID for an expanded instance"`
+	OriginalStart    *EventTime `json:"original_start,omitempty" jsonschema:"Original series start for an expanded instance"`
 	Created          string     `json:"created,omitempty"`
 	Updated          string     `json:"updated,omitempty"`
 	HtmlLink         string     `json:"html_link,omitempty"`

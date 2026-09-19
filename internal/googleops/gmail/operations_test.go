@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/steipete/gogcli/internal/mcpcontract"
 )
@@ -140,8 +141,8 @@ func TestSearchMetadataFirstPaginationAndLabels(t *testing.T) {
 		t.Fatalf("metadata search returned body state %#v", result.Data.Messages[0])
 	}
 
-	if result.Data.Messages[0].Labels[1] != "Client" {
-		t.Fatalf("labels = %#v", result.Data.Messages[0].Labels)
+	if result.Data.Messages[0].LabelIDs[1] != "Label_1" || result.Data.Messages[0].LabelNames[1] != "Client" {
+		t.Fatalf("label IDs/names = %#v / %#v", result.Data.Messages[0].LabelIDs, result.Data.Messages[0].LabelNames)
 	}
 
 	if result.Data.Messages[0].InternalDate != "2025-12-16T16:00:00Z" {
@@ -358,4 +359,271 @@ func (t *rewriteTransport) RoundTrip(request *http.Request) (*http.Response, err
 	}
 
 	return response, nil
+}
+
+func TestGetMessageReturnsLabelIDsWithoutFabricatedNames(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/gmail/v1/users/me/messages/m1" {
+			t.Errorf("unexpected request %s", r.URL.Path)
+			http.Error(w, "not found", http.StatusNotFound)
+
+			return
+		}
+		_, _ = w.Write([]byte(`{"id":"m1","threadId":"t1","labelIds":["Label_1","INBOX"],"payload":{"headers":[{"name":"Subject","value":"Labels"}]}}`))
+	}))
+	defer server.Close()
+
+	provider := &recordingProvider{}
+	provider.client = &http.Client{Transport: &rewriteTransport{url: server.URL}}
+	operation := Operations(provider)[1]
+
+	call, err := operation.Decode(json.RawMessage(`{"account_id":"acct","message_id":"m1","include_body":false}`))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	resultAny, err := call.Run(context.Background(), testIdentity())
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	result := resultAny.(mcpcontract.Result[MessageView])
+	if strings.Join(result.Data.LabelIDs, ",") != "Label_1,INBOX" {
+		t.Fatalf("label IDs = %#v", result.Data.LabelIDs)
+	}
+
+	if result.Data.LabelNames != nil {
+		t.Fatalf("label names fabricated without metadata: %#v", result.Data.LabelNames)
+	}
+}
+
+func TestSearchUsesLabelCacheForWarmRequests(t *testing.T) {
+	var labelRequests int
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/gmail/v1/users/me/messages":
+			_, _ = w.Write([]byte(`{"messages":[]}`))
+		case "/gmail/v1/users/me/labels":
+			labelRequests++
+			_, _ = w.Write([]byte(`{"labels":[{"id":"INBOX","name":"Inbox"}]}`))
+		default:
+			t.Errorf("unexpected request %s", r.URL.Path)
+			http.Error(w, "not found", http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	provider := &recordingProvider{}
+	provider.client = &http.Client{Transport: &rewriteTransport{url: server.URL}}
+	operation := Operations(provider)[0]
+
+	call, err := operation.Decode(json.RawMessage(`{"account_id":"acct","query":"all"}`))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	firstAny, err := call.Run(context.Background(), testIdentity())
+	if err != nil {
+		t.Fatalf("cold run: %v", err)
+	}
+
+	secondAny, err := call.Run(context.Background(), testIdentity())
+	if err != nil {
+		t.Fatalf("warm run: %v", err)
+	}
+
+	first := firstAny.(mcpcontract.Result[SearchData])
+	second := secondAny.(mcpcontract.Result[SearchData])
+
+	if labelRequests != 1 {
+		t.Fatalf("label requests = %d, want 1", labelRequests)
+	}
+
+	if !first.Data.LabelsFetchedAt.Equal(second.Data.LabelsFetchedAt) {
+		t.Fatalf("warm labels_fetched_at changed: %q -> %q", first.Data.LabelsFetchedAt, second.Data.LabelsFetchedAt)
+	}
+
+	if len(second.Data.Messages) != 0 || second.Data.Messages == nil {
+		t.Fatalf("warm messages = %#v, want empty non-nil slice", second.Data.Messages)
+	}
+}
+
+func TestSearchDoesNotCacheFailedLabelRequests(t *testing.T) {
+	var labelRequests int
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/gmail/v1/users/me/messages":
+			_, _ = w.Write([]byte(`{"messages":[]}`))
+		case "/gmail/v1/users/me/labels":
+			labelRequests++
+
+			http.Error(w, "unavailable", http.StatusInternalServerError)
+		default:
+			http.Error(w, "not found", http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	provider := &recordingProvider{}
+	provider.client = &http.Client{Transport: &rewriteTransport{url: server.URL}}
+	operation := Operations(provider)[0]
+
+	call, err := operation.Decode(json.RawMessage(`{"account_id":"acct","query":"all"}`))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	for run := 0; run < 2; run++ {
+		_, err := call.Run(context.Background(), testIdentity())
+		if err == nil {
+			t.Fatalf("run %d unexpectedly succeeded", run)
+		}
+	}
+
+	if labelRequests != 2 {
+		t.Fatalf("label requests = %d, want one failed request per run", labelRequests)
+	}
+}
+
+func TestSearchTerminalErrorCancelsBlockedSiblingRequest(t *testing.T) {
+	m1Started := make(chan struct{})
+	m1Canceled := make(chan struct{})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/gmail/v1/users/me/messages":
+			_, _ = w.Write([]byte(`{"messages":[{"id":"m1"},{"id":"m2"}]}`))
+		case "/gmail/v1/users/me/labels":
+			_, _ = w.Write([]byte(`{"labels":[]}`))
+		case "/gmail/v1/users/me/messages/m1":
+			close(m1Started)
+			<-r.Context().Done()
+			close(m1Canceled)
+		case "/gmail/v1/users/me/messages/m2":
+			select {
+			case <-m1Started:
+			case <-r.Context().Done():
+				t.Error("m2 finished before m1 started")
+			}
+
+			http.Error(w, "missing", http.StatusNotFound)
+		default:
+			http.Error(w, "not found", http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	provider := &recordingProvider{}
+	provider.client = &http.Client{Transport: &rewriteTransport{url: server.URL}}
+
+	call, err := Operations(provider)[0].Decode(json.RawMessage(`{"account_id":"acct","query":"all"}`))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	_, err = call.Run(context.Background(), testIdentity())
+	if err == nil {
+		t.Fatal("expected whole-page failure")
+	}
+
+	var contractErr *mcpcontract.Error
+	if !errors.As(err, &contractErr) || contractErr.Category != mcpcontract.NotFound {
+		t.Fatalf("error = %v, want typed not_found", err)
+	}
+
+	select {
+	case <-m1Canceled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("terminal m2 error did not cancel blocked m1 request")
+	}
+}
+
+func TestSearchLabelNamesOmitUnknownLabelIDs(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/gmail/v1/users/me/messages":
+			_, _ = w.Write([]byte(`{"messages":[{"id":"m1","threadId":"t1"}]}`))
+		case "/gmail/v1/users/me/labels":
+			_, _ = w.Write([]byte(`{"labels":[{"id":"INBOX","name":"Inbox"},{"id":"BLANK","name":""}]}`))
+		case "/gmail/v1/users/me/messages/m1":
+			_, _ = w.Write([]byte(`{"id":"m1","threadId":"t1","labelIds":["INBOX","BLANK","MISSING"],"payload":{"headers":[{"name":"Subject","value":"Labels"}]}}`))
+		default:
+			http.Error(w, "not found", http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	provider := &recordingProvider{}
+	provider.client = &http.Client{Transport: &rewriteTransport{url: server.URL}}
+
+	call, err := Operations(provider)[0].Decode(json.RawMessage(`{"account_id":"acct","query":"all"}`))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	resultAny, err := call.Run(context.Background(), testIdentity())
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	result := resultAny.(mcpcontract.Result[SearchData])
+
+	labels := result.Data.Messages[0]
+	if strings.Join(labels.LabelIDs, ",") != "INBOX,BLANK,MISSING" {
+		t.Fatalf("label IDs = %#v", labels.LabelIDs)
+	}
+
+	if strings.Join(labels.LabelNames, ",") != "Inbox" {
+		t.Fatalf("label names = %#v, want known name only", labels.LabelNames)
+	}
+}
+
+func TestGetMessageIncludesInlineAndExternalAttachmentsWithoutSelectedBody(t *testing.T) {
+	inlineData := base64.RawURLEncoding.EncodeToString([]byte("inline attachment"))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/gmail/v1/users/me/messages/m1":
+			_, _ = fmt.Fprintf(w, `{"id":"m1","threadId":"t1","payload":{"mimeType":"multipart/mixed","parts":[{"partId":"0","mimeType":"text/plain","headers":[{"name":"Content-Type","value":"text/plain; charset=utf-8"}],"body":{"attachmentId":"body-a1","size":13}},{"partId":"1","mimeType":"text/plain","filename":"notes.txt","headers":[{"name":"Content-Disposition","value":"attachment"}],"body":{"data":%q,"size":17}},{"partId":"2","mimeType":"application/pdf","filename":"brief.pdf","body":{"attachmentId":"a2","size":123}}]}}`, inlineData)
+		case "/gmail/v1/users/me/messages/m1/attachments/body-a1":
+			_, _ = fmt.Fprintf(w, `{"size":13,"data":%q}`, base64.RawURLEncoding.EncodeToString([]byte("external body")))
+		default:
+			http.Error(w, "not found", http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	provider := &recordingProvider{}
+	provider.client = &http.Client{Transport: &rewriteTransport{url: server.URL}}
+
+	call, err := Operations(provider)[1].Decode(json.RawMessage(`{"account_id":"acct","message_id":"m1"}`))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	resultAny, err := call.Run(context.Background(), testIdentity())
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	result := resultAny.(mcpcontract.Result[MessageView])
+	if result.Data.Body != "external body" {
+		t.Fatalf("selected body = %q", result.Data.Body)
+	}
+
+	if len(result.Data.Attachments) != 2 {
+		t.Fatalf("attachments = %#v, want inline and external attachment", result.Data.Attachments)
+	}
+
+	inline := result.Data.Attachments[0]
+	if inline.PartID != "1" || inline.AttachmentID != "" || inline.Filename != "notes.txt" || inline.SizeBytes != 17 {
+		t.Fatalf("inline attachment = %#v", inline)
+	}
+
+	external := result.Data.Attachments[1]
+	if external.PartID != "2" || external.AttachmentID != "a2" || external.Filename != "brief.pdf" || external.SizeBytes != 123 {
+		t.Fatalf("external attachment = %#v", external)
+	}
 }

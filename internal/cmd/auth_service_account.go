@@ -71,7 +71,7 @@ func storeServiceAccountKey(impersonateEmail string, keyPath string) (string, se
 		return "", serviceAccountJSONInfo{}, err
 	}
 
-	if err := os.WriteFile(destPath, data, 0o600); err != nil {
+	if err := os.WriteFile(destPath, data, 0o600); err != nil { //nolint:gosec // Destination filename is base64url-encoded by config.ServiceAccountPath.
 		return "", serviceAccountJSONInfo{}, fmt.Errorf("write service account: %w", err)
 	}
 

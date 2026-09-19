@@ -35,7 +35,7 @@ func jsonResponse(value string) *http.Response {
 	return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(value))}
 }
 
-func TestGetTextExtractsTabsParagraphsAndTables(t *testing.T) {
+func TestGetTextDefaultsToFirstTabAndWalksNestedContent(t *testing.T) {
 	var request *http.Request
 	provider := &fakeProvider{
 		identity: mcpcontract.Identity{AccountID: "opaque-a", Label: "Work"},
@@ -48,15 +48,24 @@ func TestGetTextExtractsTabsParagraphsAndTables(t *testing.T) {
 				"tabs": [{
 					"tabProperties": {"tabId": "tab-1", "title": "Q3", "index": 1},
 					"documentTab": {"body": {"content": [
-						{"paragraph": {"elements": [{"textRun": {"content": "Alpha"}}]}},
+						{"paragraph": {"elements": [{"textRun": {"content": "Alpha\n"}}]}},
 						{"table": {"tableRows": [
 							{"tableCells": [
-								{"content": [{"paragraph": {"elements": [{"textRun": {"content": "One"}}]}}]},
-								{"content": [{"paragraph": {"elements": [{"textRun": {"content": "Two"}}]}}]}
+								{"content": [
+									{"paragraph": {"elements": [{"textRun": {"content": "One\n"}}]}},
+									{"table": {"tableRows": [
+											{"tableCells": [{"content": [{"paragraph": {"elements": [{"textRun": {"content": "Two\n"}}]}}]},
+												{"content": [{"paragraph": {"elements": [{"textRun": {"content": "Three\n"}}]}}]}]}
+										]}}
+									]}
 							]},
 							{"tableCells": [
-								{"content": [{"paragraph": {"elements": [{"textRun": {"content": "Three"}}]}}]},
-								{"content": [{"paragraph": {"elements": [{"textRun": {"content": "Four"}}]}}]}
+								{"content": [{"paragraph": {"elements": [{"textRun": {"content": "Four\n"}}]}}]}
+							]},
+							{"tableCells": [
+								{"content": [{"tableOfContents": {"content": [
+									{"paragraph": {"elements": [{"textRun": {"content": "Contents\n"}}]}}
+								]}}]}
 							]}
 						]}}
 					]}}
@@ -65,7 +74,7 @@ func TestGetTextExtractsTabsParagraphsAndTables(t *testing.T) {
 		})},
 	}
 
-	call, err := Operations(provider)[0].Decode(json.RawMessage(`{"account_id":"opaque-a","document_id":"doc-1","tab_id":"tab-1"}`))
+	call, err := Operations(provider)[0].Decode(json.RawMessage(`{"account_id":"opaque-a","document_id":"doc-1"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,11 +86,11 @@ func TestGetTextExtractsTabsParagraphsAndTables(t *testing.T) {
 	result := resultAny.(mcpcontract.Result[GetTextData])
 
 	data := result.Data
-	if data.Text != "Alpha\nOne\tTwo\nThree\tFour\n" {
+	if data.Text != "Alpha\nOne\nTwo\nThree\nFour\nContents\n" {
 		t.Fatalf("unexpected text %q", data.Text)
 	}
 
-	if data.ParagraphCount != 5 || data.TableCount != 1 || data.MaxBytes != defaultMaxBytes || result.Truncated {
+	if data.TabID != "tab-1" || data.ParagraphCount != 6 || data.TableCount != 2 || data.MaxBytes != defaultMaxBytes || result.Truncated {
 		t.Fatalf("unexpected extraction %#v", data)
 	}
 
@@ -97,6 +106,11 @@ func TestGetTextExtractsTabsParagraphsAndTables(t *testing.T) {
 		t.Fatalf("unexpected request %s", request.URL.String())
 	}
 
+	fields := request.URL.Query().Get("fields")
+	if strings.Contains(fields, ",body,") || !strings.Contains(fields, "paragraph.elements.textRun.content") || !strings.Contains(fields, "tableOfContents") {
+		t.Fatalf("unexpected field projection %q", fields)
+	}
+
 	if len(provider.options) != 1 || provider.options[0].Operation != "docs_get_text" || provider.options[0].Retry != mcpcontract.SafeRead {
 		t.Fatalf("unexpected provider options %#v", provider.options)
 	}
@@ -104,7 +118,7 @@ func TestGetTextExtractsTabsParagraphsAndTables(t *testing.T) {
 
 func TestGetTextTruncatesOnRuneBoundaryBeforeProvider(t *testing.T) {
 	provider := &fakeProvider{client: &http.Client{Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
-		return jsonResponse(`{"documentId":"doc-1","body":{"content":[{"paragraph":{"elements":[{"textRun":{"content":"αβγ"}}]}}]}}`), nil
+		return jsonResponse(`{"documentId":"doc-1","tabs":[{"tabProperties":{"tabId":"tab-1"},"documentTab":{"body":{"content":[{"paragraph":{"elements":[{"textRun":{"content":"αβγ\n"}}]}}]}}}]}`), nil
 	})}}
 
 	call, err := Operations(provider)[0].Decode(json.RawMessage(`{"account_id":"opaque-a","document_id":"doc-1","max_bytes":3}`))
@@ -139,6 +153,38 @@ func TestGetTextTruncatesOnRuneBoundaryBeforeProvider(t *testing.T) {
 
 	if len(provider.options) != 0 {
 		t.Fatalf("invalid input acquired a provider: %#v", provider.options)
+	}
+}
+
+func TestGetTextMapsTypedGoogleErrors(t *testing.T) {
+	tests := []struct {
+		reason   string
+		category mcpcontract.ErrorCategory
+	}{
+		{"insufficientAuthenticationScopes", mcpcontract.InsufficientScope},
+		{"insufficientPermissions", mcpcontract.InsufficientScope},
+		{"quotaExceeded", mcpcontract.QuotaExhausted},
+	}
+
+	for _, test := range tests {
+		provider := &fakeProvider{
+			identity: mcpcontract.Identity{AccountID: "opaque-a"},
+			client: &http.Client{Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+				body := `{"error":{"code":403,"message":"denied","errors":[{"reason":"` + test.reason + `"}]}}`
+				return &http.Response{StatusCode: http.StatusForbidden, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(body))}, nil
+			})},
+		}
+
+		call, err := Operations(provider)[0].Decode(json.RawMessage(`{"account_id":"opaque-a","document_id":"doc-1"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = call.Run(context.Background(), provider.identity)
+
+		var public *mcpcontract.Error
+		if !errors.As(err, &public) || public.Category != test.category || strings.Contains(public.Error(), "denied") {
+			t.Fatalf("%s: unexpected error %#v", test.reason, err)
+		}
 	}
 }
 

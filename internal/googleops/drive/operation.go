@@ -3,15 +3,13 @@ package drive
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 
 	"google.golang.org/api/drive/v3"
-	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 
+	nativegoogleapi "github.com/steipete/gogcli/internal/googleapi"
 	"github.com/steipete/gogcli/internal/mcpcontract"
 )
 
@@ -43,10 +41,11 @@ type FileMetadata struct {
 }
 
 type SearchData struct {
-	Query        string         `json:"query"`
-	Files        []FileMetadata `json:"files"`
-	DriveID      string         `json:"drive_id,omitempty"`
-	SharedDrives bool           `json:"shared_drives"`
+	Query            string         `json:"query"`
+	Files            []FileMetadata `json:"files"`
+	DriveID          string         `json:"drive_id,omitempty"`
+	SharedDrives     bool           `json:"shared_drives"`
+	IncompleteSearch bool           `json:"incomplete_search"`
 }
 
 type GetFileRequest struct {
@@ -68,6 +67,15 @@ func Operations(provider mcpcontract.ClientProvider) []mcpcontract.Operation {
 			out := mcpcontract.NewResult(id, data)
 			out.NextPageToken = nextPageToken
 
+			out.Truncated = data.IncompleteSearch
+			if data.IncompleteSearch {
+				out.PartialFailures = append(out.PartialFailures, mcpcontract.Failure{
+					SourceID: "drive_search",
+					Category: string(mcpcontract.UpstreamFailure),
+					Message:  "Google reported an incomplete allDrives search",
+				})
+			}
+
 			return out, nil
 		}),
 		mcpcontract.NewOperation("drive_get_file", validateGetFile, func(ctx context.Context, id mcpcontract.Identity, in GetFileRequest) (mcpcontract.Result[GetFileData], error) {
@@ -86,12 +94,15 @@ func validateSearch(in SearchRequest) error {
 		return &mcpcontract.Error{Category: mcpcontract.InvalidInput, Message: "text is required"}
 	}
 
-	if in.MaxResults == 0 {
-		return nil
-	}
-
 	if in.MaxResults < 0 || in.MaxResults > maxMaxResults {
 		return &mcpcontract.Error{Category: mcpcontract.InvalidInput, Message: fmt.Sprintf("max_results must be between 1 and %d", maxMaxResults)}
+	}
+
+	includeSharedDrives := in.IncludeSharedDrives == nil || *in.IncludeSharedDrives
+
+	driveID := strings.TrimSpace(in.DriveID)
+	if driveID != "" && !includeSharedDrives {
+		return &mcpcontract.Error{Category: mcpcontract.InvalidInput, Message: "drive_id cannot be used when include_shared_drives is false"}
 	}
 
 	return nil
@@ -103,15 +114,16 @@ func search(ctx context.Context, provider mcpcontract.ClientProvider, id mcpcont
 		maxResults = defaultMaxResults
 	}
 	includeSharedDrives := in.IncludeSharedDrives == nil || *in.IncludeSharedDrives
+	driveID := strings.TrimSpace(in.DriveID)
 
 	client, err := provider.HTTPClient(ctx, id, mcpcontract.CallOptions{Operation: "drive_search", Retry: mcpcontract.SafeRead})
 	if err != nil {
-		return SearchData{}, "", setupError("drive_search", err)
+		return SearchData{}, "", nativegoogleapi.NativePublicError(err)
 	}
 
 	svc, err := drive.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
-		return SearchData{}, "", setupError("drive_search", err)
+		return SearchData{}, "", nativegoogleapi.NativePublicError(err)
 	}
 
 	call := svc.Files.List().
@@ -121,25 +133,25 @@ func search(ctx context.Context, provider mcpcontract.ClientProvider, id mcpcont
 		OrderBy("modifiedTime desc").
 		SupportsAllDrives(true).
 		IncludeItemsFromAllDrives(includeSharedDrives).
-		Fields("nextPageToken, files(id, name, mimeType, size, createdTime, modifiedTime, parents, webViewLink)").
+		Fields("nextPageToken,incompleteSearch,files(id, name, mimeType, size, createdTime, modifiedTime, parents, webViewLink)").
 		Context(ctx)
-	if includeSharedDrives {
+	if driveID != "" {
+		call = call.Corpora("drive").DriveId(driveID)
+	} else if includeSharedDrives {
 		call = call.Corpora("allDrives")
-		if in.DriveID != "" {
-			call = call.DriveId(strings.TrimSpace(in.DriveID))
-		}
 	}
 
 	resp, err := call.Do()
 	if err != nil {
-		return SearchData{}, "", mapGoogleError("drive_search", err)
+		return SearchData{}, "", nativegoogleapi.NativePublicError(err)
 	}
 
 	data := SearchData{
-		Query:        strings.TrimSpace(in.Text),
-		Files:        make([]FileMetadata, 0, len(resp.Files)),
-		DriveID:      strings.TrimSpace(in.DriveID),
-		SharedDrives: includeSharedDrives,
+		Query:            strings.TrimSpace(in.Text),
+		Files:            make([]FileMetadata, 0, len(resp.Files)),
+		DriveID:          driveID,
+		SharedDrives:     includeSharedDrives,
+		IncompleteSearch: resp.IncompleteSearch,
 	}
 	for _, file := range resp.Files {
 		if file != nil {
@@ -163,12 +175,12 @@ func getFile(ctx context.Context, provider mcpcontract.ClientProvider, id mcpcon
 
 	client, err := provider.HTTPClient(ctx, id, mcpcontract.CallOptions{Operation: "drive_get_file", Retry: mcpcontract.SafeRead})
 	if err != nil {
-		return GetFileData{}, setupError("drive_get_file", err)
+		return GetFileData{}, nativegoogleapi.NativePublicError(err)
 	}
 
 	svc, err := drive.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
-		return GetFileData{}, setupError("drive_get_file", err)
+		return GetFileData{}, nativegoogleapi.NativePublicError(err)
 	}
 
 	file, err := svc.Files.Get(fileID).
@@ -177,7 +189,7 @@ func getFile(ctx context.Context, provider mcpcontract.ClientProvider, id mcpcon
 		Context(ctx).
 		Do()
 	if err != nil {
-		return GetFileData{}, mapGoogleError("drive_get_file", err)
+		return GetFileData{}, nativegoogleapi.NativePublicError(err)
 	}
 
 	if file == nil {
@@ -214,46 +226,4 @@ func projectFile(file *drive.File) FileMetadata {
 func searchQuery(text string) string {
 	replacer := strings.NewReplacer(`\`, `\\`, `'`, `\'`)
 	return "fullText contains '" + replacer.Replace(text) + "' and trashed = false"
-}
-
-func mapGoogleError(operation string, err error) error {
-	if err == nil {
-		return nil
-	}
-
-	var apiErr *googleapi.Error
-	if errors.As(err, &apiErr) {
-		out := &mcpcontract.Error{Message: fmt.Sprintf("%s failed with Google status %d", operation, apiErr.Code), Retryable: apiErr.Code == 429 || apiErr.Code >= 500}
-		switch apiErr.Code {
-		case http.StatusBadRequest:
-			out.Category = mcpcontract.InvalidInput
-		case http.StatusUnauthorized:
-			out.Category = mcpcontract.AuthRequired
-		case http.StatusForbidden:
-			out.Category = mcpcontract.Forbidden
-		case http.StatusNotFound:
-			out.Category = mcpcontract.NotFound
-		case http.StatusTooManyRequests:
-			out.Category = mcpcontract.QuotaExhausted
-		default:
-			out.Category = mcpcontract.UpstreamFailure
-		}
-
-		return out
-	}
-
-	if errors.Is(err, context.DeadlineExceeded) {
-		return &mcpcontract.Error{Category: mcpcontract.DeadlineExceeded, Message: operation + " exceeded its deadline"}
-	}
-
-	return &mcpcontract.Error{Category: mcpcontract.UpstreamFailure, Message: operation + " failed"}
-}
-
-func setupError(operation string, err error) error {
-	var public *mcpcontract.Error
-	if errors.As(err, &public) {
-		return public
-	}
-
-	return &mcpcontract.Error{Category: mcpcontract.UpstreamFailure, Message: operation + " client setup failed"}
 }

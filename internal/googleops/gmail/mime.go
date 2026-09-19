@@ -2,17 +2,17 @@ package gmail
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
 	"mime"
-	"mime/quotedprintable"
 	"regexp"
 	"strings"
 	"unicode/utf8"
 
 	"golang.org/x/net/html/charset"
-	"google.golang.org/api/gmail/v1"
+	gmailapi "google.golang.org/api/gmail/v1"
 )
 
 var (
@@ -22,64 +22,113 @@ var (
 	whitespacePattern = regexp.MustCompile(`\s+`)
 )
 
-func boundedBody(payload *gmail.MessagePart, limit int) (string, bool, error) {
-	text, isHTML, err := bestBodyText(payload)
-	if err != nil || text == "" {
-		return "", false, err
+func boundedBody(ctx context.Context, api *gmailapi.Service, messageID string, payload *gmailapi.MessagePart, limit int) (string, bool, string, error) {
+	part, isHTML, found, err := bestBodyPart(payload)
+	if err != nil || !found {
+		return "", false, "", err
 	}
 
-	if isHTML {
+	selectedAttachmentID := ""
+	if part.Body != nil && part.Body.AttachmentId != "" && part.Body.Data == "" {
+		selectedAttachmentID = part.Body.AttachmentId
+		if part.Body.Size > maxBodyBytes {
+			return "", true, selectedAttachmentID, nil
+		}
+
+		attachment, fetchErr := api.Users.Messages.Attachments.Get("me", messageID, selectedAttachmentID).Context(ctx).Do()
+		if fetchErr != nil {
+			return "", false, "", publicError(fetchErr)
+		}
+
+		if attachment == nil {
+			return "", false, "", publicError(errEmptyMessage)
+		}
+
+		external := *part
+		external.Body = attachment
+		part = &external
+	}
+
+	text, err := decodePartBody(part)
+	if err != nil {
+		return "", false, selectedAttachmentID, publicError(err)
+	}
+
+	if isHTML || looksLikeHTML(text) {
 		text = stripHTMLTags(text)
 	}
 	bounded, truncated := boundedBytes(text, limit)
 
-	return bounded, truncated, nil
+	return bounded, truncated, selectedAttachmentID, nil
 }
 
-func bestBodyText(payload *gmail.MessagePart) (string, bool, error) {
+func bestBodyPart(payload *gmailapi.MessagePart) (*gmailapi.MessagePart, bool, bool, error) {
 	if payload == nil {
-		return "", false, nil
+		return nil, false, false, nil
 	}
 
-	if text, err := findPartBody(payload, "text/plain"); err != nil {
-		return "", false, err
-	} else if text != "" {
-		return text, looksLikeHTML(text), nil
+	part, found, err := findBodyPart(payload, "text/plain")
+	if err != nil || found {
+		return part, false, found, err
 	}
 
-	if text, err := findPartBody(payload, "text/html"); err != nil {
-		return "", false, err
-	} else if text != "" {
-		return text, true, nil
+	part, found, err = findBodyPart(payload, "text/html")
+	if err != nil || found {
+		return part, true, found, err
 	}
 
-	return "", false, nil
+	return nil, false, false, nil
 }
 
-func findPartBody(payload *gmail.MessagePart, mimeType string) (string, error) {
+func findBodyPart(payload *gmailapi.MessagePart, mimeType string) (*gmailapi.MessagePart, bool, error) {
 	if payload == nil {
-		return "", nil
+		return nil, false, nil
 	}
 
-	if mimeTypeMatches(payload.MimeType, mimeType) && payload.Body != nil && payload.Body.Data != "" {
-		return decodePartBody(payload)
+	if mimeTypeMatches(payload.MimeType, mimeType) && !isAttachmentPart(payload) && hasBodyData(payload) {
+		return payload, true, nil
 	}
 
 	for _, part := range payload.Parts {
-		text, err := findPartBody(part, mimeType)
-		if err != nil {
-			return "", err
+		if part == nil {
+			continue
 		}
 
-		if text != "" {
-			return text, nil
+		selected, found, err := findBodyPart(part, mimeType)
+		if err != nil {
+			return nil, false, err
+		}
+
+		if found {
+			return selected, true, nil
 		}
 	}
 
-	return "", nil
+	return nil, false, nil
 }
 
-func decodePartBody(part *gmail.MessagePart) (string, error) {
+func isAttachmentPart(part *gmailapi.MessagePart) bool {
+	if part == nil {
+		return true
+	}
+
+	if strings.TrimSpace(part.Filename) != "" {
+		return true
+	}
+
+	disposition := strings.TrimSpace(headerValue(part, "Content-Disposition"))
+	if index := strings.Index(disposition, ";"); index >= 0 {
+		disposition = disposition[:index]
+	}
+
+	return strings.EqualFold(strings.TrimSpace(disposition), "attachment")
+}
+
+func hasBodyData(part *gmailapi.MessagePart) bool {
+	return part != nil && part.Body != nil && (part.Body.Data != "" || part.Body.AttachmentId != "")
+}
+
+func decodePartBody(part *gmailapi.MessagePart) (string, error) {
 	if part == nil || part.Body == nil || part.Body.Data == "" {
 		return "", nil
 	}
@@ -89,36 +138,45 @@ func decodePartBody(part *gmail.MessagePart) (string, error) {
 		return "", err
 	}
 
-	encoding := strings.TrimSpace(headerValue(part, "Content-Transfer-Encoding"))
 	contentType := strings.TrimSpace(headerValue(part, "Content-Type"))
-	mediaType, params, _ := mime.ParseMediaType(contentType)
-
-	charsetLabel := strings.ToLower(strings.TrimSpace(params["charset"]))
-	switch strings.ToLower(encoding) {
-	case "base64":
-		if decoded, decodeErr := decodeAnyBase64(raw); decodeErr == nil {
-			raw = decoded
-		}
-	case "quoted-printable":
-		decoded, decodeErr := io.ReadAll(quotedprintable.NewReader(bytes.NewReader(raw)))
-		if decodeErr == nil && (!labelIsUTF8(charsetLabel) || utf8.Valid(raw) == utf8.Valid(decoded)) {
-			raw = decoded
-		}
+	if contentType == "" {
+		contentType = strings.TrimSpace(part.MimeType)
 	}
 
-	if strings.HasPrefix(strings.ToLower(mediaType), "text/") && charsetLabel != "" {
-		if reader, readerErr := charset.NewReaderLabel(charsetLabel, bytes.NewReader(raw)); readerErr == nil {
-			if decoded, decodeErr := io.ReadAll(reader); decodeErr == nil {
-				raw = decoded
-			}
+	mediaType, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return "", fmt.Errorf("parse Gmail MIME content type: %w", err)
+	}
+
+	// Decode the documented Gmail base64url transport exactly once, then the
+	// declared MIME charset. Do not infer a second transfer decode from a
+	// retained Content-Transfer-Encoding header or Body.Size; raw RFC822 MIME
+	// decoding belongs to a separate raw-message operation if one is added.
+	charsetLabel := strings.ToLower(strings.TrimSpace(params["charset"]))
+
+	if strings.HasPrefix(mediaType, "text/") && charsetLabel != "" {
+		decoded, err := decodeCharset(raw, charsetLabel)
+		if err != nil {
+			return "", err
 		}
+		raw = decoded
 	}
 
 	return string(raw), nil
 }
 
-func labelIsUTF8(label string) bool {
-	return label == "utf-8" || label == "utf8" || label == "us-ascii"
+func decodeCharset(raw []byte, label string) ([]byte, error) {
+	reader, err := charset.NewReaderLabel(label, bytes.NewReader(raw))
+	if err != nil {
+		return nil, fmt.Errorf("open Gmail body charset %q: %w", label, err)
+	}
+
+	decoded, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("decode Gmail body charset %q: %w", label, err)
+	}
+
+	return decoded, nil
 }
 
 func mimeTypeMatches(partType, want string) bool {
@@ -163,7 +221,7 @@ func stripHTMLTags(value string) string {
 	return strings.TrimSpace(value)
 }
 
-func headerValue(part *gmail.MessagePart, name string) string {
+func headerValue(part *gmailapi.MessagePart, name string) string {
 	if part == nil {
 		return ""
 	}
@@ -186,7 +244,7 @@ func decodeHeaderValue(value string) string {
 	return strings.TrimSpace(value)
 }
 
-func boundedHeaderValue(part *gmail.MessagePart, name string) (string, bool) {
+func boundedHeaderValue(part *gmailapi.MessagePart, name string) (string, bool) {
 	value := decodeHeaderValue(headerValue(part, name))
 	bounded, truncated := boundedBytes(value, maxHeaderBytes)
 
@@ -220,32 +278,10 @@ func decodeBase64(value string) ([]byte, error) {
 		return decoded, nil
 	}
 
-	if decoded, err := base64.URLEncoding.DecodeString(value); err == nil {
-		return decoded, nil
-	}
-
-	if decoded, err := base64.RawStdEncoding.DecodeString(value); err == nil {
-		return decoded, nil
-	}
-
-	decoded, err := base64.StdEncoding.DecodeString(value)
+	decoded, err := base64.URLEncoding.DecodeString(value)
 	if err != nil {
-		return nil, fmt.Errorf("decode Gmail MIME body: %w", err)
+		return nil, fmt.Errorf("decode Gmail base64url body: %w", err)
 	}
 
 	return decoded, nil
-}
-
-func decodeAnyBase64(data []byte) ([]byte, error) {
-	cleaned := make([]byte, 0, len(data))
-	for _, character := range data {
-		switch character {
-		case '\n', '\r', '\t', ' ':
-			continue
-		default:
-			cleaned = append(cleaned, character)
-		}
-	}
-
-	return decodeBase64(string(cleaned))
 }

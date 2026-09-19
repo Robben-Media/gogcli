@@ -134,8 +134,10 @@ func TestAnalyticsInputSchemasMatchFrozenRequests(t *testing.T) {
 		}
 
 		var schema struct {
-			Required   []string            `json:"required"`
-			Properties map[string]struct{} `json:"properties"`
+			Required   []string `json:"required"`
+			Properties map[string]struct {
+				Description string `json:"description"`
+			} `json:"properties"`
 		}
 		if err := json.Unmarshal(encoded, &schema); err != nil {
 			t.Fatalf("decode %s schema: %v", operation.Definition.Name, err)
@@ -162,6 +164,28 @@ func TestAnalyticsInputSchemasMatchFrozenRequests(t *testing.T) {
 
 	if got := required["analytics_report"]; !reflect.DeepEqual(got, []string{"account_id", "property", "metrics", "start_date", "end_date"}) {
 		t.Fatalf("analytics_report required fields: %#v", got)
+	}
+
+	if pageSize := operations[0].InputSchema.Properties["page_size"]; pageSize == nil ||
+		!strings.Contains(pageSize.Description, "account summaries per page") ||
+		!strings.Contains(pageSize.Description, "paging remains account-summary based") {
+		t.Fatalf("page_size description does not describe account-summary paging: %#v", pageSize)
+	}
+
+	report := operations[2].InputSchema
+	if report == nil || report.Properties["start_date"] == nil || report.Properties["end_date"] == nil {
+		t.Fatal("analytics_report schema is missing explicit date fields")
+	}
+
+	for field, description := range map[string]string{
+		"start_date": report.Properties["start_date"].Description,
+		"end_date":   report.Properties["end_date"].Description,
+	} {
+		normalized := strings.ToLower(description)
+		if !strings.Contains(normalized, "inclusive") || !strings.Contains(normalized, "yyyy-mm-dd") ||
+			!strings.Contains(normalized, "relative date expressions are not supported") {
+			t.Fatalf("%s description does not describe explicit dates: %q", field, description)
+		}
 	}
 }
 

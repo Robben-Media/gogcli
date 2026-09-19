@@ -13,6 +13,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -147,11 +148,11 @@ func StartManageServer(ctx context.Context, opts ManageServerOptions) error {
 	}()
 
 	port := ln.Addr().(*net.TCPAddr).Port
-	url := fmt.Sprintf("http://127.0.0.1:%d", port)
+	managerURL := fmt.Sprintf("http://127.0.0.1:%d", port)
 
 	fmt.Fprintln(os.Stderr, "Opening accounts manager in browser...")
-	fmt.Fprintln(os.Stderr, "If the browser doesn't open, visit:", url)
-	_ = openBrowserFn(url)
+	fmt.Fprintln(os.Stderr, "If the browser doesn't open, visit:", managerURL)
+	_ = openBrowserFn(managerURL)
 
 	select {
 	case err := <-ms.resultCh:
@@ -307,7 +308,17 @@ func (ms *ManageServer) handleAuthUpgrade(w http.ResponseWriter, r *http.Request
 		append(authURLParams(true, true),
 			oauth2.SetAuthURLParam("login_hint", email))...)
 
-	http.Redirect(w, r, authURL, http.StatusFound)
+	// Both URLs are built from the configured OAuth endpoint. The email only
+	// becomes an encoded login_hint query parameter.
+	redirect, redirectErr := url.Parse(authURL)
+
+	endpoint, endpointErr := url.Parse(oauthEndpoint.AuthURL)
+	if redirectErr != nil || endpointErr != nil || redirect.Host != endpoint.Host {
+		http.Error(w, "Invalid authorization endpoint", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, authURL, http.StatusFound) //nolint:gosec // The destination host is checked against the configured OAuth endpoint.
 }
 
 func (ms *ManageServer) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
@@ -515,8 +526,8 @@ func fetchUserEmailDefault(ctx context.Context, tok *oauth2.Token) (string, erro
 
 // fetchUserEmailWithURL retrieves the user's email from the specified userinfo URL.
 // This is separated for testability.
-func fetchUserEmailWithURL(ctx context.Context, accessToken string, url string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+func fetchUserEmailWithURL(ctx context.Context, accessToken string, userinfoURL string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, userinfoURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("create userinfo request: %w", err)
 	}

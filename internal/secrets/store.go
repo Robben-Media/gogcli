@@ -331,7 +331,7 @@ func (s *KeyringStore) SetToken(client string, email string, tok Token) error {
 		tok.CreatedAt = time.Now().UTC()
 	}
 
-	payload, err := json.Marshal(storedToken{
+	payload, err := json.Marshal(storedToken{ //nolint:gosec // Serialization is required before storing the token in the protected keyring.
 		RefreshToken: tok.RefreshToken,
 		Services:     tok.Services,
 		Scopes:       tok.Scopes,

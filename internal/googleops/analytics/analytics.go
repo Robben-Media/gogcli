@@ -32,7 +32,7 @@ var (
 
 type listPropertiesInput struct {
 	mcpcontract.Selection
-	PageSize  int64  `json:"page_size,omitempty"`
+	PageSize  int64  `json:"page_size,omitempty" jsonschema:"Number of GA4 account summaries per page; defaults to 50 and supports at most 100. Results flatten each summary into property rows while paging remains account-summary based."`
 	PageToken string `json:"page_token,omitempty"`
 }
 
@@ -47,8 +47,8 @@ type reportInput struct {
 	Property   string   `json:"property"`
 	Metrics    []string `json:"metrics"`
 	Dimensions []string `json:"dimensions,omitempty"`
-	StartDate  string   `json:"start_date"`
-	EndDate    string   `json:"end_date"`
+	StartDate  string   `json:"start_date" jsonschema:"Inclusive report start date in explicit YYYY-MM-DD format; relative date expressions are not supported"`
+	EndDate    string   `json:"end_date" jsonschema:"Inclusive report end date in explicit YYYY-MM-DD format; relative date expressions are not supported"`
 	Limit      int64    `json:"limit,omitempty"`
 	Offset     int64    `json:"offset,omitempty"`
 }

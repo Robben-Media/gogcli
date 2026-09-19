@@ -1,6 +1,6 @@
 # gogcli spec
 
-This document describes the original CLI design. The [native Google MCP implementation plan](plans/native-google-mcp.html) owns the new agent-interface architecture and supersedes the original exclusion of an MCP server. That server is planned, not implemented in this release.
+This document describes the original CLI design. The [native Google MCP implementation plan](plans/native-google-mcp.html) owns the new agent-interface architecture and supersedes the original exclusion of an MCP server. The native Go read-only preview is under integration; the plan records its local evidence and separate deployment gates. Existing CLI consumers remain supported during this migration.
 
 ## Goal
 

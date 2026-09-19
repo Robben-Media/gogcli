@@ -63,7 +63,7 @@ func WriteClientCredentialsFor(client string, c ClientCredentials) error {
 		return fmt.Errorf("resolve credentials path: %w", err)
 	}
 
-	b, err := json.MarshalIndent(c, "", "  ")
+	b, err := json.MarshalIndent(c, "", "  ") //nolint:gosec // OAuth client secret is written to its 0600 config file.
 	if err != nil {
 		return fmt.Errorf("encode credentials json: %w", err)
 	}

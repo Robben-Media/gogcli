@@ -37,7 +37,9 @@ var keySpecs = map[Key]KeySpec{
 			if _, err := time.LoadLocation(value); err != nil {
 				return fmt.Errorf("invalid timezone %q: %w (use IANA timezone names like America/New_York, UTC, Europe/London)", value, err)
 			}
+
 			cfg.DefaultTimezone = value
+
 			return nil
 		},
 		Unset: func(cfg *File) {

@@ -15,6 +15,7 @@ import (
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 
+	nativegoogleapi "github.com/steipete/gogcli/internal/googleapi"
 	"github.com/steipete/gogcli/internal/mcpcontract"
 )
 
@@ -23,6 +24,8 @@ const (
 	hardMaxCells    = 10000
 	maxA1Column     = 18278
 	maxUpstreamBits = 8 * 1024 * 1024
+	dimensionRows   = "ROWS"
+	dimensionCols   = "COLUMNS"
 )
 
 var errResponseLimit = errors.New("response exceeds bounded read limit")
@@ -112,12 +115,12 @@ func getMetadata(ctx context.Context, provider mcpcontract.ClientProvider, ident
 
 	client, err := provider.HTTPClient(ctx, identity, mcpcontract.CallOptions{Operation: "sheets_get_metadata", Retry: mcpcontract.SafeRead})
 	if err != nil {
-		return GetMetadataData{}, setupError("sheets_get_metadata", err)
+		return GetMetadataData{}, nativegoogleapi.NativePublicError(err)
 	}
 
 	svc, err := sheets.NewService(ctx, option.WithHTTPClient(boundedClient(client, maxUpstreamBits)))
 	if err != nil {
-		return GetMetadataData{}, setupError("sheets_get_metadata", err)
+		return GetMetadataData{}, nativegoogleapi.NativePublicError(err)
 	}
 
 	resp, err := svc.Spreadsheets.Get(spreadsheetID).
@@ -175,7 +178,7 @@ func validateReadRange(in ReadRangeRequest) error {
 	}
 
 	switch in.MajorDimension {
-	case "ROWS", "COLUMNS":
+	case dimensionRows, dimensionCols:
 	default:
 		return invalid("major_dimension must be ROWS or COLUMNS")
 	}
@@ -195,13 +198,14 @@ func validateReadRange(in ReadRangeRequest) error {
 		return invalid(fmt.Sprintf("max_cells must be between 1 and %d", hardMaxCells))
 	}
 
-	rangeSize, err := boundedA1Cells(in.Range)
+	dimensions, err := parseBoundedA1(in.Range)
 	if err != nil {
 		return err
 	}
 
-	if rangeSize > hardMaxCells {
-		return invalid(fmt.Sprintf("range contains %d cells, which exceeds the %d-cell hard limit", rangeSize, hardMaxCells))
+	rangeSize := dimensions.Rows * dimensions.Columns
+	if rangeSize > maxCells {
+		return invalid(fmt.Sprintf("range contains %d cells, which exceeds the effective %d-cell limit", rangeSize, maxCells))
 	}
 
 	return nil
@@ -216,12 +220,12 @@ func readRange(ctx context.Context, provider mcpcontract.ClientProvider, identit
 
 	client, err := provider.HTTPClient(ctx, identity, mcpcontract.CallOptions{Operation: "sheets_read_range", Retry: mcpcontract.SafeRead})
 	if err != nil {
-		return ReadRangeData{}, setupError("sheets_read_range", err)
+		return ReadRangeData{}, nativegoogleapi.NativePublicError(err)
 	}
 
 	svc, err := sheets.NewService(ctx, option.WithHTTPClient(boundedClient(client, maxUpstreamBits)))
 	if err != nil {
-		return ReadRangeData{}, setupError("sheets_read_range", err)
+		return ReadRangeData{}, nativegoogleapi.NativePublicError(err)
 	}
 
 	resp, err := svc.Spreadsheets.Values.Get(spreadsheetID, cleanRange(in.Range)).
@@ -233,83 +237,141 @@ func readRange(ctx context.Context, provider mcpcontract.ClientProvider, identit
 		return ReadRangeData{}, mapGoogleError("sheets_read_range", err)
 	}
 
+	if resp == nil {
+		return ReadRangeData{}, &mcpcontract.Error{Category: mcpcontract.UpstreamFailure, Message: "sheets_read_range returned no values"}
+	}
+
+	dimensions, err := parseBoundedA1(in.Range)
+	if err != nil {
+		return ReadRangeData{}, err
+	}
+
+	values, unexpectedExcess := rectangularValues(resp.Values, dimensions, in.MajorDimension)
+
 	data := ReadRangeData{
 		SpreadsheetID:     spreadsheetID,
 		RequestedRange:    strings.TrimSpace(in.Range),
 		UpstreamRange:     resp.Range,
 		MajorDimension:    in.MajorDimension,
 		ValueRenderOption: in.ValueRenderOption,
-		Rows:              make([][]any, 0, len(resp.Values)),
+		Rows:              values,
 		MaxCells:          maxCells,
 		URL:               spreadsheetURL(spreadsheetID),
-	}
-
-	remaining := maxCells
-	for _, row := range resp.Values {
-		if remaining == 0 {
-			data.truncated = true
-			break
-		}
-
-		if len(row) > remaining {
-			row = row[:remaining]
-			data.truncated = true
-		}
-		copied := append([]any(nil), row...)
-		data.Rows = append(data.Rows, copied)
-		remaining -= len(copied)
-
-		data.CellCount += len(copied)
-		if data.truncated {
-			break
-		}
+		CellCount:         dimensions.Rows * dimensions.Columns,
+		truncated:         unexpectedExcess,
 	}
 
 	return data, nil
 }
 
+type a1Dimensions struct {
+	Rows    int
+	Columns int
+}
+
+func rectangularValues(values [][]any, dimensions a1Dimensions, majorDimension string) ([][]any, bool) {
+	rows := make([][]any, dimensions.Rows)
+	for row := range rows {
+		rows[row] = make([]any, dimensions.Columns)
+	}
+
+	truncated := false
+
+	for outer, vector := range values {
+		var maxOuter int
+		if majorDimension == dimensionRows {
+			maxOuter = dimensions.Rows
+		} else {
+			maxOuter = dimensions.Columns
+		}
+
+		if outer >= maxOuter {
+			truncated = true
+			break
+		}
+
+		var maxInner int
+		if majorDimension == dimensionRows {
+			maxInner = dimensions.Columns
+		} else {
+			maxInner = dimensions.Rows
+		}
+
+		if len(vector) > maxInner {
+			truncated = true
+		}
+
+		for inner, value := range vector {
+			if inner >= maxInner {
+				break
+			}
+
+			if majorDimension == dimensionRows {
+				rows[outer][inner] = value
+			} else {
+				rows[inner][outer] = value
+			}
+		}
+	}
+
+	return rows, truncated
+}
+
 func boundedA1Cells(raw string) (int, error) {
+	dimensions, err := parseBoundedA1(raw)
+	if err != nil {
+		return 0, err
+	}
+
+	return dimensions.Rows * dimensions.Columns, nil
+}
+
+func parseBoundedA1(raw string) (a1Dimensions, error) {
 	value := cleanRange(strings.TrimSpace(raw))
 	if value == "" {
-		return 0, invalid("range is required")
+		return a1Dimensions{}, invalid("range is required")
 	}
 
 	sheet, rangePart, err := splitSheet(value)
 	if err != nil {
-		return 0, err
+		return a1Dimensions{}, err
 	}
 	_ = sheet
 
 	parts := strings.Split(rangePart, ":")
 	if len(parts) != 2 {
 		if len(parts) == 1 {
-			return 1, nil
+			if _, _, cellErr := parseA1Cell(parts[0]); cellErr != nil {
+				return a1Dimensions{}, cellErr
+			}
+
+			return a1Dimensions{Rows: 1, Columns: 1}, nil
 		}
 
-		return 0, invalid("range must contain at most one colon")
+		return a1Dimensions{}, invalid("range must contain at most one colon")
 	}
 
 	startCol, startRow, err := parseA1Cell(parts[0])
 	if err != nil {
-		return 0, err
+		return a1Dimensions{}, err
 	}
 
 	endCol, endRow, err := parseA1Cell(parts[1])
 	if err != nil {
-		return 0, err
+		return a1Dimensions{}, err
 	}
 
 	if endRow < startRow || endCol < startCol {
-		return 0, invalid("range endpoints must be in ascending row and column order")
+		return a1Dimensions{}, invalid("range endpoints must be in ascending row and column order")
 	}
-	rows := int64(endRow - startRow + 1)
+	rows := endRow - startRow + 1
 
-	columns := int64(endCol - startCol + 1)
+	columns := endCol - startCol + 1
 	if rows > hardMaxCells || columns > hardMaxCells || rows*columns > hardMaxCells {
-		return 0, invalid("range exceeds the 10000-cell hard limit")
+		return a1Dimensions{}, invalid("range exceeds the 10000-cell hard limit")
 	}
 
-	return int(rows * columns), nil
+	return a1Dimensions{Rows: int(rows), Columns: int(columns)}, nil
 }
 
 func splitSheet(value string) (string, string, error) {
@@ -489,44 +551,12 @@ func mapGoogleError(operation string, err error) error {
 		return nil
 	}
 
-	var apiErr *googleapi.Error
-	if errors.As(err, &apiErr) {
-		out := &mcpcontract.Error{Message: fmt.Sprintf("%s failed with Google status %d", operation, apiErr.Code), Retryable: apiErr.Code == http.StatusTooManyRequests || apiErr.Code >= 500}
-		switch apiErr.Code {
-		case http.StatusBadRequest:
-			out.Category = mcpcontract.InvalidInput
-		case http.StatusUnauthorized:
-			out.Category = mcpcontract.AuthRequired
-		case http.StatusForbidden:
-			out.Category = mcpcontract.Forbidden
-		case http.StatusNotFound:
-			out.Category = mcpcontract.NotFound
-		case http.StatusTooManyRequests:
-			out.Category = mcpcontract.QuotaExhausted
-		default:
-			out.Category = mcpcontract.UpstreamFailure
-		}
-
-		return out
-	}
-
-	if errors.Is(err, context.DeadlineExceeded) {
-		return &mcpcontract.Error{Category: mcpcontract.DeadlineExceeded, Message: operation + " exceeded its deadline"}
-	}
-
-	message := operation + " failed"
 	if errors.Is(err, errResponseLimit) {
-		message = operation + " response exceeded the bounded read limit"
+		return &mcpcontract.Error{
+			Category: mcpcontract.UpstreamFailure,
+			Message:  operation + " response exceeded the bounded read limit",
+		}
 	}
 
-	return &mcpcontract.Error{Category: mcpcontract.UpstreamFailure, Message: message}
-}
-
-func setupError(operation string, err error) error {
-	var public *mcpcontract.Error
-	if errors.As(err, &public) {
-		return public
-	}
-
-	return &mcpcontract.Error{Category: mcpcontract.UpstreamFailure, Message: operation + " client setup failed"}
+	return nativegoogleapi.NativePublicError(err)
 }

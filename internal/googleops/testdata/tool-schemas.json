@@ -8,7 +8,8 @@
           "description": "Opaque account ID returned by accounts_list; required for every Google operation"
         },
         "page_size": {
-          "type": "integer"
+          "type": "integer",
+          "description": "Number of GA4 account summaries per page; defaults to 50 and supports at most 100. Results flatten each summary into property rows while paging remains account-summary based."
         },
         "page_token": {
           "type": "string"
@@ -347,10 +348,12 @@
           }
         },
         "start_date": {
-          "type": "string"
+          "type": "string",
+          "description": "Inclusive report start date in explicit YYYY-MM-DD format; relative date expressions are not supported"
         },
         "end_date": {
-          "type": "string"
+          "type": "string",
+          "description": "Inclusive report end date in explicit YYYY-MM-DD format; relative date expressions are not supported"
         },
         "limit": {
           "type": "integer"
@@ -1002,10 +1005,12 @@
                     ],
                     "items": {
                       "type": "string"
-                    }
+                    },
+                    "description": "Recurrence rules; absent from expanded instances returned with single_events"
                   },
                   "recurring_event_id": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Recurring-series ID for an expanded instance"
                   },
                   "original_start": {
                     "type": [
@@ -1023,6 +1028,7 @@
                         "type": "string"
                       }
                     },
+                    "description": "Original series start for an expanded instance",
                     "required": [
                       "date",
                       "date_time",
@@ -1507,12 +1513,16 @@
             },
             "shared_drives": {
               "type": "boolean"
+            },
+            "incomplete_search": {
+              "type": "boolean"
             }
           },
           "required": [
             "query",
             "files",
-            "shared_drives"
+            "shared_drives",
+            "incomplete_search"
           ],
           "additionalProperties": false
         },
@@ -1634,7 +1644,16 @@
             "list_unsubscribe": {
               "type": "string"
             },
-            "labels": {
+            "label_ids": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "string"
+              }
+            },
+            "label_names": {
               "type": [
                 "null",
                 "array"
@@ -1666,6 +1685,9 @@
               "items": {
                 "type": "object",
                 "properties": {
+                  "part_id": {
+                    "type": "string"
+                  },
                   "attachment_id": {
                     "type": "string"
                   },
@@ -1679,9 +1701,6 @@
                     "type": "integer"
                   }
                 },
-                "required": [
-                  "attachment_id"
-                ],
                 "additionalProperties": false
               }
             },
@@ -1691,7 +1710,7 @@
           },
           "required": [
             "id",
-            "labels"
+            "label_ids"
           ],
           "additionalProperties": false
         },
@@ -1794,6 +1813,9 @@
             "snippet_truncated": {
               "type": "boolean"
             },
+            "labels_fetched_at": {
+              "type": "string"
+            },
             "messages": {
               "type": [
                 "null",
@@ -1832,7 +1854,16 @@
                   "list_unsubscribe": {
                     "type": "string"
                   },
-                  "labels": {
+                  "label_ids": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "label_names": {
                     "type": [
                       "null",
                       "array"
@@ -1864,6 +1895,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "part_id": {
+                          "type": "string"
+                        },
                         "attachment_id": {
                           "type": "string"
                         },
@@ -1877,9 +1911,6 @@
                           "type": "integer"
                         }
                       },
-                      "required": [
-                        "attachment_id"
-                      ],
                       "additionalProperties": false
                     }
                   },
@@ -1889,7 +1920,7 @@
                 },
                 "required": [
                   "id",
-                  "labels"
+                  "label_ids"
                 ],
                 "additionalProperties": false
               }
@@ -1900,6 +1931,7 @@
           },
           "required": [
             "id",
+            "labels_fetched_at",
             "messages"
           ],
           "additionalProperties": false
@@ -2042,7 +2074,16 @@
                   "list_unsubscribe": {
                     "type": "string"
                   },
-                  "labels": {
+                  "label_ids": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "label_names": {
                     "type": [
                       "null",
                       "array"
@@ -2074,6 +2115,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "part_id": {
+                          "type": "string"
+                        },
                         "attachment_id": {
                           "type": "string"
                         },
@@ -2087,9 +2131,6 @@
                           "type": "integer"
                         }
                       },
-                      "required": [
-                        "attachment_id"
-                      ],
                       "additionalProperties": false
                     }
                   },
@@ -2099,17 +2140,21 @@
                 },
                 "required": [
                   "id",
-                  "labels"
+                  "label_ids"
                 ],
                 "additionalProperties": false
               }
             },
             "result_size_estimate": {
               "type": "integer"
+            },
+            "labels_fetched_at": {
+              "type": "string"
             }
           },
           "required": [
-            "messages"
+            "messages",
+            "labels_fetched_at"
           ],
           "additionalProperties": false
         },
@@ -2272,7 +2317,8 @@
           "description": "Opaque account ID returned by accounts_list; required for every Google operation"
         },
         "site_url": {
-          "type": "string"
+          "type": "string",
+          "description": "Exact opaque property identifier returned by searchconsole_list_sites"
         },
         "start_date": {
           "type": "string"
@@ -2287,7 +2333,8 @@
           ],
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Grouping dimensions: query, page, country, device, date, or search_appearance"
         },
         "filters": {
           "type": [
@@ -2298,10 +2345,12 @@
             "type": "object",
             "properties": {
               "dimension": {
-                "type": "string"
+                "type": "string",
+                "description": "query, page, country, device, or search_appearance"
               },
               "operator": {
-                "type": "string"
+                "type": "string",
+                "description": "equals, contains, or not_contains"
               },
               "expression": {
                 "type": "string"
@@ -2313,10 +2362,12 @@
               "expression"
             ],
             "additionalProperties": false
-          }
+          },
+          "description": "Filters ANDed together; dimensions support query, page, country, device, and search_appearance, and operators support equals, contains, and not_contains"
         },
         "row_limit": {
-          "type": "integer"
+          "type": "integer",
+          "description": "Maximum rows returned; one additional row is requested only to detect truncation"
         },
         "start_row": {
           "type": "integer"

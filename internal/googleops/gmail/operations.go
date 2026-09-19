@@ -65,7 +65,8 @@ type GetThreadInput struct {
 }
 
 type AttachmentView struct {
-	AttachmentID string `json:"attachment_id"`
+	PartID       string `json:"part_id,omitempty"`
+	AttachmentID string `json:"attachment_id,omitempty"`
 	Filename     string `json:"filename,omitempty"`
 	MimeType     string `json:"mime_type,omitempty"`
 	SizeBytes    int64  `json:"size_bytes,omitempty"`
@@ -82,7 +83,8 @@ type MessageView struct {
 	Subject              string           `json:"subject,omitempty"`
 	Date                 string           `json:"date,omitempty"`
 	ListUnsubscribe      string           `json:"list_unsubscribe,omitempty"`
-	Labels               []string         `json:"labels"`
+	LabelIDs             []string         `json:"label_ids"`
+	LabelNames           []string         `json:"label_names,omitempty"`
 	Snippet              string           `json:"snippet,omitempty"`
 	SizeEstimate         int64            `json:"size_estimate,omitempty"`
 	Body                 string           `json:"body,omitempty"`
@@ -95,23 +97,26 @@ type MessageView struct {
 type SearchData struct {
 	Messages           []MessageView `json:"messages"`
 	ResultSizeEstimate int64         `json:"result_size_estimate,omitempty"`
+	LabelsFetchedAt    time.Time     `json:"labels_fetched_at"`
 }
 
 type ThreadView struct {
 	ID                string        `json:"id"`
 	Snippet           string        `json:"snippet,omitempty"`
 	SnippetTruncated  bool          `json:"snippet_truncated,omitempty"`
+	LabelsFetchedAt   time.Time     `json:"labels_fetched_at"`
 	Messages          []MessageView `json:"messages"`
 	MessagesTruncated bool          `json:"messages_truncated,omitempty"`
 }
 
 type service struct {
 	provider mcpcontract.ClientProvider
+	labels   *labelCache
 }
 
 // Operations returns the three Gmail operations in public catalog order.
 func Operations(provider mcpcontract.ClientProvider) []mcpcontract.Operation {
-	s := &service{provider: provider}
+	s := &service{provider: provider, labels: newLabelCache()}
 
 	return []mcpcontract.Operation{
 		s.withInputConstraints(mcpcontract.NewOperation[SearchInput, mcpcontract.Result[SearchData]](
@@ -150,7 +155,7 @@ func (s *service) search(ctx context.Context, id mcpcontract.Identity, in Search
 
 	api, err := gmailapi.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
-		return mcpcontract.Result[SearchData]{}, upstreamError("gmail", "", err)
+		return mcpcontract.Result[SearchData]{}, publicError(err)
 	}
 
 	list := api.Users.Messages.List("me").
@@ -164,19 +169,31 @@ func (s *service) search(ctx context.Context, id mcpcontract.Identity, in Search
 
 	resp, err := list.Do()
 	if err != nil {
-		return mcpcontract.Result[SearchData]{}, mapGoogleError(err, "message list", "")
+		return mcpcontract.Result[SearchData]{}, publicError(err)
 	}
 
-	labelNames, err := fetchLabelNames(ctx, api)
-	if err != nil {
-		return mcpcontract.Result[SearchData]{}, err
+	labelKey := newLabelCacheKey(id)
+
+	labelNames, labelsFetchedAt, cached := s.labels.get(labelKey)
+	if !cached {
+		labels, fetchErr := fetchLabelNames(ctx, api)
+		if fetchErr != nil {
+			return mcpcontract.Result[SearchData]{}, fetchErr
+		}
+		labelNames = labels.Names
+		labelsFetchedAt = labels.FetchedAt
+		s.labels.set(labelKey, labels)
 	}
 
 	messages, truncated, err := fetchMessageViews(ctx, api, resp.Messages, labelNames, in.IncludeBody, bodyLimit)
 	if err != nil {
 		return mcpcontract.Result[SearchData]{}, err
 	}
-	result := mcpcontract.NewResult(id, SearchData{Messages: messages, ResultSizeEstimate: resp.ResultSizeEstimate})
+	result := mcpcontract.NewResult(id, SearchData{
+		Messages:           messages,
+		ResultSizeEstimate: resp.ResultSizeEstimate,
+		LabelsFetchedAt:    labelsFetchedAt,
+	})
 	result.NextPageToken = resp.NextPageToken
 	result.Truncated = truncated || resp.NextPageToken != ""
 
@@ -201,7 +218,7 @@ func (s *service) getMessage(ctx context.Context, id mcpcontract.Identity, in Ge
 
 	api, err := gmailapi.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
-		return mcpcontract.Result[MessageView]{}, upstreamError("gmail", "", err)
+		return mcpcontract.Result[MessageView]{}, publicError(err)
 	}
 
 	call := api.Users.Messages.Get("me", strings.TrimSpace(in.MessageID)).Context(ctx)
@@ -217,10 +234,10 @@ func (s *service) getMessage(ctx context.Context, id mcpcontract.Identity, in Ge
 
 	msg, err := call.Fields(googleapi.Field(fieldMask)).Do()
 	if err != nil {
-		return mcpcontract.Result[MessageView]{}, mapGoogleError(err, "message", in.MessageID)
+		return mcpcontract.Result[MessageView]{}, publicError(err)
 	}
 
-	view, err := newMessageView(msg, map[string]string{}, includeBody, bodyLimit)
+	view, err := newMessageView(ctx, api, msg, nil, includeBody, bodyLimit)
 	if err != nil {
 		return mcpcontract.Result[MessageView]{}, err
 	}
@@ -248,7 +265,7 @@ func (s *service) getThread(ctx context.Context, id mcpcontract.Identity, in Get
 
 	api, err := gmailapi.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
-		return mcpcontract.Result[ThreadView]{}, upstreamError("gmail", "", err)
+		return mcpcontract.Result[ThreadView]{}, publicError(err)
 	}
 
 	thread, err := api.Users.Threads.Get("me", strings.TrimSpace(in.ThreadID)).
@@ -257,12 +274,20 @@ func (s *service) getThread(ctx context.Context, id mcpcontract.Identity, in Get
 		Context(ctx).
 		Do()
 	if err != nil {
-		return mcpcontract.Result[ThreadView]{}, mapGoogleError(err, "thread", in.ThreadID)
+		return mcpcontract.Result[ThreadView]{}, publicError(err)
 	}
 
-	labelNames, err := fetchLabelNames(ctx, api)
-	if err != nil {
-		return mcpcontract.Result[ThreadView]{}, err
+	labelKey := newLabelCacheKey(id)
+
+	labelNames, labelsFetchedAt, cached := s.labels.get(labelKey)
+	if !cached {
+		labels, fetchErr := fetchLabelNames(ctx, api)
+		if fetchErr != nil {
+			return mcpcontract.Result[ThreadView]{}, fetchErr
+		}
+		labelNames = labels.Names
+		labelsFetchedAt = labels.FetchedAt
+		s.labels.set(labelKey, labels)
 	}
 
 	messages := make([]MessageView, 0, len(thread.Messages))
@@ -274,7 +299,7 @@ func (s *service) getThread(ctx context.Context, id mcpcontract.Identity, in Get
 	}
 
 	for _, msg := range thread.Messages[:messageLimit] {
-		view, err := newMessageView(msg, labelNames, true, bodyLimit)
+		view, err := newMessageView(ctx, api, msg, labelNames, true, bodyLimit)
 		if err != nil {
 			return mcpcontract.Result[ThreadView]{}, err
 		}
@@ -287,6 +312,7 @@ func (s *service) getThread(ctx context.Context, id mcpcontract.Identity, in Get
 		ID:                thread.Id,
 		Snippet:           threadSnippet,
 		SnippetTruncated:  threadSnippetTruncated,
+		LabelsFetchedAt:   labelsFetchedAt,
 		Messages:          messages,
 		MessagesTruncated: len(thread.Messages) > maxMessages,
 	})
@@ -307,11 +333,11 @@ func (s *service) httpClient(ctx context.Context, id mcpcontract.Identity, opera
 
 	client, err := s.provider.HTTPClient(ctx, id, mcpcontract.CallOptions{Operation: def.Name, Retry: def.Retry})
 	if err != nil {
-		return nil, upstreamError("gmail", "", err)
+		return nil, publicError(err)
 	}
 
 	if client == nil {
-		return nil, upstreamError("gmail", "", errNoHTTPClient)
+		return nil, publicError(errNoHTTPClient)
 	}
 
 	return client, nil
@@ -399,10 +425,10 @@ func validateCount(name string, value, maximum int) error {
 	return nil
 }
 
-func fetchLabelNames(ctx context.Context, api *gmailapi.Service) (map[string]string, error) {
+func fetchLabelNames(ctx context.Context, api *gmailapi.Service) (labelMetadata, error) {
 	resp, err := api.Users.Labels.List("me").Fields("labels(id,name,type)").Context(ctx).Do()
 	if err != nil {
-		return nil, mapGoogleError(err, "label list", "")
+		return labelMetadata{}, publicError(err)
 	}
 
 	names := make(map[string]string, len(resp.Labels))
@@ -411,14 +437,12 @@ func fetchLabelNames(ctx context.Context, api *gmailapi.Service) (map[string]str
 			continue
 		}
 
-		name := strings.TrimSpace(label.Name)
-		if name == "" {
-			name = label.Id
+		if name := strings.TrimSpace(label.Name); name != "" {
+			names[label.Id] = name
 		}
-		names[label.Id] = name
 	}
 
-	return names, nil
+	return labelMetadata{Names: names, FetchedAt: time.Now().UTC()}, nil
 }
 
 type messageFetchResult struct {
@@ -432,6 +456,9 @@ func fetchMessageViews(ctx context.Context, api *gmailapi.Service, messages []*g
 	if len(messages) == 0 {
 		return []MessageView{}, false, nil
 	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	results := make(chan messageFetchResult, len(messages))
 	var wg sync.WaitGroup
@@ -451,7 +478,7 @@ func fetchMessageViews(ctx context.Context, api *gmailapi.Service, messages []*g
 			case sem <- struct{}{}:
 				defer func() { <-sem }()
 			case <-ctx.Done():
-				results <- messageFetchResult{index: index, messageID: messageID, err: contextError(ctx.Err(), "message", messageID)}
+				results <- messageFetchResult{index: index, messageID: messageID, err: publicError(ctx.Err())}
 				return
 			}
 
@@ -469,11 +496,11 @@ func fetchMessageViews(ctx context.Context, api *gmailapi.Service, messages []*g
 
 			msg, err := call.Fields(googleapi.Field(fieldMask)).Do()
 			if err != nil {
-				results <- messageFetchResult{index: index, messageID: messageID, err: mapGoogleError(err, "message", messageID)}
+				results <- messageFetchResult{index: index, messageID: messageID, err: publicError(err)}
 				return
 			}
 
-			view, err := newMessageView(msg, labelNames, includeBody, bodyLimit)
+			view, err := newMessageView(ctx, api, msg, labelNames, includeBody, bodyLimit)
 			if err != nil {
 				results <- messageFetchResult{index: index, messageID: messageID, err: err}
 				return
@@ -511,37 +538,40 @@ func fetchMessageViews(ctx context.Context, api *gmailapi.Service, messages []*g
 	return items, truncated, nil
 }
 
-func newMessageView(msg *gmailapi.Message, labelNames map[string]string, includeBody bool, bodyLimit int) (MessageView, error) {
+func newMessageView(ctx context.Context, api *gmailapi.Service, msg *gmailapi.Message, labelNames map[string]string, includeBody bool, bodyLimit int) (MessageView, error) {
 	if msg == nil {
-		return MessageView{}, upstreamError("gmail", "message", errEmptyMessage)
+		return MessageView{}, publicError(errEmptyMessage)
 	}
 
 	view := MessageView{
 		ID:       msg.Id,
 		ThreadID: msg.ThreadId,
-		Labels:   []string{},
+		LabelIDs: []string{},
 	}
 	if msg.InternalDate != 0 {
 		view.InternalDate = time.UnixMilli(msg.InternalDate).UTC().Format(time.RFC3339)
 	}
 	view.SizeEstimate = msg.SizeEstimate
 	view.MetadataTruncated = setHeaders(&view, msg.Payload)
-	view.Labels = labelViews(msg.LabelIds, labelNames)
+	view.LabelIDs = stableStrings(msg.LabelIds)
+	view.LabelNames = labelViews(msg.LabelIds, labelNames)
 
-	var attachments []AttachmentView
-	var attachmentsTruncated bool
-	attachments, attachmentsTruncated = attachmentViews(msg.Payload)
-	view.Attachments = attachments
-	view.AttachmentsTruncated = attachmentsTruncated
+	bodyAttachmentID := ""
 
 	if includeBody {
-		body, bodyTruncated, err := boundedBody(msg.Payload, bodyLimit)
+		body, bodyTruncated, attachmentID, err := boundedBody(ctx, api, msg.Id, msg.Payload, bodyLimit)
 		if err != nil {
 			return MessageView{}, err
 		}
+		bodyAttachmentID = attachmentID
 		view.Body = body
 		view.BodyTruncated = bodyTruncated
 	}
+	var attachments []AttachmentView
+	var attachmentsTruncated bool
+	attachments, attachmentsTruncated = attachmentViews(msg.Payload, bodyAttachmentID)
+	view.Attachments = attachments
+	view.AttachmentsTruncated = attachmentsTruncated
 
 	if msg.Snippet != "" && includeBody {
 		snippet := boundedString(msg.Snippet, maxHeaderBytes)
@@ -579,6 +609,10 @@ func setHeaders(view *MessageView, payload *gmailapi.MessagePart) bool {
 }
 
 func labelViews(ids []string, names map[string]string) []string {
+	if names == nil {
+		return nil
+	}
+
 	labels := make([]string, 0, len(ids))
 
 	seen := make(map[string]struct{}, len(ids))
@@ -594,16 +628,33 @@ func labelViews(ids []string, names map[string]string) []string {
 		seen[id] = struct{}{}
 		if name, ok := names[id]; ok && name != "" {
 			labels = append(labels, name)
-		} else {
-			labels = append(labels, id)
 		}
 	}
 
 	return labels
 }
 
-func attachmentViews(payload *gmailapi.MessagePart) ([]AttachmentView, bool) {
-	attachments := collectAttachments(payload)
+func stableStrings(values []string) []string {
+	stable := make([]string, 0, len(values))
+
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+
+		if _, duplicate := seen[value]; duplicate {
+			continue
+		}
+		seen[value] = struct{}{}
+		stable = append(stable, value)
+	}
+
+	return stable
+}
+
+func attachmentViews(payload *gmailapi.MessagePart, excludedAttachmentID string) ([]AttachmentView, bool) {
+	attachments := collectAttachments(payload, excludedAttachmentID)
 	limit := len(attachments)
 
 	truncated := limit > maxAttachments
@@ -614,7 +665,8 @@ func attachmentViews(payload *gmailapi.MessagePart) ([]AttachmentView, bool) {
 	out := make([]AttachmentView, 0, limit)
 	for _, attachment := range attachments[:limit] {
 		out = append(out, AttachmentView{
-			AttachmentID: attachment.ID,
+			PartID:       boundedString(attachment.PartID, maxIdLength),
+			AttachmentID: boundedString(attachment.AttachmentID, maxIdLength),
 			Filename:     boundedString(attachment.Filename, maxHeaderBytes),
 			MimeType:     boundedString(attachment.MimeType, 256),
 			SizeBytes:    attachment.Size,
@@ -625,29 +677,39 @@ func attachmentViews(payload *gmailapi.MessagePart) ([]AttachmentView, bool) {
 }
 
 type attachmentInfo struct {
-	ID       string
-	Filename string
-	MimeType string
-	Size     int64
+	PartID       string
+	AttachmentID string
+	Filename     string
+	MimeType     string
+	Size         int64
 }
 
-func collectAttachments(payload *gmailapi.MessagePart) []attachmentInfo {
+func collectAttachments(payload *gmailapi.MessagePart, excludedAttachmentID string) []attachmentInfo {
 	if payload == nil {
 		return nil
 	}
 
 	var attachments []attachmentInfo
-	if payload.Body != nil && payload.Body.AttachmentId != "" {
-		attachments = append(attachments, attachmentInfo{
-			ID:       payload.Body.AttachmentId,
-			Filename: payload.Filename,
-			MimeType: payload.MimeType,
-			Size:     payload.Body.Size,
-		})
+
+	if isAttachmentPart(payload) {
+		selectedExternalBody := payload.Body != nil && payload.Body.AttachmentId != "" && payload.Body.AttachmentId == excludedAttachmentID
+		if !selectedExternalBody {
+			attachment := attachmentInfo{
+				PartID:   payload.PartId,
+				Filename: payload.Filename,
+				MimeType: payload.MimeType,
+			}
+			if payload.Body != nil {
+				attachment.AttachmentID = payload.Body.AttachmentId
+				attachment.Size = payload.Body.Size
+			}
+
+			attachments = append(attachments, attachment)
+		}
 	}
 
 	for _, part := range payload.Parts {
-		attachments = append(attachments, collectAttachments(part)...)
+		attachments = append(attachments, collectAttachments(part, excludedAttachmentID)...)
 	}
 
 	return attachments

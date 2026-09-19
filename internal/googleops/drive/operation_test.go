@@ -85,7 +85,7 @@ func TestSearchDefaultsSharedDrivesAndProjection(t *testing.T) {
 	}
 
 	for name, expected := range map[string]string{
-		"pageSize": "25", "corpora": "allDrives", "driveId": "shared-1",
+		"pageSize": "25", "corpora": "drive", "driveId": "shared-1",
 		"includeItemsFromAllDrives": "true", "supportsAllDrives": "true",
 	} {
 		if query.Get(name) != expected {
@@ -107,6 +107,69 @@ func TestSearchDefaultsSharedDrivesAndProjection(t *testing.T) {
 	}
 }
 
+func TestSearchReportsIncompleteAllDrivesResult(t *testing.T) {
+	var request *http.Request
+	provider := &fakeProvider{
+		identity: mcpcontract.Identity{AccountID: "opaque-a"},
+		client: &http.Client{Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			request = req
+
+			return jsonResponse(`{"incompleteSearch":true,"files":[]}`), nil
+		})},
+	}
+
+	call, err := Operations(provider)[0].Decode(json.RawMessage(`{"account_id":"opaque-a","text":"brief"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resultAny, err := call.Run(context.Background(), provider.identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := resultAny.(mcpcontract.Result[SearchData])
+	if !result.Truncated || !result.Data.IncompleteSearch || len(result.PartialFailures) != 1 {
+		t.Fatalf("unexpected result %#v", result)
+	}
+
+	if request.URL.Query().Get("corpora") != "allDrives" || !strings.Contains(request.URL.Query().Get("fields"), "incompleteSearch") {
+		t.Fatalf("unexpected request %s", request.URL.String())
+	}
+}
+
+func TestGetFileMapsTypedGoogleErrors(t *testing.T) {
+	tests := []struct {
+		reason   string
+		category mcpcontract.ErrorCategory
+	}{
+		{"insufficientAuthenticationScopes", mcpcontract.InsufficientScope},
+		{"insufficientPermissions", mcpcontract.InsufficientScope},
+		{"rateLimitExceeded", mcpcontract.QuotaExhausted},
+	}
+
+	for _, test := range tests {
+		provider := &fakeProvider{
+			identity: mcpcontract.Identity{AccountID: "opaque-a"},
+			client: &http.Client{Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+				body := `{"error":{"code":403,"message":"denied","errors":[{"reason":"` + test.reason + `"}]}}`
+				return &http.Response{StatusCode: http.StatusForbidden, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(body))}, nil
+			})},
+		}
+
+		call, err := Operations(provider)[1].Decode(json.RawMessage(`{"account_id":"opaque-a","file_id":"file-1"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = call.Run(context.Background(), provider.identity)
+
+		var public *mcpcontract.Error
+		if !errors.As(err, &public) || public.Category != test.category || strings.Contains(public.Error(), "user secret") {
+			t.Fatalf("%s: unexpected error %#v", test.reason, err)
+		}
+	}
+}
+
 func TestSearchValidationHappensBeforeProvider(t *testing.T) {
 	provider := &fakeProvider{}
 
@@ -115,6 +178,7 @@ func TestSearchValidationHappensBeforeProvider(t *testing.T) {
 		`{"account_id":"a","text":"x","max_results":101}`,
 		`{"account_id":"a","text":"x","max_results":-1}`,
 		`{"account_id":"a","text":"  "}`,
+		`{"account_id":"a","text":"x","drive_id":"shared-1","include_shared_drives":false}`,
 	} {
 		if _, err := ops[0].Decode(json.RawMessage(raw)); err == nil {
 			t.Fatalf("accepted %s", raw)
@@ -158,7 +222,7 @@ func TestGetFileProjectionAndErrorMapping(t *testing.T) {
 	}
 
 	provider.client = &http.Client{Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
-		return &http.Response{StatusCode: http.StatusForbidden, Body: io.NopCloser(strings.NewReader(`{"error":"denied"}`))}, nil
+		return &http.Response{StatusCode: http.StatusForbidden, Body: io.NopCloser(strings.NewReader(`{"error":"user secret"}`))}, nil
 	})}
 
 	call, err = Operations(provider)[1].Decode(json.RawMessage(`{"account_id":"opaque-a","file_id":"file-1"}`))
@@ -168,7 +232,7 @@ func TestGetFileProjectionAndErrorMapping(t *testing.T) {
 	_, err = call.Run(context.Background(), provider.identity)
 
 	var public *mcpcontract.Error
-	if !errors.As(err, &public) || public.Category != mcpcontract.Forbidden || strings.Contains(public.Error(), "denied") {
+	if !errors.As(err, &public) || public.Category != mcpcontract.Forbidden || strings.Contains(public.Error(), "user secret") {
 		t.Fatalf("unexpected error %#v", err)
 	}
 }

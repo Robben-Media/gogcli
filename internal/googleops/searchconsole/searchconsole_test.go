@@ -160,13 +160,14 @@ func TestSearchConsoleInputSchemasMatchFrozenRequests(t *testing.T) {
 	}
 }
 
-func TestSearchConsoleQuerySendsFiltersDatesAndPagination(t *testing.T) {
+func TestSearchConsoleQuerySendsFiltersDatesAndDefinitePagination(t *testing.T) {
 	t.Parallel()
 	operation, provider := fixture(t, "searchconsole_query", `{
 		"responseAggregationType": "BY_PAGE",
 		"rows": [
 			{"keys": ["shoes", "2026-09-01"], "clicks": 20, "impressions": 100, "ctr": 0.2, "position": 4.5},
-			{"keys": ["boots", "2026-09-01"], "clicks": 20, "impressions": 80, "ctr": 0.25, "position": 3.5}
+			{"keys": ["boots", "2026-09-01"], "clicks": 20, "impressions": 80, "ctr": 0.25, "position": 3.5},
+			{"keys": ["sandals", "2026-09-01"], "clicks": 10, "impressions": 70, "ctr": 0.14, "position": 5.5}
 		]
 	}`)
 
@@ -211,7 +212,7 @@ func TestSearchConsoleQuerySendsFiltersDatesAndPagination(t *testing.T) {
 	}
 
 	if body.StartDate != "2026-09-01" || body.EndDate != "2026-09-07" ||
-		!reflect.DeepEqual(body.Dimensions, []string{"QUERY", "DATE"}) || body.RowLimit != 2 || body.StartRow != 4 {
+		!reflect.DeepEqual(body.Dimensions, []string{"QUERY", "DATE"}) || body.RowLimit != 3 || body.StartRow != 4 {
 		t.Fatalf("unexpected query body: %#v", body)
 	}
 
@@ -223,6 +224,90 @@ func TestSearchConsoleQuerySendsFiltersDatesAndPagination(t *testing.T) {
 
 	if provider.options[0] != (mcpcontract.CallOptions{Operation: "searchconsole_query", Retry: mcpcontract.SafeRead}) {
 		t.Fatalf("unexpected call options: %#v", provider.options[0])
+	}
+}
+
+func TestSearchConsoleExactPageHasNoDefiniteTruncation(t *testing.T) {
+	t.Parallel()
+	operation, provider := fixture(t, "searchconsole_query", `{
+		"rows": [
+			{"keys": ["shoes"], "clicks": 20, "impressions": 100, "ctr": 0.2, "position": 4.5},
+			{"keys": ["boots"], "clicks": 20, "impressions": 80, "ctr": 0.25, "position": 3.5}
+		]
+	}`)
+
+	result, err := decodeRun(t, operation, `{
+		"account_id":"opaque-account", "site_url":"sc-domain:robben.media",
+		"start_date":"2026-09-01", "end_date":"2026-09-07", "dimensions":["query"], "row_limit":2
+	}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out := result.(mcpcontract.Result[QueryData])
+	if len(out.Data.Rows) != 2 || out.NextPageToken != "" || out.Truncated {
+		t.Fatalf("exact page was reported as truncated: %#v", out)
+	}
+
+	var body struct {
+		RowLimit int64 `json:"rowLimit"`
+	}
+	if err := json.Unmarshal([]byte(provider.transport.bodies[0]), &body); err != nil {
+		t.Fatal(err)
+	}
+
+	if body.RowLimit != 3 {
+		t.Fatalf("rowLimit = %d, want 3", body.RowLimit)
+	}
+}
+
+func TestSearchConsoleOpaqueURLPrefixAndSearchAppearanceRoundTrip(t *testing.T) {
+	t.Parallel()
+	const siteURL = "https://example.test:8443//marketing//path;query=x/a"
+	operation, provider := fixture(t, "searchconsole_query", `{
+		"rows": [{"keys": ["rich result"], "clicks": 5, "impressions": 50, "ctr": 0.1, "position": 2}]
+	}`)
+
+	result, err := decodeRun(t, operation, fmt.Sprintf(`{
+		"account_id":"opaque-account", "site_url":%q,
+		"start_date":"2026-09-01", "end_date":"2026-09-07", "dimensions":["search_appearance"],
+		"filters":[{"dimension":"search_appearance","operator":"contains","expression":"rich"}], "row_limit":1
+	}`, siteURL))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out := result.(mcpcontract.Result[QueryData])
+	if out.Data.SiteURL != siteURL || out.Data.SiteType != "url_prefix" || len(out.Data.Rows) != 1 ||
+		out.Data.Rows[0].Keys[0] != "rich result" || out.NextPageToken != "" || out.Truncated {
+		t.Fatalf("opaque property was not preserved: %#v", out)
+	}
+
+	req := provider.transport.requests[0]
+
+	wantPath := "/webmasters/v3/sites/" + strings.NewReplacer(
+		"/", "%2F", ":", "%3A", ";", "%3B", "=", "%3D",
+	).Replace(siteURL) + "/searchAnalytics/query"
+	if req.URL.EscapedPath() != wantPath {
+		t.Fatalf("encoded property path = %q, want %q", req.URL.EscapedPath(), wantPath)
+	}
+
+	var body struct {
+		Dimensions            []string `json:"dimensions"`
+		DimensionFilterGroups []struct {
+			Filters []struct {
+				Dimension string `json:"dimension"`
+			} `json:"filters"`
+		} `json:"dimensionFilterGroups"`
+		RowLimit int64 `json:"rowLimit"`
+	}
+	if err := json.Unmarshal([]byte(provider.transport.bodies[0]), &body); err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(body.Dimensions, []string{"SEARCH_APPEARANCE"}) ||
+		body.DimensionFilterGroups[0].Filters[0].Dimension != "SEARCH_APPEARANCE" || body.RowLimit != 2 {
+		t.Fatalf("unexpected request body: %#v", body)
 	}
 }
 
@@ -244,17 +329,19 @@ func TestSearchConsoleEmptyRowsAreSuccessful(t *testing.T) {
 	}
 }
 
-func TestSearchConsoleValidationRejectsPropertyPathTricksBeforeProviderAcquisition(t *testing.T) {
+func TestSearchConsoleValidationHappensBeforeProviderAcquisition(t *testing.T) {
 	t.Parallel()
 
 	for _, raw := range []string{
-		`{"account_id":"a","site_url":"sc-domain:example.com/path","start_date":"2026-09-01","end_date":"2026-09-07"}`,
-		`{"account_id":"a","site_url":"https://example.com/../","start_date":"2026-09-01","end_date":"2026-09-07"}`,
-		`{"account_id":"a","site_url":"https://example.com/%2Fpath","start_date":"2026-09-01","end_date":"2026-09-07"}`,
-		`{"account_id":"a","site_url":"https://user@example.com/","start_date":"2026-09-01","end_date":"2026-09-07"}`,
+		`{"account_id":"a","site_url":"ftp://example.com/","start_date":"2026-09-01","end_date":"2026-09-07"}`,
+		`{"account_id":"a","site_url":"sc-domain:","start_date":"2026-09-01","end_date":"2026-09-07"}`,
+		`{"account_id":"a","site_url":"https://","start_date":"2026-09-01","end_date":"2026-09-07"}`,
 		`{"account_id":"a","site_url":"https://example.com/","start_date":"2026-09-07","end_date":"2026-09-01"}`,
-		`{"account_id":"a","site_url":"https://example.com/","start_date":"2026-09-01","end_date":"2026-09-07","dimensions":"query"}`,
+		`{"account_id":"a","site_url":"https://example.com/","start_date":"2026-09-01","end_date":"2026-09-07","dimensions":["invalid"]}`,
+		`{"account_id":"a","site_url":"https://example.com/","start_date":"2026-09-01","end_date":"2026-09-07","filters":[{"dimension":"date","operator":"equals","expression":"2026-09-01"}]}`,
 		`{"account_id":"a","site_url":"https://example.com/","start_date":"2026-09-01","end_date":"2026-09-07","filters":[{"dimension":"query","operator":"regex","expression":"x"}]}`,
+		`{"account_id":"a","site_url":"https://example.com/","start_date":"2026-09-01","end_date":"2026-09-07","row_limit":-1}`,
+		`{"account_id":"a","site_url":"https://example.com/","start_date":"2026-09-01","end_date":"2026-09-07","start_row":9223372036854775807}`,
 		`{"account_id":"a","site_url":"https://example.com/","start_date":"2026-09-01","end_date":"2026-09-07","row_limit":1001}`,
 	} {
 		operation, provider := fixture(t, "searchconsole_query", `{}`)

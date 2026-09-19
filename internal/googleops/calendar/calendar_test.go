@@ -172,22 +172,24 @@ func TestCalendarInputSchemasMatchFrozenRequests(t *testing.T) {
 	}
 }
 
-func TestCalendarListEventsPreservesAllDayAndRecurrence(t *testing.T) {
+func TestCalendarListEventsPreservesAllDayExpandedRecurrenceInstances(t *testing.T) {
 	t.Parallel()
 	operation, provider := fixture(t, "calendar_list_events", `{
 		"summary": "Work", "timeZone": "America/Chicago", "accessRole": "reader", "nextPageToken": "events-next",
 		"items": [
 			{
-				"id": "all-day", "summary": "Travel", "transparency": "opaque",
+				"id": "all-day-instance", "summary": "Travel", "transparency": "opaque",
+				"recurringEventId": "travel-series",
 				"start": {"date": "2026-11-01", "timeZone": "America/Chicago"},
 				"end": {"date": "2026-11-02", "timeZone": "America/Chicago"},
-				"recurrence": ["RRULE:FREQ=DAILY;COUNT=1"]
+				"originalStartTime": {"date": "2026-11-01", "timeZone": "America/Chicago"}
 			},
 			{
-				"id": "instance", "recurringEventId": "all-day",
+				"id": "timed-instance", "summary": "Travel review",
+				"recurringEventId": "review-series",
 				"start": {"dateTime": "2026-11-01T09:00:00-05:00", "timeZone": "America/Chicago"},
 				"end": {"dateTime": "2026-11-01T09:30:00-05:00", "timeZone": "America/Chicago"},
-				"originalStartTime": {"date": "2026-11-01", "timeZone": "America/Chicago"}
+				"originalStartTime": {"dateTime": "2026-11-01T09:00:00-05:00", "timeZone": "America/Chicago"}
 			}
 		]
 	}`)
@@ -207,14 +209,16 @@ func TestCalendarListEventsPreservesAllDayAndRecurrence(t *testing.T) {
 
 	first := out.Data.Events[0]
 	if !first.AllDay || first.Start.Date != "2026-11-01" || first.Start.DateTime != "" ||
-		first.End.Date != "2026-11-02" || len(first.Recurrence) != 1 {
-		t.Fatalf("all-day event was not preserved: %#v", first)
+		first.End.Date != "2026-11-02" || first.RecurringEventID != "travel-series" ||
+		first.OriginalStart == nil || first.OriginalStart.Date != "2026-11-01" || len(first.Recurrence) != 0 {
+		t.Fatalf("all-day expanded instance was not preserved: %#v", first)
 	}
 
 	second := out.Data.Events[1]
-	if second.RecurringEventID != "all-day" || second.OriginalStart == nil ||
+	if second.RecurringEventID != "review-series" || second.OriginalStart == nil ||
+		second.OriginalStart.DateTime != "2026-11-01T09:00:00-05:00" ||
 		second.Start.DateTime != "2026-11-01T09:00:00-05:00" || second.Start.TimeZone != "America/Chicago" {
-		t.Fatalf("recurrence instance was not preserved: %#v", second)
+		t.Fatalf("timed expanded instance was not preserved: %#v", second)
 	}
 
 	req := provider.transport.requests[0]
