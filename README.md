@@ -5,7 +5,7 @@
 
 Fast, script-friendly CLI for Gmail, Calendar, Chat, Classroom, Drive, Docs, Slides, Sheets, Contacts, Tasks, People, Groups (Workspace), and Keep (Workspace-only). JSON-first output, multiple accounts, and least-privilege auth built in.
 
-The [native Google MCP implementation plan](docs/plans/native-google-mcp.html) owns the direct-API agent interface, performance evaluation, and migration gates. A native Go MCP read-only preview is under integration on this branch; it preserves the existing CLI. See the plan's [local implementation evidence](docs/plans/native-google-mcp.html#implementation) for verified progress and remaining rollout gates.
+The [native Google MCP implementation plan](docs/plans/native-google-mcp.html) owns the direct-API agent interface, performance evaluation, and migration gates. A native Go MCP read-only preview is implemented and locally verified on this branch; it preserves the existing CLI. See the plan's [local implementation evidence](docs/plans/native-google-mcp.html#implementation) for verified progress and remaining rollout gates.
 
 ## Features
 
