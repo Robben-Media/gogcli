@@ -1,16 +1,23 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/alecthomas/kong"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/steipete/gogcli/internal/accountconnect"
+	"github.com/steipete/gogcli/internal/googleops/gmail"
 	"github.com/steipete/gogcli/internal/mcpcontract"
+	"github.com/steipete/gogcli/internal/mcpserver"
 )
 
 func TestLoadGrantsRequiresAllowOrFile(t *testing.T) {
@@ -173,5 +180,68 @@ func TestLoadGrantsUnknownOperation(t *testing.T) {
 	_, _, err := loadGrants(cli{AllowOperations: "gmail_serach"}, "local")
 	if err == nil {
 		t.Fatal("unknown allow operation must fail")
+	}
+}
+
+func TestRuntimePublishedBeforeConnectListener(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	registry := accountconnect.NewMemoryRegistry()
+	syncer := &toolSyncInvalidator{}
+	runtime, err := mcpserver.New(mcpserver.Config{
+		Principal: mcpcontract.Principal{ID: "fixture"},
+		Grants: []mcpcontract.Grant{{
+			PrincipalID: "fixture", AccountIDs: []string{"account"}, ClientNames: []string{"native-mcp"},
+			Operations: []string{"gmail_search"},
+		}},
+		AllowOperations: []string{"accounts_list", "gmail_search"},
+		Operations:      gmail.Operations(nil),
+		Accounts:        registryAccounts{registry: registry},
+		Logger:          slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	syncer.runtime.Store(runtime)
+	if stored := syncer.runtime.Load(); stored != runtime {
+		t.Fatal("runtime was not published before connect startup")
+	}
+
+	if err = registry.Upsert(ctx, accountconnect.Record{
+		AccountID: "account", Subject: "subject-account", Email: "account@example.test", Label: "Account",
+		PrincipalID: "fixture", ClientName: "native-mcp", AuthMode: accountconnect.AuthModeOAuth,
+		Scopes: []string{mcpcontract.GmailReadScope}, Generation: 1, State: accountconnect.RecordStateActive,
+		UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	syncer.ConnectionsChanged()
+
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	serverSession, err := runtime.Server().Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer serverSession.Close()
+	client := mcp.NewClient(&mcp.Implementation{Name: "startup-fixture", Version: "test"}, nil)
+	session, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+
+	tools, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sawGmailSearch bool
+	for _, tool := range tools.Tools {
+		sawGmailSearch = sawGmailSearch || tool.Name == "gmail_search"
+	}
+	if !sawGmailSearch {
+		t.Fatalf("connect event dropped after runtime publication: tools %#v", tools.Tools)
 	}
 }

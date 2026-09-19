@@ -28,10 +28,9 @@ type metaToken struct {
 }
 
 type metaTokenStore struct {
-	inner      *accountconnect.MemoryTokenStore
-	mu         sync.Mutex
-	extra      map[string]metaToken
-	beforeSwap func()
+	inner *accountconnect.MemoryTokenStore
+	mu    sync.Mutex
+	extra map[string]metaToken
 }
 
 func newMetaTokenStore() *metaTokenStore {
@@ -67,39 +66,6 @@ func (s *metaTokenStore) Put(ctx context.Context, clientName, email, token strin
 	}
 
 	return nil
-}
-
-func (s *metaTokenStore) CompareAndSwap(ctx context.Context, clientName, email, expected, next string, scopes []string) (bool, error) {
-	if s.beforeSwap != nil {
-		s.beforeSwap()
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	current, _, err := s.inner.Get(ctx, clientName, email)
-	if err != nil {
-		if accountconnect.IsTokenNotFound(err) {
-			return false, nil
-		}
-
-		return false, fmt.Errorf("cas get: %w", err)
-	}
-
-	if current != expected {
-		return false, nil
-	}
-
-	key := s.key(clientName, email)
-	if extra, ok := s.extra[key]; ok {
-		s.extra[key] = extra
-	}
-
-	if err := s.inner.Put(ctx, clientName, email, next, scopes); err != nil {
-		return false, fmt.Errorf("cas put: %w", err)
-	}
-
-	return true, nil
 }
 
 func (s *metaTokenStore) Delete(ctx context.Context, clientName, email string) error {

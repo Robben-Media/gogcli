@@ -454,12 +454,11 @@ func (c *Controller) CompleteCallback(ctx context.Context, req CallbackRequest) 
 
 	committed, cleanupPending, err := c.persistConnection(ctx, rec, refresh, previousEmail)
 	c.lifecycle.Unlock()
+	c.notifyConnectionsChanged()
 
 	if err != nil {
 		return CallbackResult{}, err
 	}
-
-	c.notifyConnectionsChanged()
 
 	result := CallbackResult{Account: accountView(committed), Created: created, CleanupPending: cleanupPending}
 	if cleanupPending {
@@ -493,7 +492,7 @@ func (c *Controller) persistConnection(ctx context.Context, rec Record, refresh,
 		rec.Cleanup = &Cleanup{Kind: CleanupTokenKey, ClientName: rec.ClientName, Email: previousEmail}
 	}
 
-	committed, previous, existed, err := c.registry.Commit(ctx, rec)
+	committed, _, existed, err := c.registry.Commit(ctx, rec)
 	if err != nil {
 		return Record{}, false, fmt.Errorf("persist account: %w", err)
 	}
@@ -505,22 +504,9 @@ func (c *Controller) persistConnection(ctx context.Context, rec Record, refresh,
 	if putErr := c.tokens.Put(ctx, committed.ClientName, committed.Email, refresh, committed.Scopes); putErr != nil {
 		c.invalidator.InvalidateAccount(committed.AccountID)
 
-		if tokenMutationUnknown(putErr) {
-			return committed, true, fmt.Errorf("store refresh token: %w", putErr)
-		}
-
-		var rollErr error
-		if existed {
-			rollErr = c.registry.Upsert(ctx, previous)
-		} else {
-			rollErr = c.registry.Delete(ctx, committed.AccountID)
-		}
-
-		if rollErr != nil {
-			return Record{}, false, fmt.Errorf("store refresh token: %w (rollback: %w)", putErr, rollErr)
-		}
-
-		return Record{}, false, fmt.Errorf("store refresh token: %w", putErr)
+		// Protected stores can mutate before returning an error. Keep the
+		// committed pending row and cleanup intent until reconnect recovers it.
+		return committed, true, fmt.Errorf("store refresh token: %w", putErr)
 	}
 
 	committed.State = RecordStateActive

@@ -293,7 +293,3 @@ func (s *SecretsTokenStore) Delete(ctx context.Context, clientName, email string
 func IsTokenNotFound(err error) bool {
 	return errors.Is(err, errTokenNotFound)
 }
-
-func tokenMutationUnknown(err error) bool {
-	return err != nil && (errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) || errors.Is(err, ErrTokenStoreUnavailable))
-}

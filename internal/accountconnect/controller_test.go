@@ -1152,7 +1152,7 @@ func TestPutTimeoutKeepsPendingRekeyCleanup(t *testing.T) {
 	}
 
 	cbErr := <-done
-	if !tokenMutationUnknown(cbErr) {
+	if !errors.Is(cbErr, context.DeadlineExceeded) {
 		t.Fatalf("expected unknown put: %v", cbErr)
 	}
 
@@ -1301,5 +1301,102 @@ func TestDisconnectLocalFailureWithoutTokenNotRevokedRemote(t *testing.T) {
 	got, discErr := ctrl.Disconnect(ctx, DisconnectRequest{PrincipalID: "jeremy", AccountID: rec.AccountID})
 	if discErr == nil || got.RevokedRemote || !got.Retryable {
 		t.Fatalf("missing token local failure: %+v err=%v", got, discErr)
+	}
+}
+
+var errMutatedPut = errors.New("put reported failure after mutation")
+
+type mutatingPutStore struct {
+	inner    *MemoryTokenStore
+	failNext bool
+}
+
+func (s *mutatingPutStore) Get(ctx context.Context, clientName, email string) (string, []string, error) {
+	token, scopes, err := s.inner.Get(ctx, clientName, email)
+	if err != nil {
+		return "", nil, fmt.Errorf("mutating get: %w", err)
+	}
+
+	return token, scopes, nil
+}
+
+func (s *mutatingPutStore) Put(ctx context.Context, clientName, email, token string, scopes []string) error {
+	if err := s.inner.Put(ctx, clientName, email, token, scopes); err != nil {
+		return fmt.Errorf("mutating put: %w", err)
+	}
+
+	if s.failNext {
+		return errMutatedPut
+	}
+
+	return nil
+}
+
+func (s *mutatingPutStore) Delete(ctx context.Context, clientName, email string) error {
+	if err := s.inner.Delete(ctx, clientName, email); err != nil {
+		return fmt.Errorf("mutating delete: %w", err)
+	}
+
+	return nil
+}
+
+func TestPutErrorAfterMutationLeavesPendingAndNotifies(t *testing.T) {
+	provider := &fakeProvider{}
+	tokens := &mutatingPutStore{inner: NewMemoryTokenStore(), failNext: true}
+	inv := &recordingInvalidator{}
+
+	ctrl, err := NewController(Options{
+		Registry: NewMemoryRegistry(), Tokens: tokens, OAuth: provider, Invalidator: inv,
+		Credentials: func(string) (ClientCredentials, error) {
+			return ClientCredentials{ClientID: "id", ClientSecret: "secret"}, nil
+		},
+		Now:         func() time.Time { return time.Date(2026, 9, 18, 12, 0, 0, 0, time.UTC) },
+		RedirectURL: "http://127.0.0.1:9/oauth/callback",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	inv.life = ctrl.Lifecycle()
+	ctx := t.Context()
+
+	started, err := ctrl.StartConnect(ctx, ConnectRequest{PrincipalID: "jeremy"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider.exchange = func(ExchangeParams) (TokenSet, error) {
+		return TokenSet{RefreshToken: "new-token", Subject: "subject", Email: "me@example.test", Scopes: []string{mcpcontractGmail(), "https://www.googleapis.com/auth/calendar.readonly"}}, nil
+	}
+
+	if _, cbErr := ctrl.CompleteCallback(ctx, CallbackRequest{Code: "c", State: started.SessionID, BrowserID: started.SessionID, RedirectURL: ctrl.RedirectURL()}); !errors.Is(cbErr, errMutatedPut) {
+		t.Fatalf("callback: %v", cbErr)
+	}
+
+	if inv.notify == 0 {
+		t.Fatal("durable pending change did not notify")
+	}
+
+	for _, held := range inv.notifyHeld {
+		if held {
+			t.Fatal("ConnectionsChanged ran while Lifecycle was held")
+		}
+	}
+
+	recs, err := ctrl.registry.List(ctx, "jeremy")
+	if err != nil || len(recs) != 1 {
+		t.Fatalf("records: %v %v", recs, err)
+	}
+
+	stored := recs[0]
+	if stored.State != RecordStatePending || len(stored.Scopes) != 2 {
+		t.Fatalf("expected pending new grant: %+v", stored)
+	}
+
+	if _, getErr := ctrl.GetRecord(ctx, stored.AccountID); !errors.Is(getErr, ErrAccountUnavailable) {
+		t.Fatalf("pending remained usable: %v", getErr)
+	}
+
+	token, scopes, err := tokens.inner.Get(ctx, stored.ClientName, stored.Email)
+	if err != nil || token != "new-token" || len(scopes) != 2 {
+		t.Fatalf("token=%q scopes=%v err=%v", token, scopes, err)
 	}
 }

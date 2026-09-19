@@ -133,26 +133,6 @@ func serve(flags cli, logger *slog.Logger) error {
 
 	syncer := &toolSyncInvalidator{inner: provider}
 
-	var connectSrv *http.Server
-	if strings.TrimSpace(flags.ConnectAddr) != "" {
-		if verr := validateConnectAddr(flags.ConnectAddr); verr != nil {
-			return verr
-		}
-
-		connectSrv, err = startConnectServer(flags, principal, registry, tokens, syncer, lifecycle, logger)
-		if err != nil {
-			return err
-		}
-	}
-
-	if connectSrv != nil {
-		defer func() {
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_ = connectSrv.Shutdown(shutdownCtx)
-		}()
-	}
-
 	runtime, err := mcpserver.New(mcpserver.Config{
 		Name:            "gog-mcp",
 		Version:         defaultVersion,
@@ -171,8 +151,25 @@ func serve(flags cli, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("start mcp runtime: %w", err)
 	}
-
 	syncer.runtime.Store(runtime)
+
+	var connectSrv *http.Server
+	if strings.TrimSpace(flags.ConnectAddr) != "" {
+		if verr := validateConnectAddr(flags.ConnectAddr); verr != nil {
+			return verr
+		}
+
+		connectSrv, err = startConnectServer(flags, principal, registry, tokens, syncer, lifecycle, logger)
+		if err != nil {
+			return err
+		}
+
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = connectSrv.Shutdown(shutdownCtx)
+		}()
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
