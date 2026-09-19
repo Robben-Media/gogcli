@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -182,14 +183,19 @@ func (p *NativeProvider) HTTPClient(ctx context.Context, id mcpcontract.Identity
 		return nil, err
 	}
 
-	err = nativeRequireScopes(id.Scopes, def.Scopes)
+	err = p.lockLifecycle(ctx)
 	if err != nil {
+		return nil, NativePublicError(err)
+	}
+
+	rec, err := p.liveRecord(ctx, id)
+	if err != nil {
+		p.unlockLifecycle()
+
 		return nil, err
 	}
 
-	p.lockLifecycle()
-
-	rec, err := p.liveRecord(ctx, id)
+	err = nativeRequireScopes(rec.Scopes, def.Scopes)
 	if err != nil {
 		p.unlockLifecycle()
 
@@ -204,10 +210,10 @@ func (p *NativeProvider) HTTPClient(ctx context.Context, id mcpcontract.Identity
 	}
 
 	return &http.Client{
-		Transport: &nativeSlotTransport{
-			slots: p.slots,
-			base: &nativeAuthTransport{
-				source: cached.source,
+		Transport: &nativeAuthTransport{
+			source: cached.source,
+			base: &nativeSlotTransport{
+				slots: p.slots,
 				base: &NativeRetryTransport{
 					Base:          p.pool,
 					Class:         def.Retry,
@@ -255,10 +261,26 @@ func (p *NativeProvider) accountFenced(accountID string, fence uint64) bool {
 	return p.accountFence(accountID) != fence
 }
 
-func (p *NativeProvider) lockLifecycle() {
-	if p != nil {
-		p.lifecycle.Lock()
+func (p *NativeProvider) lockLifecycle(ctx context.Context) error {
+	if p == nil {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("googleapi: lifecycle: %w", err)
+		}
+
+		return nil
 	}
+
+	if err := p.lifecycle.Lock(ctx); err != nil {
+		return fmt.Errorf("googleapi: lifecycle: %w", err)
+	}
+
+	if err := ctx.Err(); err != nil {
+		p.lifecycle.Unlock()
+
+		return fmt.Errorf("googleapi: lifecycle: %w", err)
+	}
+
+	return nil
 }
 
 func (p *NativeProvider) unlockLifecycle() {
@@ -310,7 +332,11 @@ func nativeValidateIdentity(id mcpcontract.Identity) error {
 
 func nativeRequireScopes(granted, required []string) error {
 	for _, scope := range required {
-		if !nativeScopeGranted(granted, scope) {
+		if strings.TrimSpace(scope) == "" {
+			continue
+		}
+
+		if !mcpcontract.ScopeGranted(granted, scope) {
 			return &mcpcontract.Error{
 				Category:  mcpcontract.InsufficientScope,
 				Message:   nativeScopeMessage,
@@ -320,39 +346,6 @@ func nativeRequireScopes(granted, required []string) error {
 	}
 
 	return nil
-}
-
-func nativeScopeGranted(granted []string, required string) bool {
-	required = strings.TrimSpace(required)
-	if required == "" {
-		return true
-	}
-
-	for _, scope := range granted {
-		scope = strings.TrimSpace(scope)
-		if scope == required {
-			return true
-		}
-
-		for _, covered := range explicitScopeSupersets[scope] {
-			if covered == required {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-var explicitScopeSupersets = map[string][]string{
-	"https://mail.google.com/":                     {mcpcontract.GmailReadScope},
-	"https://www.googleapis.com/auth/gmail.modify": {mcpcontract.GmailReadScope},
-	"https://www.googleapis.com/auth/drive":        {mcpcontract.DriveReadScope},
-	"https://www.googleapis.com/auth/documents":    {mcpcontract.DocsReadScope},
-	"https://www.googleapis.com/auth/calendar":     {mcpcontract.CalendarReadScope},
-	"https://www.googleapis.com/auth/spreadsheets": {mcpcontract.SheetsReadScope},
-	"https://www.googleapis.com/auth/webmasters":   {mcpcontract.SearchConsoleReadScope},
-	"https://www.googleapis.com/auth/analytics":    {mcpcontract.AnalyticsReadScope},
 }
 
 func (p *NativeProvider) liveRecord(ctx context.Context, id mcpcontract.Identity) (accountconnect.Record, error) {
@@ -365,7 +358,7 @@ func (p *NativeProvider) liveRecord(ctx context.Context, id mcpcontract.Identity
 		return accountconnect.Record{}, &mcpcontract.Error{Category: mcpcontract.AuthRequired, Message: nativeAuthMessage}
 	}
 
-	if rec.Generation != id.Generation || rec.Subject != id.Subject || rec.ClientName != id.ClientName || rec.Email != id.Email || rec.AuthMode != id.AuthMode {
+	if rec.Generation != id.Generation || rec.Subject != id.Subject || rec.ClientName != id.ClientName || rec.Email != id.Email || rec.AuthMode != id.AuthMode || rec.PrincipalID != id.PrincipalID {
 		return accountconnect.Record{}, &mcpcontract.Error{Category: mcpcontract.AuthRequired, Message: nativeAuthMessage}
 	}
 
@@ -387,6 +380,8 @@ func identityCacheKey(id mcpcontract.Identity) string {
 	return strings.Join([]string{
 		id.AccountID,
 		id.Subject,
+		id.Email,
+		id.PrincipalID,
 		id.ClientName,
 		id.AuthMode,
 		strings.Join(scopes, " "),

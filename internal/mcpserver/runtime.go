@@ -36,6 +36,7 @@ func New(cfg Config) (*Runtime, error) {
 	if principalID == "" {
 		return nil, errPrincipalRequired
 	}
+
 	if cfg.Accounts == nil {
 		return nil, errAccountSource
 	}
@@ -44,6 +45,7 @@ func New(cfg Config) (*Runtime, error) {
 	if name == "" {
 		name = defaultName
 	}
+
 	version := strings.TrimSpace(cfg.Version)
 	if version == "" {
 		version = defaultVersion
@@ -53,10 +55,12 @@ func New(cfg Config) (*Runtime, error) {
 	if timeout <= 0 {
 		timeout = defaultRequestTimeout
 	}
+
 	maxConcurrency := cfg.MaxConcurrency
 	if maxConcurrency <= 0 {
 		maxConcurrency = defaultMaxConcurrency
 	}
+
 	maxBody := cfg.MaxBodyBytes
 	if maxBody <= 0 {
 		maxBody = defaultMaxBodyBytes
@@ -123,9 +127,12 @@ func (rt *Runtime) ReplaceAccess(snapshot access.Snapshot) {
 // ReloadAccess validates the candidate snapshot against the live registry
 // before publishing it. On failure the previous snapshot and tool catalog stay.
 func (rt *Runtime) ReloadAccess(snapshot access.Snapshot) error {
+	rt.toolsMu.Lock()
+	defer rt.toolsMu.Unlock()
+
 	probe, err := rt.authorizer.Preview(snapshot)
 	if err != nil {
-		return err
+		return fmt.Errorf("preview access: %w", err)
 	}
 
 	wanted, wantedSet, err := rt.collectWanted(probe)
@@ -148,6 +155,9 @@ func (rt *Runtime) ResyncTools() {
 }
 
 func (rt *Runtime) syncTools() error {
+	rt.toolsMu.Lock()
+	defer rt.toolsMu.Unlock()
+
 	wanted, wantedSet, err := rt.collectWanted(rt.authorizer)
 	if err != nil {
 		return err
@@ -162,7 +172,7 @@ func (rt *Runtime) collectWanted(authorizer *access.Authorizer) ([]string, map[s
 
 	visible, err := authorizer.Visible(rt.principal, accountsListName)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("account tool visibility: %w", err)
 	}
 
 	if visible {
@@ -177,7 +187,7 @@ func (rt *Runtime) collectWanted(authorizer *access.Authorizer) ([]string, map[s
 
 		ok, visErr := authorizer.Visible(rt.principal, operation.Definition.Name)
 		if visErr != nil {
-			return nil, nil, visErr
+			return nil, nil, fmt.Errorf("google tool visibility: %w", visErr)
 		}
 
 		if ok {
@@ -190,9 +200,6 @@ func (rt *Runtime) collectWanted(authorizer *access.Authorizer) ([]string, map[s
 }
 
 func (rt *Runtime) applyWanted(wanted []string, wantedSet map[string]struct{}) error {
-	rt.toolsMu.Lock()
-	defer rt.toolsMu.Unlock()
-
 	for _, name := range wanted {
 		if _, ok := rt.registered[name]; ok {
 			continue
@@ -257,6 +264,7 @@ func (rt *Runtime) withTimeout(ctx context.Context) (context.Context, context.Ca
 		if remaining <= 0 {
 			return context.WithTimeout(ctx, time.Nanosecond)
 		}
+
 		if remaining < timeout {
 			timeout = remaining
 		}

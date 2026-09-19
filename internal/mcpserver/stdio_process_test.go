@@ -23,7 +23,7 @@ func TestNativeStdioHelper(t *testing.T) {
 
 	provider := &countingProvider{}
 
-	runtime, err := mcpserver.New(fixtureConfig(provider, []mcpcontract.Operation{fakeSearch(provider)}))
+	runtime, err := mcpserver.New(fixtureConfig([]mcpcontract.Operation{fakeSearch(provider)}))
 	if err != nil {
 		t.Fatal(err)
 	}

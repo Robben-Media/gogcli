@@ -48,9 +48,7 @@ type ExchangeParams struct {
 
 // TokenSet is the provider result. Tokens must not be returned through MCP or UI JSON.
 type TokenSet struct {
-	AccessToken  string
 	RefreshToken string
-	IDToken      string
 	Scopes       []string
 	Subject      string
 	Email        string
@@ -197,9 +195,7 @@ func (p *GoogleProvider) Exchange(ctx context.Context, params ExchangeParams) (T
 	}
 
 	return TokenSet{
-		AccessToken:  tok.AccessToken,
 		RefreshToken: tok.RefreshToken,
-		IDToken:      raw,
 		Scopes:       splitScopes(tok.Extra("scope")),
 		Subject:      subject,
 		Email:        email,

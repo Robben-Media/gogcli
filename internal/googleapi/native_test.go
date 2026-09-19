@@ -28,9 +28,10 @@ type metaToken struct {
 }
 
 type metaTokenStore struct {
-	inner *accountconnect.MemoryTokenStore
-	mu    sync.Mutex
-	extra map[string]metaToken
+	inner      *accountconnect.MemoryTokenStore
+	mu         sync.Mutex
+	extra      map[string]metaToken
+	beforeSwap func()
 }
 
 func newMetaTokenStore() *metaTokenStore {
@@ -66,6 +67,39 @@ func (s *metaTokenStore) Put(ctx context.Context, clientName, email, token strin
 	}
 
 	return nil
+}
+
+func (s *metaTokenStore) CompareAndSwap(ctx context.Context, clientName, email, expected, next string, scopes []string) (bool, error) {
+	if s.beforeSwap != nil {
+		s.beforeSwap()
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	current, _, err := s.inner.Get(ctx, clientName, email)
+	if err != nil {
+		if accountconnect.IsTokenNotFound(err) {
+			return false, nil
+		}
+
+		return false, fmt.Errorf("cas get: %w", err)
+	}
+
+	if current != expected {
+		return false, nil
+	}
+
+	key := s.key(clientName, email)
+	if extra, ok := s.extra[key]; ok {
+		s.extra[key] = extra
+	}
+
+	if err := s.inner.Put(ctx, clientName, email, next, scopes); err != nil {
+		return false, fmt.Errorf("cas put: %w", err)
+	}
+
+	return true, nil
 }
 
 func (s *metaTokenStore) Delete(ctx context.Context, clientName, email string) error {
@@ -435,7 +469,10 @@ func TestNativeHTTPClientGenerationDisconnectAndNoResurrection(t *testing.T) {
 		t.Fatal("refresh did not start")
 	}
 
-	fx.life.Lock()
+	if err := fx.life.Lock(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
 	fx.provider.InvalidateAccount(id.AccountID)
 
 	if err := fx.registry.Delete(context.Background(), id.AccountID); err != nil {
@@ -854,4 +891,50 @@ func isCategory(err error, category mcpcontract.ErrorCategory) bool {
 	}
 
 	return safe.Category == category
+}
+
+func TestNativeHTTPClientUsesLiveScopesAndPrincipal(t *testing.T) {
+	fx := newNativeFixture(t, 3600)
+	id := fx.putAccount(t, "acct-authz", "sub-authz", "authz@gmail.com", "personal", []string{mcpcontract.GmailReadScope}, "rt-authz")
+	forged := id
+	forged.PrincipalID = "other-principal"
+	forged.Scopes = []string{mcpcontract.GmailReadScope, mcpcontract.DriveReadScope}
+	opts := mcpcontract.CallOptions{Operation: "drive_search", Retry: mcpcontract.SafeRead}
+
+	if _, err := fx.provider.HTTPClient(context.Background(), forged, opts); !isCategory(err, mcpcontract.AuthRequired) {
+		t.Fatalf("forged principal err = %v", err)
+	}
+
+	id.Scopes = []string{mcpcontract.GmailReadScope, mcpcontract.DriveReadScope}
+	if _, err := fx.provider.HTTPClient(context.Background(), id, opts); !isCategory(err, mcpcontract.InsufficientScope) {
+		t.Fatalf("snapshot scope expansion err = %v", err)
+	}
+}
+
+func TestNativeHTTPClientRespectsExpiredContextAfterLock(t *testing.T) {
+	fx := newNativeFixture(t, 3600)
+	id := fx.putAccount(t, "acct-lock", "sub-lock", "lock@gmail.com", "personal", []string{mcpcontract.GmailReadScope}, "rt-lock")
+
+	if err := fx.life.Lock(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	time.Sleep(30 * time.Millisecond)
+	done := make(chan error, 1)
+
+	go func() {
+		_, err := fx.provider.HTTPClient(ctx, id, mcpcontract.CallOptions{Operation: "gmail_search", Retry: mcpcontract.SafeRead})
+		done <- err
+	}()
+
+	time.Sleep(20 * time.Millisecond)
+	fx.life.Unlock()
+
+	err := <-done
+	if !isCategory(err, mcpcontract.DeadlineExceeded) {
+		t.Fatalf("expired lock wait err = %v", err)
+	}
 }

@@ -29,7 +29,6 @@ type Config struct {
 	AllowOperations []string
 	Operations      []mcpcontract.Operation
 	Accounts        access.AccountSource
-	Provider        mcpcontract.ClientProvider
 	Logger          *slog.Logger
 	RequestTimeout  time.Duration
 	MaxConcurrency  int

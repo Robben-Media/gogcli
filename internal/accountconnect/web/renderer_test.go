@@ -60,7 +60,7 @@ func TestRenderAccountsTwoAccountsFormsAndEscaping(t *testing.T) {
 		ClientName:            `trusted-bucket <client>`,
 		RequestedCapabilities: []string{"gmail.read", "calendar.read", "unexpected <capability>"},
 		ScopeChoices: []accountconnect.ScopeChoice{
-			{Capability: "gmail.read", Scope: "https://www.googleapis.com/auth/gmail.readonly", Required: true},
+			{Capability: "gmail.read", Scope: "https://www.googleapis.com/auth/gmail.readonly"},
 			{Capability: "calendar.read", Scope: "https://www.googleapis.com/auth/calendar.readonly"},
 			{Capability: "unexpected <capability>", Scope: "https://example.test/unexpected <scope>"},
 		},
@@ -116,8 +116,8 @@ func TestRenderAccountsTwoAccountsFormsAndEscaping(t *testing.T) {
 		t.Fatalf("capability content was not escaped: %s", body)
 	}
 
-	if !strings.Contains(body, `<input id="scope-0" type="checkbox" checked disabled>`) {
-		t.Fatal("default Gmail capability is not shown as always included")
+	if !strings.Contains(body, `<input id="scope-0" type="checkbox" name="capabilities" value="gmail.read" checked>`) {
+		t.Fatal("Gmail capability is not selectable and checked")
 	}
 
 	if !strings.Contains(body, `<input id="scope-1" type="checkbox" name="capabilities" value="calendar.read" checked>`) {
@@ -126,6 +126,10 @@ func TestRenderAccountsTwoAccountsFormsAndEscaping(t *testing.T) {
 
 	if !strings.Contains(body, `<input id="reconnect-0-scope-0" type="checkbox" name="capabilities" value="calendar.read">`) {
 		t.Fatal("reconnect form does not offer an ungranted capability")
+	}
+
+	if !strings.Contains(body, `<input id="reconnect-1-scope-0" type="checkbox" name="capabilities" value="gmail.read">`) {
+		t.Fatal("reconnect form does not offer ungranted Gmail access")
 	}
 
 	if !strings.Contains(body, "Connect another account") || !strings.Contains(body, "Work") {
@@ -154,7 +158,7 @@ func TestRenderAccountsTwoAccountsFormsAndEscaping(t *testing.T) {
 
 	hiddenField := regexp.MustCompile(`<input type="hidden" name="([^"]+)"`)
 	for _, match := range hiddenField.FindAllStringSubmatch(body, -1) {
-		if match[1] != "csrf_token" && match[1] != "account_id" {
+		if match[1] != "csrf_token" && match[1] != "account_id" && match[1] != "capabilities" {
 			t.Fatalf("unexpected hidden form field %q", match[1])
 		}
 	}
@@ -197,7 +201,7 @@ func TestRenderAccountsEmptyAndServerScopeChoices(t *testing.T) {
 		ClientName:            "trusted-bucket",
 		RequestedCapabilities: []string{"gmail.read"},
 		ScopeChoices: []accountconnect.ScopeChoice{
-			{Capability: "gmail.read", Scope: "https://www.googleapis.com/auth/gmail.readonly", Required: true},
+			{Capability: "gmail.read", Scope: "https://www.googleapis.com/auth/gmail.readonly"},
 			{Capability: "calendar.read", Scope: "https://www.googleapis.com/auth/calendar.readonly"},
 		},
 	}
@@ -213,12 +217,12 @@ func TestRenderAccountsEmptyAndServerScopeChoices(t *testing.T) {
 		t.Fatalf("empty state is missing: %s", body)
 	}
 
-	if !strings.Contains(body, "Access Google will request") || !strings.Contains(body, "Gmail read (always included)") {
+	if !strings.Contains(body, "Access Google will request") || strings.Contains(body, "always included") {
 		t.Fatalf("server scope choices are missing: %s", body)
 	}
 
-	if got := strings.Count(body, `<input id="scope-0" type="checkbox" checked disabled>`); got != 1 {
-		t.Fatalf("included capability markup count = %d, want 1", got)
+	if got := strings.Count(body, `<input id="scope-0" type="checkbox" name="capabilities" value="gmail.read" checked>`); got != 1 {
+		t.Fatalf("default Gmail capability markup count = %d, want 1", got)
 	}
 
 	if !strings.Contains(body, `<input id="scope-1" type="checkbox" name="capabilities" value="calendar.read">`) {
@@ -234,6 +238,60 @@ func TestRenderAccountsEmptyAndServerScopeChoices(t *testing.T) {
 	}
 }
 
+func TestRenderCalendarOnlyDoesNotForceGmail(t *testing.T) {
+	renderer, err := NewRenderer()
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+
+	page := accountconnect.PageModel{
+		CSRFToken:             "csrf",
+		RequestedCapabilities: []string{"calendar.read"},
+		ScopeChoices: []accountconnect.ScopeChoice{
+			{Capability: "gmail.read", Required: true},
+			{Capability: "calendar.read"},
+		},
+		Accounts: []accountconnect.AccountView{{
+			AccountID:    "acct-calendar",
+			Email:        "calendar@example.test",
+			Label:        "Calendar",
+			State:        accountconnect.RecordStateActive,
+			Capabilities: []string{"calendar.read"},
+		}},
+	}
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/accounts", nil)
+
+	if err := renderer.RenderAccounts(recorder, request, page); err != nil {
+		t.Fatalf("RenderAccounts: %v", err)
+	}
+
+	body := recorder.Body.String()
+	if !strings.Contains(body, `<input id="scope-0" type="checkbox" name="capabilities" value="gmail.read">`) {
+		t.Fatalf("Gmail is not an unchecked connect choice: %s", body)
+	}
+
+	if !strings.Contains(body, `<input id="scope-1" type="checkbox" name="capabilities" value="calendar.read" checked>`) {
+		t.Fatalf("Calendar-only selection is missing: %s", body)
+	}
+
+	if !strings.Contains(body, `<input id="reconnect-0-scope-0" type="checkbox" name="capabilities" value="gmail.read">`) {
+		t.Fatalf("reconnect form does not offer Gmail as an extension: %s", body)
+	}
+
+	if got := strings.Count(body, `value="gmail.read"`); got != 2 {
+		t.Fatalf("Gmail capability value count = %d, want connect and reconnect only", got)
+	}
+
+	hiddenField := regexp.MustCompile(`<input type="hidden" name="([^"]+)"`)
+	for _, match := range hiddenField.FindAllStringSubmatch(body, -1) {
+		if match[1] != "csrf_token" && match[1] != "account_id" && match[1] != "capabilities" {
+			t.Fatalf("unexpected hidden form field %q", match[1])
+		}
+	}
+}
+
 func TestRenderAccountsRequiresCSRF(t *testing.T) {
 	renderer, err := NewRenderer()
 	if err != nil {
@@ -245,6 +303,101 @@ func TestRenderAccountsRequiresCSRF(t *testing.T) {
 
 	if err := renderer.RenderAccounts(recorder, request, accountconnect.PageModel{}); err == nil {
 		t.Fatal("RenderAccounts unexpectedly accepted an empty CSRF token")
+	}
+}
+
+func TestRenderAccountLifecycleStates(t *testing.T) {
+	tests := []struct {
+		name            string
+		state           accountconnect.RecordState
+		cleanupPending  bool
+		note            string
+		button          string
+		reconnectForms  int
+		disconnectForms int
+		showsGranted    bool
+		showsAddAccess  bool
+	}{
+		{
+			name:            "pending needs reconnect",
+			state:           accountconnect.RecordStatePending,
+			note:            "Connection interrupted. Reconnect to finish Google sign-in.",
+			button:          "Finish connection",
+			reconnectForms:  1,
+			disconnectForms: 0,
+		},
+		{
+			name:            "disconnecting retries disconnect",
+			state:           accountconnect.RecordStateDisconnecting,
+			note:            "Disconnect is pending. Retry disconnect to finish removing this account.",
+			button:          "Retry disconnect",
+			reconnectForms:  0,
+			disconnectForms: 1,
+		},
+		{
+			name:            "active cleanup debt remains granted",
+			state:           accountconnect.RecordStateActive,
+			cleanupPending:  true,
+			note:            "Connected. Previous credential cleanup is pending.",
+			button:          "Reconnect",
+			reconnectForms:  1,
+			disconnectForms: 1,
+			showsGranted:    true,
+			showsAddAccess:  true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			renderer, err := NewRenderer()
+			if err != nil {
+				t.Fatalf("NewRenderer: %v", err)
+			}
+
+			page := accountconnect.PageModel{
+				CSRFToken: "csrf",
+				ScopeChoices: []accountconnect.ScopeChoice{
+					{Capability: "gmail.read", Scope: "https://www.googleapis.com/auth/gmail.readonly"},
+					{Capability: "calendar.read", Scope: "https://www.googleapis.com/auth/calendar.readonly"},
+				},
+				Accounts: []accountconnect.AccountView{{
+					AccountID:      "acct-lifecycle",
+					Email:          "lifecycle@example.test",
+					Label:          "Lifecycle",
+					State:          test.state,
+					CleanupPending: test.cleanupPending,
+					Capabilities:   []string{"gmail.read"},
+				}},
+			}
+
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/accounts", nil)
+
+			if err := renderer.RenderAccounts(recorder, request, page); err != nil {
+				t.Fatalf("RenderAccounts: %v", err)
+			}
+
+			body := recorder.Body.String()
+			if !strings.Contains(body, test.note) || !strings.Contains(body, test.button) {
+				t.Fatalf("lifecycle state or action is missing: %s", body)
+			}
+
+			if got := strings.Count(body, `<form method="post" action="/reconnect">`); got != test.reconnectForms {
+				t.Fatalf("reconnect form count = %d, want %d", got, test.reconnectForms)
+			}
+
+			if got := strings.Count(body, `<form method="post" action="/disconnect">`); got != test.disconnectForms {
+				t.Fatalf("disconnect form count = %d, want %d", got, test.disconnectForms)
+			}
+
+			if strings.Contains(body, "Granted") != test.showsGranted {
+				t.Fatalf("granted claim for state %q = %v, want %v", test.state, strings.Contains(body, "Granted"), test.showsGranted)
+			}
+
+			if strings.Contains(body, "Add Google access") != test.showsAddAccess {
+				t.Fatalf("add-access control for state %q = %v, want %v", test.state, strings.Contains(body, "Add Google access"), test.showsAddAccess)
+			}
+		})
 	}
 }
 
@@ -307,6 +460,10 @@ func TestRenderedCapabilityFieldsReachHandler(t *testing.T) {
 		t.Fatalf("rendered capability field is incompatible with handler form decoding: %s", body)
 	}
 
+	if got := strings.Count(body, `<input type="hidden" name="capabilities" value="">`); got != 2 {
+		t.Fatalf("explicit capability marker count = %d, want connect and reconnect markers", got)
+	}
+
 	csrf := getRec.Result().Cookies()[0]
 	connectForm := url.Values{
 		"csrf_token":   {csrf.Value},
@@ -323,7 +480,11 @@ func TestRenderedCapabilityFieldsReachHandler(t *testing.T) {
 		t.Fatalf("POST connect=%d body=%s", connectRec.Code, connectRec.Body.String())
 	}
 
-	if !hasAllScopes(provider.lastScopes(), "openid", "email", "https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/calendar.readonly") {
+	if hasScope(provider.lastScopes(), "https://www.googleapis.com/auth/gmail.readonly") {
+		t.Fatalf("explicit Calendar-only connect forced Gmail: %v", provider.lastScopes())
+	}
+
+	if !hasAllScopes(provider.lastScopes(), "openid", "email", "https://www.googleapis.com/auth/calendar.readonly") {
 		t.Fatalf("connect scopes=%v", provider.lastScopes())
 	}
 
@@ -346,6 +507,29 @@ func TestRenderedCapabilityFieldsReachHandler(t *testing.T) {
 	if !hasAllScopes(provider.lastScopes(), "openid", "email", "https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/calendar.readonly") {
 		t.Fatalf("reconnect scopes=%v", provider.lastScopes())
 	}
+
+	emptyForm := url.Values{
+		"csrf_token":   {csrf.Value},
+		"capabilities": {""},
+	}
+	emptyPost := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/connect", strings.NewReader(emptyForm.Encode()))
+	emptyPost.Host = "127.0.0.1:9"
+	emptyPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	emptyPost.AddCookie(csrf)
+	emptyRec := httptest.NewRecorder()
+	handler.ServeHTTP(emptyRec, emptyPost)
+
+	if emptyRec.Code != http.StatusFound {
+		t.Fatalf("POST empty connect=%d body=%s", emptyRec.Code, emptyRec.Body.String())
+	}
+
+	if hasScope(provider.lastScopes(), "https://www.googleapis.com/auth/gmail.readonly") {
+		t.Fatalf("explicit empty connect forced Gmail: %v", provider.lastScopes())
+	}
+
+	if !hasAllScopes(provider.lastScopes(), "openid", "email") {
+		t.Fatalf("explicit empty connect omitted identity scopes: %v", provider.lastScopes())
+	}
 }
 
 func hasAllScopes(got []string, want ...string) bool {
@@ -361,6 +545,10 @@ func hasAllScopes(got []string, want ...string) bool {
 	}
 
 	return true
+}
+
+func hasScope(got []string, want string) bool {
+	return hasAllScopes(got, want)
 }
 
 func TestRenderStatusFailureStatesWithoutRawError(t *testing.T) {
@@ -462,6 +650,78 @@ func TestRenderStatusSuccessEscapesAccount(t *testing.T) {
 		if strings.Contains(body, value) {
 			t.Fatalf("unnecessary value %q leaked to the status page", value)
 		}
+	}
+}
+
+func TestRenderStatusLifecycleStates(t *testing.T) {
+	tests := []struct {
+		name    string
+		account accountconnect.AccountView
+		heading string
+		message string
+	}{
+		{
+			name: "cleanup debt remains connected",
+			account: accountconnect.AccountView{
+				Email:          "personal@example.test",
+				State:          accountconnect.RecordStateActive,
+				CleanupPending: true,
+				Capabilities:   []string{"gmail.read"},
+			},
+			heading: "Google account connected",
+			message: "Connected personal@example.test. Previous credential cleanup is pending.",
+		},
+		{
+			name: "pending is not connected",
+			account: accountconnect.AccountView{
+				Email:        "personal@example.test",
+				State:        accountconnect.RecordStatePending,
+				Capabilities: []string{"gmail.read"},
+			},
+			heading: "Connection pending",
+			message: "Google sign-in is not complete. Return to Google accounts and finish connecting.",
+		},
+		{
+			name: "disconnecting is retryable",
+			account: accountconnect.AccountView{
+				Email: "personal@example.test",
+				State: accountconnect.RecordStateDisconnecting,
+			},
+			heading: "Disconnect pending",
+			message: "Retry disconnect from Google accounts to finish removing this account.",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			renderer, err := NewRenderer()
+			if err != nil {
+				t.Fatalf("NewRenderer: %v", err)
+			}
+
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/status", nil)
+			page := accountconnect.PageModel{
+				Status: &accountconnect.StatusResponse{
+					OK:      true,
+					Action:  accountconnect.ActionConnected,
+					Account: &test.account,
+				},
+			}
+
+			if err := renderer.RenderStatus(recorder, request, page); err != nil {
+				t.Fatalf("RenderStatus: %v", err)
+			}
+
+			body := recorder.Body.String()
+			if !strings.Contains(body, test.heading) || !strings.Contains(body, test.message) {
+				t.Fatalf("lifecycle status is missing: %s", body)
+			}
+
+			if strings.Contains(body, "Sign-in failed") {
+				t.Fatalf("lifecycle status was presented as a failure: %s", body)
+			}
+		})
 	}
 }
 

@@ -208,13 +208,17 @@ func TestNativeRetryTransportWriteDoesNotRetry429(t *testing.T) {
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://example.invalid/write", strings.NewReader("x"))
 
 	resp, err := rt.RoundTrip(req)
-	if err != nil {
-		t.Fatalf("RoundTrip: %v", err)
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusTooManyRequests || script.calls != 1 {
-		t.Fatalf("status=%d calls=%d", resp.StatusCode, script.calls)
+	var safe *mcpcontract.Error
+	if !errors.As(err, &safe) || safe.Category != mcpcontract.OutcomeUnknown || safe.Retryable {
+		t.Fatalf("err=%v", err)
+	}
+
+	if script.calls != 1 {
+		t.Fatalf("calls=%d", script.calls)
 	}
 }
 
@@ -237,5 +241,32 @@ func TestNativeRetryTransportCountsUpstreamAttempts(t *testing.T) {
 
 	if counter.Load() != 2 || UpstreamCalls(ctx) != 2 {
 		t.Fatalf("calls=%d counter=%d", script.calls, counter.Load())
+	}
+}
+
+func TestNativeRetryTransportNonReplayableAmbiguousHTTP(t *testing.T) {
+	for _, code := range []int{http.StatusRequestTimeout, http.StatusTooManyRequests, http.StatusInternalServerError} {
+		script := &scriptedTransport{
+			responses: []*http.Response{
+				{StatusCode: code, Body: io.NopCloser(strings.NewReader("maybe"))},
+				{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("ok"))},
+			},
+		}
+		rt := &NativeRetryTransport{Base: script, Class: mcpcontract.NonReplayableWrite, MaxRetries429: 3, MaxRetries5xx: 3, BaseDelay: time.Millisecond}
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://example.invalid/send", strings.NewReader("payload"))
+
+		resp, err := rt.RoundTrip(req)
+		if resp != nil && resp.Body != nil {
+			_ = resp.Body.Close()
+		}
+
+		public := NativePublicError(err)
+		if public == nil || public.Category != mcpcontract.OutcomeUnknown || public.Retryable {
+			t.Fatalf("status %d: %#v", code, public)
+		}
+
+		if script.calls != 1 {
+			t.Fatalf("status %d retried: %d", code, script.calls)
+		}
 	}
 }

@@ -64,7 +64,7 @@ func TestRuntimeDeadlineReachesOperation(t *testing.T) {
 		<-ctx.Done()
 		return mcpcontract.Result[searchData]{}, ctx.Err()
 	})
-	cfg := fixtureConfig(nil, []mcpcontract.Operation{operation})
+	cfg := fixtureConfig([]mcpcontract.Operation{operation})
 	cfg.RequestTimeout = 20 * time.Millisecond
 	session := limitSession(t, cfg)
 
@@ -89,7 +89,7 @@ func TestRuntimeClientCancellationReachesOperation(t *testing.T) {
 
 		return mcpcontract.Result[searchData]{}, ctx.Err()
 	})
-	session := limitSession(t, fixtureConfig(nil, []mcpcontract.Operation{operation}))
+	session := limitSession(t, fixtureConfig([]mcpcontract.Operation{operation}))
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -131,7 +131,7 @@ func TestRuntimeSemaphoreWaitHasDeadline(t *testing.T) {
 
 		return mcpcontract.NewResult(identity, searchData{Account: identity.AccountID, Query: in.Query}), nil
 	})
-	cfg := fixtureConfig(nil, []mcpcontract.Operation{operation})
+	cfg := fixtureConfig([]mcpcontract.Operation{operation})
 	cfg.MaxConcurrency = 1
 	cfg.RequestTimeout = 30 * time.Millisecond
 	session := limitSession(t, cfg)
@@ -177,7 +177,7 @@ func TestRuntimeBoundsRequestsAndResults(t *testing.T) {
 				calls.Add(1)
 				return mcpcontract.NewResult(identity, searchData{Account: identity.AccountID, Query: strings.Repeat("private", 1000)}), nil
 			})
-			cfg := fixtureConfig(nil, []mcpcontract.Operation{operation})
+			cfg := fixtureConfig([]mcpcontract.Operation{operation})
 			cfg.MaxBodyBytes = 256
 			session := limitSession(t, cfg)
 

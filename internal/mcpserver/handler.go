@@ -34,6 +34,7 @@ func (rt *Runtime) handlerFor(operation mcpcontract.Operation) mcp.ToolHandler {
 		if request != nil && request.Params != nil && len(request.Params.Arguments) > 0 {
 			raw = request.Params.Arguments
 		}
+
 		if err := rt.checkSize(int64(len(raw)), "request"); err != nil {
 			result := toolErrorResult(err)
 			rt.logCall(ctx, operation.Definition.Name, traceID, started, result)

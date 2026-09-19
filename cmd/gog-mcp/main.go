@@ -45,7 +45,7 @@ type cli struct {
 	AllowOperations string        `name:"allow-operations" help:"Comma-separated enabled MCP operations" env:"GOG_MCP_ALLOW_OPERATIONS"`
 	GrantsFile      string        `name:"grants-file" help:"JSON file of caller account/client/action grants" env:"GOG_MCP_GRANTS_FILE"`
 	RegistryFile    string        `name:"registry-file" help:"Persistent account registry JSON path (defaults to <config-dir>/mcp-accounts.json). Memory registries are test-only." env:"GOG_MCP_REGISTRY_FILE"`
-	ClientName      string        `name:"client-name" help:"App-owned OAuth credential bucket" default:"default" env:"GOG_MCP_CLIENT_NAME"`
+	ClientName      string        `name:"client-name" help:"App-owned OAuth credential bucket" default:"native-mcp" env:"GOG_MCP_CLIENT_NAME"`
 	ConnectAddr     string        `name:"connect-addr" help:"Optional loopback address for the account connect page" env:"GOG_MCP_CONNECT_ADDR"`
 	RedirectURL     string        `name:"redirect-url" help:"Exact OAuth callback URL registered for the connect page" env:"GOG_MCP_REDIRECT_URL"`
 	RequestTimeout  time.Duration `name:"request-timeout" help:"Per-tool deadline" default:"30s" env:"GOG_MCP_REQUEST_TIMEOUT"`
@@ -89,6 +89,10 @@ func run(args []string) int {
 }
 
 func serve(flags cli, logger *slog.Logger) error {
+	if strings.TrimSpace(flags.ClientName) == "" {
+		flags.ClientName = "native-mcp"
+	}
+
 	principalID := strings.TrimSpace(flags.Principal)
 	if principalID == "" {
 		principalID = defaultPrincipal
@@ -106,7 +110,7 @@ func serve(flags cli, logger *slog.Logger) error {
 		return fmt.Errorf("read config: %w", err)
 	}
 
-	store, err := secrets.OpenDefault()
+	store, err := secrets.OpenDefaultNonInteractive()
 	if err != nil {
 		return fmt.Errorf("open secret store: %w", err)
 	}
@@ -158,11 +162,11 @@ func serve(flags cli, logger *slog.Logger) error {
 		AllowOperations: allow,
 		Operations:      googleops.Operations(provider),
 		Accounts:        registryAccounts{registry: registry},
-		Provider:        provider,
-		Logger:          logger,
-		RequestTimeout:  flags.RequestTimeout,
-		MaxConcurrency:  flags.MaxConcurrency,
-		MaxBodyBytes:    defaultMaxBodyBytes,
+
+		Logger:         logger,
+		RequestTimeout: flags.RequestTimeout,
+		MaxConcurrency: flags.MaxConcurrency,
+		MaxBodyBytes:   defaultMaxBodyBytes,
 	})
 	if err != nil {
 		return fmt.Errorf("start mcp runtime: %w", err)

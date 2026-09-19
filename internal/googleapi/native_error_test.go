@@ -82,10 +82,11 @@ func TestNativePublicErrorClassifications(t *testing.T) {
 
 func TestNativePublicErrorRetrieve400(t *testing.T) {
 	got := NativePublicError(&oauth2.RetrieveError{
-		Response: &http.Response{StatusCode: 400},
-		Body:     []byte("invalid_request for user@gmail.com at https://oauth2.googleapis.com/token"),
+		ErrorCode: "invalid_client",
+		Response:  &http.Response{StatusCode: 400},
+		Body:      []byte("invalid_client for user@gmail.com at https://oauth2.googleapis.com/token"),
 	})
-	if got.Category != mcpcontract.InvalidInput || got.Retryable {
+	if got.Category != mcpcontract.AuthRequired || got.Retryable {
 		t.Fatalf("got %#v", got)
 	}
 

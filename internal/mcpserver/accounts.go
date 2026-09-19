@@ -35,6 +35,7 @@ func accountsListSchemas() (*jsonschema.Schema, *jsonschema.Schema) {
 	if err != nil {
 		panic("accounts_list input schema: " + err.Error())
 	}
+
 	output, err := jsonschema.For[accountsListOutput](nil)
 	if err != nil {
 		panic("accounts_list output schema: " + err.Error())
@@ -118,11 +119,11 @@ func decodeStrict(raw json.RawMessage, dest any) error {
 	dec.DisallowUnknownFields()
 
 	if err := dec.Decode(dest); err != nil {
-		return mcpcontract.Invalid("arguments must match the tool input schema")
+		return &mcpcontract.Error{Category: mcpcontract.InvalidInput, Message: "arguments must match the tool input schema"}
 	}
 
 	if err := dec.Decode(new(any)); !errors.Is(err, io.EOF) {
-		return mcpcontract.Invalid("arguments must contain one JSON object")
+		return &mcpcontract.Error{Category: mcpcontract.InvalidInput, Message: "arguments must contain one JSON object"}
 	}
 
 	return nil

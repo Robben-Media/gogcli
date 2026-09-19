@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"golang.org/x/oauth2"
 
@@ -14,13 +15,15 @@ import (
 )
 
 type nativeTokenSource struct {
-	provider   *NativeProvider
-	accountID  string
-	email      string
-	clientName string
-	generation uint64
-	fence      uint64
-	invalid    atomic.Bool
+	provider    *NativeProvider
+	accountID   string
+	email       string
+	clientName  string
+	principalID string
+	generation  uint64
+	revokeEpoch uint64
+	fence       uint64
+	invalid     atomic.Bool
 
 	mu       sync.Mutex
 	inner    oauth2.TokenSource
@@ -107,9 +110,15 @@ func (s *nativeTokenSource) beginRefresh(ctx context.Context) *nativeRefreshWait
 	return wait
 }
 
-func (s *nativeTokenSource) runRefresh(ctx context.Context, wait *nativeRefreshWait) {
-	ctx = context.WithoutCancel(ctx)
+func (s *nativeTokenSource) persistTimeout() time.Duration {
+	if s.provider != nil && s.provider.timeout > 0 {
+		return s.provider.timeout
+	}
 
+	return defaultHTTPTimeout
+}
+
+func (s *nativeTokenSource) runRefresh(ctx context.Context, wait *nativeRefreshWait) {
 	tok, err := s.inner.Token()
 	if err != nil {
 		if s.blocked() {
@@ -177,45 +186,50 @@ func (s *nativeTokenSource) persistRotated(ctx context.Context, tok *oauth2.Toke
 	}
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if s.blocked() {
+		s.mu.Unlock()
+
 		return &mcpcontract.Error{Category: mcpcontract.AuthRequired, Message: nativeAuthMessage}
 	}
 
 	if tok.RefreshToken == s.refresh {
+		s.mu.Unlock()
+
 		return nil
 	}
+	s.mu.Unlock()
 
-	s.provider.lockLifecycle()
-	defer s.provider.unlockLifecycle()
+	storeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.persistTimeout())
+	defer cancel()
 
-	if s.blocked() {
-		return &mcpcontract.Error{Category: mcpcontract.AuthRequired, Message: nativeAuthMessage}
-	}
-
-	storeCtx := ctx
-
-	rec, ok, err := s.provider.registry.Get(storeCtx, s.accountID)
-	if err != nil {
+	if err := s.provider.lockLifecycle(storeCtx); err != nil {
 		return NativePublicError(err)
 	}
 
-	if !ok || rec.Generation != s.generation || rec.Email != s.email || rec.ClientName != s.clientName || !rec.IsActive() {
+	rec, ok, err := s.provider.registry.Get(storeCtx, s.accountID)
+	if err != nil {
+		s.provider.unlockLifecycle()
+
+		return NativePublicError(err)
+	}
+
+	if !s.liveUsable(rec, ok) {
+		s.provider.unlockLifecycle()
 		s.invalid.Store(true)
 
 		return &mcpcontract.Error{Category: mcpcontract.AuthRequired, Message: nativeAuthMessage}
 	}
 
 	stored, storedScopes, getErr := s.provider.tokens.Get(storeCtx, rec.ClientName, rec.Email)
-	if getErr != nil {
-		if accountconnect.IsTokenNotFound(getErr) {
-			s.invalid.Store(true)
+	if getErr != nil || stored == "" {
+		s.provider.unlockLifecycle()
+		s.invalid.Store(true)
 
-			return &mcpcontract.Error{Category: mcpcontract.AuthRequired, Message: nativeAuthMessage}
+		if getErr != nil && !accountconnect.IsTokenNotFound(getErr) {
+			return NativePublicError(getErr)
 		}
 
-		return NativePublicError(getErr)
+		return &mcpcontract.Error{Category: mcpcontract.AuthRequired, Message: nativeAuthMessage}
 	}
 
 	scopes := rec.Scopes
@@ -223,23 +237,27 @@ func (s *nativeTokenSource) persistRotated(ctx context.Context, tok *oauth2.Toke
 		scopes = storedScopes
 	}
 
-	if stored == "" {
-		s.invalid.Store(true)
-
-		return &mcpcontract.Error{Category: mcpcontract.AuthRequired, Message: nativeAuthMessage}
-	}
-
-	if s.blocked() {
-		return &mcpcontract.Error{Category: mcpcontract.AuthRequired, Message: nativeAuthMessage}
-	}
-
 	if err := s.provider.tokens.Put(storeCtx, rec.ClientName, rec.Email, tok.RefreshToken, scopes); err != nil {
+		s.provider.unlockLifecycle()
+
 		return NativePublicError(err)
 	}
 
+	s.provider.unlockLifecycle()
+
+	s.mu.Lock()
 	s.refresh = tok.RefreshToken
+	s.mu.Unlock()
 
 	return nil
+}
+
+func (s *nativeTokenSource) liveUsable(rec accountconnect.Record, ok bool) bool {
+	if s.blocked() || !ok || !rec.IsActive() {
+		return false
+	}
+
+	return rec.Generation == s.generation && rec.Email == s.email && rec.ClientName == s.clientName && rec.PrincipalID == s.principalID && rec.RevokeEpoch == s.revokeEpoch
 }
 
 func (p *NativeProvider) cachedClient(ctx context.Context, rec accountconnect.Record) (*nativeCachedClient, error) {
@@ -319,14 +337,16 @@ func (p *NativeProvider) newCachedClient(ctx context.Context, rec accountconnect
 	}
 	refreshCtx := context.WithValue(context.Background(), oauth2.HTTPClient, p.refreshHTTP)
 	source := &nativeTokenSource{
-		provider:   p,
-		accountID:  rec.AccountID,
-		email:      rec.Email,
-		clientName: rec.ClientName,
-		generation: rec.Generation,
-		fence:      fence,
-		inner:      cfg.TokenSource(refreshCtx, &oauth2.Token{RefreshToken: refresh}),
-		refresh:    refresh,
+		provider:    p,
+		accountID:   rec.AccountID,
+		email:       rec.Email,
+		clientName:  rec.ClientName,
+		principalID: rec.PrincipalID,
+		generation:  rec.Generation,
+		revokeEpoch: rec.RevokeEpoch,
+		fence:       fence,
+		inner:       cfg.TokenSource(refreshCtx, &oauth2.Token{RefreshToken: refresh}),
+		refresh:     refresh,
 	}
 
 	return &nativeCachedClient{source: source}, nil

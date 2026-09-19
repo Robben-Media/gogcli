@@ -85,7 +85,7 @@ func TestGmailTwoAccountMCPVerticalSlice(t *testing.T) {
 	provider := &sliceProvider{}
 	grant := mcpcontract.Grant{PrincipalID: "fixture", AccountIDs: []string{"personal", "work"}, ClientNames: []string{"app"}, Operations: []string{"gmail:get"}}
 
-	runtime, err := mcpserver.New(mcpserver.Config{Principal: mcpcontract.Principal{ID: "fixture"}, Grants: []mcpcontract.Grant{grant}, AllowOperations: []string{"accounts_list", "gmail_get_message"}, Operations: nativegmail.Operations(provider), Accounts: accounts, Provider: provider, RequestTimeout: 5 * time.Second})
+	runtime, err := mcpserver.New(mcpserver.Config{Principal: mcpcontract.Principal{ID: "fixture"}, Grants: []mcpcontract.Grant{grant}, AllowOperations: []string{"accounts_list", "gmail_get_message"}, Operations: nativegmail.Operations(provider), Accounts: accounts, RequestTimeout: 5 * time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}

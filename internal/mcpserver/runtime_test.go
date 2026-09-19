@@ -27,12 +27,15 @@ type countingProvider struct {
 
 func (p *countingProvider) HTTPClient(_ context.Context, id mcpcontract.Identity, _ mcpcontract.CallOptions) (*http.Client, error) {
 	p.calls.Add(1)
+
 	return &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		googleapi.AddUpstreamCall(req.Context())
+
 		if _, ok := req.Context().Deadline(); !ok {
 			return nil, errNoDeadline
 		}
 		body := `{"ok":true,"account":"` + id.AccountID + `"}`
+
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Header:     http.Header{"Content-Type": []string{"application/json"}},
@@ -73,16 +76,19 @@ func fakeSearch(provider mcpcontract.ClientProvider) mcpcontract.Operation {
 			if err != nil {
 				return mcpcontract.Result[searchData]{}, fmt.Errorf("gmail search: %w", err)
 			}
+
 			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://gmail.googleapis.com/gmail/v1/users/me/messages/list", strings.NewReader("{}"))
 			if err != nil {
 				return mcpcontract.Result[searchData]{}, fmt.Errorf("gmail search: %w", err)
 			}
+
 			resp, err := client.Do(req)
 			if err != nil {
 				return mcpcontract.Result[searchData]{}, fmt.Errorf("gmail search: %w", err)
 			}
 			defer resp.Body.Close()
 			_, _ = io.Copy(io.Discard, resp.Body)
+
 			return mcpcontract.NewResult(id, searchData{Account: id.AccountID, Query: in.Query}), nil
 		},
 	)
@@ -96,15 +102,15 @@ func fixtureAccounts() *access.MemoryAccounts {
 	)
 }
 
-func fixtureConfig(provider mcpcontract.ClientProvider, operations []mcpcontract.Operation) mcpserver.Config {
+func fixtureConfig(operations []mcpcontract.Operation) mcpserver.Config {
 	return mcpserver.Config{
 		Principal:       mcpcontract.Principal{ID: "fixture"},
 		Grants:          []mcpcontract.Grant{{PrincipalID: "fixture", AccountIDs: []string{"personal", "work"}, ClientNames: []string{"app"}, Operations: []string{"gmail:messages.search"}}},
 		AllowOperations: []string{"accounts_list", "gmail_search"},
 		Operations:      operations,
 		Accounts:        fixtureAccounts(),
-		Provider:        provider,
-		RequestTimeout:  5 * time.Second,
+
+		RequestTimeout: 5 * time.Second,
 	}
 }
 
@@ -115,7 +121,8 @@ func TestRuntimeFakeOperationAndDeniedZeroUpstream(t *testing.T) {
 	defer cancel()
 
 	provider := &countingProvider{}
-	runtime, err := mcpserver.New(fixtureConfig(provider, []mcpcontract.Operation{fakeSearch(provider)}))
+
+	runtime, err := mcpserver.New(fixtureConfig([]mcpcontract.Operation{fakeSearch(provider)}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,6 +134,7 @@ func TestRuntimeFakeOperationAndDeniedZeroUpstream(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(listed.Tools) != 2 {
 		t.Fatalf("visible tools: %d", len(listed.Tools))
 	}
@@ -135,6 +143,7 @@ func TestRuntimeFakeOperationAndDeniedZeroUpstream(t *testing.T) {
 	if err != nil || catalog.IsError {
 		t.Fatalf("accounts_list: %#v %v", catalog, err)
 	}
+
 	payload, _ := json.Marshal(catalog.StructuredContent)
 	if strings.Contains(string(payload), "private@example.test") || !strings.Contains(string(payload), "personal") {
 		t.Fatalf("catalog: %s", payload)
@@ -144,16 +153,19 @@ func TestRuntimeFakeOperationAndDeniedZeroUpstream(t *testing.T) {
 	if err != nil || got.IsError {
 		t.Fatalf("search: %#v %v", got, err)
 	}
+
 	body, _ := json.Marshal(got.StructuredContent)
 	if !strings.Contains(string(body), `"account":"work"`) {
 		t.Fatalf("result: %s", body)
 	}
 
 	before := provider.calls.Load()
+
 	denied, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "gmail_search", Arguments: map[string]any{"account_id": "secret", "query": "from:client"}})
 	if err == nil && !denied.IsError {
 		t.Fatal("secret account accepted")
 	}
+
 	if provider.calls.Load() != before {
 		t.Fatal("forbidden call reached Google")
 	}
@@ -166,7 +178,8 @@ func TestRuntimeStdioTransportLogsStayOffStdout(t *testing.T) {
 	defer cancel()
 
 	provider := &countingProvider{}
-	runtime, err := mcpserver.New(fixtureConfig(provider, []mcpcontract.Operation{fakeSearch(provider)}))
+
+	runtime, err := mcpserver.New(fixtureConfig([]mcpcontract.Operation{fakeSearch(provider)}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,6 +203,7 @@ func TestRuntimeStdioTransportLogsStayOffStdout(t *testing.T) {
 	})
 
 	client := mcp.NewClient(&mcp.Implementation{Name: "stdio-test", Version: "1"}, nil)
+
 	session, err := client.Connect(ctx, &mcp.IOTransport{Reader: clientReader, Writer: clientWriter}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -206,6 +220,7 @@ func connectRuntime(t *testing.T, ctx context.Context, runtime *mcpserver.Runtim
 	t.Helper()
 
 	st, ct := mcp.NewInMemoryTransports()
+
 	ss, err := runtime.Server().Connect(ctx, st, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -214,6 +229,7 @@ func connectRuntime(t *testing.T, ctx context.Context, runtime *mcpserver.Runtim
 	t.Cleanup(func() { _ = ss.Close() })
 
 	client := mcp.NewClient(&mcp.Implementation{Name: "fixture-client", Version: "1"}, nil)
+
 	session, err := client.Connect(ctx, ct, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -232,6 +248,7 @@ func (a *attrLogger) Handle(_ context.Context, record slog.Record) error {
 		a.attrs = append(a.attrs, attr)
 		return true
 	})
+
 	return nil
 }
 func (a *attrLogger) WithAttrs([]slog.Attr) slog.Handler { return a }
@@ -245,8 +262,9 @@ func TestRuntimeLogsUpstreamCalls(t *testing.T) {
 
 	handler := &attrLogger{}
 	provider := &countingProvider{}
-	cfg := fixtureConfig(provider, []mcpcontract.Operation{fakeSearch(provider)})
+	cfg := fixtureConfig([]mcpcontract.Operation{fakeSearch(provider)})
 	cfg.Logger = slog.New(handler)
+
 	runtime, err := mcpserver.New(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -261,11 +279,13 @@ func TestRuntimeLogsUpstreamCalls(t *testing.T) {
 	}
 
 	var calls int64 = -1
+
 	for _, attr := range handler.attrs {
 		if attr.Key == "upstream_calls" {
 			calls = attr.Value.Int64()
 		}
 	}
+
 	if calls != 1 {
 		t.Fatalf("upstream_calls=%d attrs=%v", calls, handler.attrs)
 	}
@@ -278,7 +298,8 @@ func TestAccountsListRejectsUnknownFields(t *testing.T) {
 	defer cancel()
 
 	provider := &countingProvider{}
-	runtime, err := mcpserver.New(fixtureConfig(provider, []mcpcontract.Operation{fakeSearch(provider)}))
+
+	runtime, err := mcpserver.New(fixtureConfig([]mcpcontract.Operation{fakeSearch(provider)}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,8 +321,9 @@ func TestResyncDropsToolsWhenSoleAccountRemoved(t *testing.T) {
 
 	provider := &countingProvider{}
 	accounts := fixtureAccounts()
-	cfg := fixtureConfig(provider, []mcpcontract.Operation{fakeSearch(provider)})
+	cfg := fixtureConfig([]mcpcontract.Operation{fakeSearch(provider)})
 	cfg.Accounts = accounts
+
 	runtime, err := mcpserver.New(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -341,7 +363,12 @@ type flipAccounts struct {
 }
 
 func (f *flipAccounts) Get(ctx context.Context, id string) (mcpcontract.Identity, bool, error) {
-	return f.inner.Get(ctx, id)
+	identity, ok, err := f.inner.Get(ctx, id)
+	if err != nil {
+		return identity, ok, fmt.Errorf("fixture get: %w", err)
+	}
+
+	return identity, ok, nil
 }
 
 func (f *flipAccounts) List(ctx context.Context, principal string) ([]mcpcontract.Identity, error) {
@@ -349,7 +376,12 @@ func (f *flipAccounts) List(ctx context.Context, principal string) ([]mcpcontrac
 		return nil, errCorruptRegistry
 	}
 
-	return f.inner.List(ctx, principal)
+	identities, err := f.inner.List(ctx, principal)
+	if err != nil {
+		return nil, fmt.Errorf("fixture list: %w", err)
+	}
+
+	return identities, nil
 }
 
 var errCorruptRegistry = errors.New("corrupt registry")
@@ -362,8 +394,9 @@ func TestReloadAccessKeepsPriorSnapshotOnRegistryError(t *testing.T) {
 
 	provider := &countingProvider{}
 	accounts := &flipAccounts{inner: fixtureAccounts()}
-	cfg := fixtureConfig(provider, []mcpcontract.Operation{fakeSearch(provider)})
+	cfg := fixtureConfig([]mcpcontract.Operation{fakeSearch(provider)})
 	cfg.Accounts = accounts
+
 	runtime, err := mcpserver.New(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -378,6 +411,7 @@ func TestReloadAccessKeepsPriorSnapshotOnRegistryError(t *testing.T) {
 	}
 
 	accounts.fail.Store(true)
+
 	err = runtime.ReloadAccess(access.Snapshot{
 		AllowOperations: []string{"accounts_list", "gmail_search"},
 		Grants:          []mcpcontract.Grant{{PrincipalID: "fixture", AccountIDs: []string{"work"}, ClientNames: []string{"app"}, Operations: []string{"gmail_search"}}},
@@ -402,13 +436,13 @@ func TestEncodedToolResultIsBounded(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	provider := &countingProvider{}
 	payload := strings.Repeat("n", 80)
 	op := mcpcontract.NewOperation[searchInput, mcpcontract.Result[searchData]]("gmail_search", nil, func(context.Context, mcpcontract.Identity, searchInput) (mcpcontract.Result[searchData], error) {
 		return mcpcontract.NewResult(mcpcontract.Identity{AccountID: "work", Label: "Work"}, searchData{Account: "work", Query: payload}), nil
 	})
-	cfg := fixtureConfig(provider, []mcpcontract.Operation{op})
+	cfg := fixtureConfig([]mcpcontract.Operation{op})
 	cfg.MaxBodyBytes = 180
+
 	runtime, err := mcpserver.New(cfg)
 	if err != nil {
 		t.Fatal(err)

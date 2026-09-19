@@ -331,8 +331,8 @@ func TestCatalogToolsAndWorkflowResources(t *testing.T) {
 		AllowOperations: allowOperations,
 		Operations:      operations,
 		Accounts:        access.NewMemoryAccounts(identity),
-		Provider:        provider,
-		RequestTimeout:  5 * time.Second,
+
+		RequestTimeout: 5 * time.Second,
 	})
 	if err != nil {
 		t.Fatal(err)

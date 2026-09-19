@@ -96,7 +96,7 @@ func validateSnapshot(snapshot Snapshot) error {
 				continue
 			}
 
-			if strings.Contains(operation, ":") && CanonicalAction(operation) != "" {
+			if matchesCatalogAction(operation) {
 				continue
 			}
 
@@ -105,4 +105,16 @@ func validateSnapshot(snapshot Snapshot) error {
 	}
 
 	return nil
+}
+
+func matchesCatalogAction(pattern string) bool {
+	for _, definition := range mcpcontract.Catalog() {
+		for _, action := range definition.Actions {
+			if MatchAction(pattern, action) {
+				return true
+			}
+		}
+	}
+
+	return false
 }

@@ -317,15 +317,6 @@ func rectangularValues(values [][]any, dimensions a1Dimensions, majorDimension s
 	return rows, truncated
 }
 
-func boundedA1Cells(raw string) (int, error) {
-	dimensions, err := parseBoundedA1(raw)
-	if err != nil {
-		return 0, err
-	}
-
-	return dimensions.Rows * dimensions.Columns, nil
-}
-
 func parseBoundedA1(raw string) (a1Dimensions, error) {
 	value := cleanRange(strings.TrimSpace(raw))
 	if value == "" {

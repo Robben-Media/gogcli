@@ -94,10 +94,9 @@ type AccountView struct {
 }
 
 // ConnectRequest starts a new Google account connection for a trusted principal.
-// ClientName is ignored; the controller uses the server-configured OAuth app.
+// The controller uses the server-configured OAuth app, not a caller-selected client.
 type ConnectRequest struct {
 	PrincipalID string   `json:"principal_id"`
-	ClientName  string   `json:"client_name,omitempty"`
 	Label       string   `json:"label"`
 	Scopes      []string `json:"scopes"`
 }
@@ -117,7 +116,10 @@ type ReconnectRequest struct {
 }
 
 // StartResult is returned to the UI so it can redirect the browser to Google.
-// State and PKCE verifiers stay server-side; they are not in this payload.
+// SessionID is the OAuth state value. The handler copies it into the HttpOnly
+// browser cookie so the callback can bind the redirect to the initiating
+// browser. The PKCE verifier and pending session record stay server-side and
+// are not in this payload.
 type StartResult struct {
 	AuthURL   string `json:"auth_url"`
 	SessionID string `json:"session_id"`

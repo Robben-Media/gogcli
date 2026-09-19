@@ -155,14 +155,14 @@ func TestReadRangeNormalizesColumnsIntoRows(t *testing.T) {
 	}
 }
 
-func TestBoundedA1CellsAcceptsLowercaseReferences(t *testing.T) {
+func TestParseBoundedA1AcceptsLowercaseReferences(t *testing.T) {
 	t.Parallel()
 
-	if cells, err := boundedA1Cells("'Monthly Budget'!a1:b2"); err != nil || cells != 4 {
-		t.Fatalf("boundedA1Cells lower-case: %d %v", cells, err)
+	if dimensions, err := parseBoundedA1("'Monthly Budget'!a1:b2"); err != nil || dimensions.Rows*dimensions.Columns != 4 {
+		t.Fatalf("parseBoundedA1 lower-case: %#v %v", dimensions, err)
 	}
 
-	if _, err := boundedA1Cells("Sheet1!a1:b10001"); err == nil {
+	if _, err := parseBoundedA1("Sheet1!a1:b10001"); err == nil {
 		t.Fatal("accepted a range over the hard cell limit")
 	}
 }

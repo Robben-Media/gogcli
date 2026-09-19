@@ -22,7 +22,6 @@ type capabilityChoice struct {
 	Capability string
 	Name       string
 	Checked    bool
-	Included   bool
 }
 
 type accountItem struct {
@@ -31,6 +30,11 @@ type accountItem struct {
 	Label             string
 	AccountID         string
 	FormID            string
+	IsActive          bool
+	IsPending         bool
+	IsDisconnecting   bool
+	CleanupPending    bool
+	StateNote         string
 	Capabilities      []capabilityStatus
 	AdditionalChoices []capabilityChoice
 }
@@ -56,12 +60,10 @@ func newCapabilityChoices(choices []accountconnect.ScopeChoice, requested []stri
 
 	out := make([]capabilityChoice, 0, len(choices))
 	for _, choice := range choices {
-		included := choice.Required || choice.Capability == "gmail.read"
 		out = append(out, capabilityChoice{
 			Capability: choice.Capability,
 			Name:       capabilityDisplayName(choice.Capability),
 			Checked:    requestedSet[choice.Capability],
-			Included:   included,
 		})
 	}
 
@@ -77,9 +79,22 @@ type statusPage struct {
 
 func newAccountItem(account accountconnect.AccountView, choices []accountconnect.ScopeChoice) accountItem {
 	item := accountItem{
-		Email:     account.Email,
-		Label:     account.Label,
-		AccountID: account.AccountID,
+		Email:           account.Email,
+		Label:           account.Label,
+		AccountID:       account.AccountID,
+		IsActive:        account.State == "" || account.State == accountconnect.RecordStateActive,
+		IsPending:       account.State == accountconnect.RecordStatePending,
+		IsDisconnecting: account.State == accountconnect.RecordStateDisconnecting,
+		CleanupPending:  account.CleanupPending,
+	}
+
+	switch {
+	case item.IsPending:
+		item.StateNote = "Connection interrupted. Reconnect to finish Google sign-in."
+	case item.IsDisconnecting:
+		item.StateNote = "Disconnect is pending. Retry disconnect to finish removing this account."
+	case item.CleanupPending:
+		item.StateNote = "Connected. Previous credential cleanup is pending."
 	}
 
 	granted := make(map[string]bool, len(account.Capabilities))
@@ -87,22 +102,26 @@ func newAccountItem(account accountconnect.AccountView, choices []accountconnect
 		granted[capability] = true
 	}
 
-	for _, capability := range account.Capabilities {
-		item.Capabilities = append(item.Capabilities, capabilityStatus{
-			Name:   capabilityDisplayName(capability),
-			Status: "Granted",
-		})
+	if item.IsActive {
+		for _, capability := range account.Capabilities {
+			item.Capabilities = append(item.Capabilities, capabilityStatus{
+				Name:   capabilityDisplayName(capability),
+				Status: "Granted",
+			})
+		}
 	}
 
-	for _, choice := range choices {
-		if granted[choice.Capability] || choice.Required || choice.Capability == "gmail.read" {
-			continue
-		}
+	if item.IsActive {
+		for _, choice := range choices {
+			if granted[choice.Capability] {
+				continue
+			}
 
-		item.AdditionalChoices = append(item.AdditionalChoices, capabilityChoice{
-			Capability: choice.Capability,
-			Name:       capabilityDisplayName(choice.Capability),
-		})
+			item.AdditionalChoices = append(item.AdditionalChoices, capabilityChoice{
+				Capability: choice.Capability,
+				Name:       capabilityDisplayName(choice.Capability),
+			})
+		}
 	}
 
 	return item
@@ -127,6 +146,18 @@ func successCopy(status *accountconnect.StatusResponse, account *accountItem) (h
 
 	if account == nil {
 		return "Google account updated", "The account request completed. Return to Google accounts to see the current list."
+	}
+
+	if account.IsPending {
+		return "Connection pending", "Google sign-in is not complete. Return to Google accounts and finish connecting."
+	}
+
+	if account.IsDisconnecting {
+		return "Disconnect pending", "Retry disconnect from Google accounts to finish removing this account."
+	}
+
+	if account.CleanupPending {
+		return "Google account connected", "Connected " + account.Email + ". Previous credential cleanup is pending."
 	}
 
 	return "Google account connected", "Connected " + account.Email + ". Reconnect or disconnect it from Google accounts."

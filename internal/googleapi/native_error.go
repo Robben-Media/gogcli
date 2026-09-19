@@ -99,12 +99,12 @@ func nativeRetrieveError(err *oauth2.RetrieveError) *mcpcontract.Error {
 		}
 	}
 
-	if code == "invalid_grant" || status == 401 {
+	if code == "invalid_grant" || code == "invalid_client" || code == "unauthorized_client" || status == 401 {
 		return &mcpcontract.Error{Category: mcpcontract.AuthRequired, Message: nativeAuthMessage}
 	}
 
 	if status == 400 {
-		return &mcpcontract.Error{Category: mcpcontract.InvalidInput, Message: nativeInvalidGoogleMessage}
+		return &mcpcontract.Error{Category: mcpcontract.AuthRequired, Message: nativeAuthMessage}
 	}
 
 	if status == 403 {

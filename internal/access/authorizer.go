@@ -374,15 +374,10 @@ func narrowActions(catalog []string, requested []string) ([]string, error) {
 }
 
 func missingScopes(have []string, required []string) []string {
-	set := make(map[string]struct{}, len(have))
-	for _, scope := range have {
-		set[strings.TrimSpace(scope)] = struct{}{}
-	}
-
 	var missing []string
 
 	for _, scope := range required {
-		if _, ok := set[strings.TrimSpace(scope)]; !ok {
+		if !mcpcontract.ScopeGranted(have, scope) {
 			missing = append(missing, scope)
 		}
 	}

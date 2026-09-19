@@ -91,14 +91,28 @@ func (t *NativeRetryTransport) roundTripOnce(base http.RoundTripper, req *http.R
 
 	resp, err := base.RoundTrip(req)
 	if err != nil {
-		return nil, &mcpcontract.Error{
-			Category:  mcpcontract.OutcomeUnknown,
-			Message:   nativeWriteUnknownMessage,
-			Retryable: false,
-		}
+		return nil, nativeWriteUnknown()
+	}
+
+	if nativeWriteAmbiguousStatus(resp.StatusCode) {
+		drainAndClose(resp.Body)
+
+		return nil, nativeWriteUnknown()
 	}
 
 	return resp, nil
+}
+
+func nativeWriteUnknown() error {
+	return &mcpcontract.Error{
+		Category:  mcpcontract.OutcomeUnknown,
+		Message:   nativeWriteUnknownMessage,
+		Retryable: false,
+	}
+}
+
+func nativeWriteAmbiguousStatus(code int) bool {
+	return code == http.StatusRequestTimeout || code == http.StatusTooManyRequests || code >= 500
 }
 
 func (t *NativeRetryTransport) safeReadRetry(req *http.Request, resp *http.Response, retries429, retries5xx, max429, max5xx int) (bool, time.Duration) {

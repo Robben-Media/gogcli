@@ -182,7 +182,7 @@ func TestHandlerDisconnectStatusIndependentOfRecord(t *testing.T) {
 	}
 }
 
-func TestHandlerCapabilitiesFormIncludesGmail(t *testing.T) {
+func TestHandlerCapabilitiesFormOmitsUnselectedGmail(t *testing.T) {
 	provider := &fakeProvider{}
 	ctrl := testController(t, provider)
 
@@ -217,8 +217,8 @@ func TestHandlerCapabilitiesFormIncludesGmail(t *testing.T) {
 		}
 	}
 
-	if !foundGmail || !foundCal {
-		t.Fatalf("scopes=%v", provider.last.Scopes)
+	if foundGmail || !foundCal {
+		t.Fatalf("calendar-only connect scopes=%v", provider.last.Scopes)
 	}
 }
 
@@ -273,5 +273,49 @@ func TestHandlerReconnectCapabilitiesForm(t *testing.T) {
 
 	if !foundGmail || !foundCal {
 		t.Fatalf("reconnect scopes=%v", provider.last.Scopes)
+	}
+}
+
+func TestHandlerJSONCalendarOnlyCapabilities(t *testing.T) {
+	provider := &fakeProvider{}
+	ctrl := testController(t, provider)
+
+	h, err := NewHandler(ctrl, HandlerOptions{Principal: mcpcontract.Principal{ID: "jeremy"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	get := withHost(httptest.NewRequestWithContext(t.Context(), http.MethodGet, PathAccounts, nil))
+	getRec := httptest.NewRecorder()
+	h.ServeHTTP(getRec, get)
+	csrf := cookieNamed(getRec, CSRFCookieName)
+
+	post := withHost(httptest.NewRequestWithContext(t.Context(), http.MethodPost, PathConnect, strings.NewReader(`{"label":"Work","capabilities":["calendar.read"]}`)))
+	post.Header.Set("Content-Type", "application/json")
+	post.Header.Set("Accept", "application/json")
+	post.Header.Set(CSRFHeaderName, csrf.Value)
+	post.AddCookie(csrf)
+	postRec := httptest.NewRecorder()
+	h.ServeHTTP(postRec, post)
+
+	if postRec.Code != http.StatusOK {
+		t.Fatalf("connect=%d %s", postRec.Code, postRec.Body.String())
+	}
+
+	foundGmail := false
+	foundCal := false
+
+	for _, scope := range provider.last.Scopes {
+		if scope == mcpcontract.GmailReadScope {
+			foundGmail = true
+		}
+
+		if scope == mcpcontract.CalendarReadScope {
+			foundCal = true
+		}
+	}
+
+	if foundGmail || !foundCal {
+		t.Fatalf("json calendar-only scopes=%v", provider.last.Scopes)
 	}
 }

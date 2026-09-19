@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -21,16 +22,20 @@ type Registry interface {
 	// previous is the pre-commit clone when existed is true.
 	// FileRegistry is owned by one process; concurrent processes are unsupported.
 	Commit(_ context.Context, rec Record) (committed Record, previous Record, existed bool, err error)
+	RevokeEpoch(clientName, subject string) (uint64, error)
+	BumpRevokeEpoch(clientName, subject string) (uint64, error)
+	Epochs() (map[string]uint64, error)
 }
 
 // MemoryRegistry is a concurrency-safe in-memory registry for tests.
 type MemoryRegistry struct {
 	mu      sync.Mutex
 	records map[string]Record
+	epochs  map[string]uint64
 }
 
 func NewMemoryRegistry() *MemoryRegistry {
-	return &MemoryRegistry{records: make(map[string]Record)}
+	return &MemoryRegistry{records: make(map[string]Record), epochs: make(map[string]uint64)}
 }
 
 func (r *MemoryRegistry) Get(_ context.Context, accountID string) (Record, bool, error) {
@@ -94,19 +99,63 @@ func (r *MemoryRegistry) Commit(_ context.Context, rec Record) (Record, Record, 
 	return commitRecords(r.records, rec)
 }
 
+func epochKey(clientName, subject string) string {
+	return clientName + "\x00" + subject
+}
+
+func (r *MemoryRegistry) RevokeEpoch(clientName, subject string) (uint64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return r.epochs[epochKey(clientName, subject)], nil
+}
+
+func (r *MemoryRegistry) BumpRevokeEpoch(clientName, subject string) (uint64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.epochs == nil {
+		r.epochs = map[string]uint64{}
+	}
+
+	key := epochKey(clientName, subject)
+	r.epochs[key]++
+
+	return r.epochs[key], nil
+}
+
+func (r *MemoryRegistry) Epochs() (map[string]uint64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	out := make(map[string]uint64, len(r.epochs))
+	for k, v := range r.epochs {
+		out[k] = v
+	}
+
+	return out, nil
+}
+
 func cloneRecord(r Record) Record {
 	r.Scopes = append([]string(nil), r.Scopes...)
+	if r.Cleanup != nil {
+		c := *r.Cleanup
+		r.Cleanup = &c
+	}
+
 	return r
 }
 
 type fileSnapshot struct {
-	Records []Record `json:"records"`
+	Records []Record          `json:"records"`
+	Epochs  map[string]uint64 `json:"revoke_epochs,omitempty"`
 }
 
 // FileRegistry persists records as JSON. Tokens are never written here.
 type FileRegistry struct {
-	path string
-	mu   sync.Mutex
+	path   string
+	mu     sync.Mutex
+	epochs map[string]uint64
 }
 
 func NewFileRegistry(path string) (*FileRegistry, error) {
@@ -220,27 +269,33 @@ func commitRecords(records map[string]Record, rec Record) (Record, Record, bool,
 			continue
 		}
 
-		sameSubject := existing.Subject == rec.Subject
+		if existing.Subject == rec.Subject {
+			if existing.PrincipalID != rec.PrincipalID {
+				return Record{}, Record{}, false, ErrAccountOwned
+			}
 
-		sameEmail := existing.Email != "" && rec.Email != "" && existing.Email == rec.Email
-		if !sameSubject && !sameEmail {
-			continue
-		}
-
-		if existing.PrincipalID != rec.PrincipalID {
-			return Record{}, Record{}, false, ErrAccountOwned
-		}
-
-		if sameSubject || winner == "" {
 			winner = id
 			previous = cloneRecord(existing)
 			existed = true
+
+			continue
+		}
+
+		if existing.Email != "" && rec.Email != "" && strings.EqualFold(existing.Email, rec.Email) {
+			return Record{}, Record{}, false, ErrSubjectMismatch
 		}
 	}
 
 	if existed {
 		rec.AccountID = winner
-		rec.Generation = previous.Generation + 1
+		if rec.Generation == 0 || rec.Generation < previous.Generation {
+			rec.Generation = previous.Generation + 1
+		}
+
+		if rec.RevokeEpoch < previous.RevokeEpoch {
+			rec.RevokeEpoch = previous.RevokeEpoch
+		}
+
 		records[winner] = cloneRecord(rec)
 
 		return cloneRecord(rec), previous, true, nil
@@ -270,6 +325,10 @@ func (r *FileRegistry) loadLocked() (map[string]Record, error) {
 	data, err := os.ReadFile(r.path) //nolint:gosec // G703: registry path is process configuration
 	if err != nil {
 		if os.IsNotExist(err) {
+			if r.epochs == nil {
+				r.epochs = map[string]uint64{}
+			}
+
 			return map[string]Record{}, nil
 		}
 
@@ -286,11 +345,20 @@ func (r *FileRegistry) loadLocked() (map[string]Record, error) {
 		out[rec.AccountID] = cloneRecord(rec)
 	}
 
+	r.epochs = snap.Epochs
+	if r.epochs == nil {
+		r.epochs = map[string]uint64{}
+	}
+
 	return out, nil
 }
 
 func (r *FileRegistry) saveLocked(records map[string]Record) error {
-	snap := fileSnapshot{Records: make([]Record, 0, len(records))}
+	if r.epochs == nil {
+		r.epochs = map[string]uint64{}
+	}
+
+	snap := fileSnapshot{Records: make([]Record, 0, len(records)), Epochs: r.epochs}
 	for _, rec := range records {
 		snap.Records = append(snap.Records, cloneRecord(rec))
 	}
@@ -314,4 +382,55 @@ func (r *FileRegistry) saveLocked(records map[string]Record) error {
 	}
 
 	return nil
+}
+
+func (r *FileRegistry) RevokeEpoch(clientName, subject string) (uint64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, err := r.loadLocked(); err != nil {
+		return 0, err
+	}
+
+	return r.epochs[epochKey(clientName, subject)], nil
+}
+
+func (r *FileRegistry) BumpRevokeEpoch(clientName, subject string) (uint64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	records, err := r.loadLocked()
+	if err != nil {
+		return 0, err
+	}
+
+	if r.epochs == nil {
+		r.epochs = map[string]uint64{}
+	}
+
+	key := epochKey(clientName, subject)
+	r.epochs[key]++
+
+	if err := r.saveLocked(records); err != nil {
+		r.epochs[key]--
+		return 0, err
+	}
+
+	return r.epochs[key], nil
+}
+
+func (r *FileRegistry) Epochs() (map[string]uint64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, err := r.loadLocked(); err != nil {
+		return nil, err
+	}
+
+	out := make(map[string]uint64, len(r.epochs))
+	for k, v := range r.epochs {
+		out[k] = v
+	}
+
+	return out, nil
 }

@@ -126,20 +126,7 @@ func (h *Handler) accounts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) connect(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	h.limitBody(w, r)
-
-	if err := h.guard(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
-	}
-
-	if err := h.requireCSRF(r); err != nil {
-		http.Error(w, "invalid CSRF token", http.StatusForbidden)
+	if !h.beginMutation(w, r) {
 		return
 	}
 
@@ -150,7 +137,6 @@ func (h *Handler) connect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req.PrincipalID = h.principal.ID
-	req.ClientName = ""
 
 	result, err := h.controller.StartConnect(r.Context(), req)
 	if err != nil {
@@ -158,31 +144,11 @@ func (h *Handler) connect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.setOAuthSessionCookie(w, result.SessionID)
-
-	if h.wantJSON(r) {
-		h.writeJSON(w, http.StatusOK, result)
-		return
-	}
-
-	http.Redirect(w, r, result.AuthURL, http.StatusFound)
+	h.writeStartResult(w, r, result)
 }
 
 func (h *Handler) reconnect(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	h.limitBody(w, r)
-
-	if err := h.guard(r); err != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
-	}
-
-	if err := h.requireCSRF(r); err != nil {
-		http.Error(w, "invalid CSRF token", http.StatusForbidden)
+	if !h.beginMutation(w, r) {
 		return
 	}
 
@@ -200,6 +166,31 @@ func (h *Handler) reconnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.writeStartResult(w, r, result)
+}
+
+func (h *Handler) beginMutation(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return false
+	}
+
+	h.limitBody(w, r)
+
+	if err := h.guard(r); err != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return false
+	}
+
+	if err := h.requireCSRF(r); err != nil {
+		http.Error(w, "invalid CSRF token", http.StatusForbidden)
+		return false
+	}
+
+	return true
+}
+
+func (h *Handler) writeStartResult(w http.ResponseWriter, r *http.Request, result StartResult) {
 	h.setOAuthSessionCookie(w, result.SessionID)
 
 	if h.wantJSON(r) {
@@ -454,14 +445,26 @@ func isJSONRequest(r *http.Request) bool {
 	return strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/json")
 }
 
+type capabilityPayload struct {
+	Label        string          `json:"label"`
+	AccountID    string          `json:"account_id"`
+	Scopes       json.RawMessage `json:"scopes"`
+	Capabilities json.RawMessage `json:"capabilities"`
+}
+
 func decodeConnectRequest(r *http.Request) (ConnectRequest, error) {
 	if isJSONRequest(r) {
-		var req ConnectRequest
-		if err := decodeJSONBody(r, &req); err != nil && !errors.Is(err, errEmptyBody) {
+		var payload capabilityPayload
+		if err := decodeJSONBody(r, &payload); err != nil && !errors.Is(err, errEmptyBody) {
 			return ConnectRequest{}, err
 		}
 
-		return req, nil
+		scopes, err := scopesFromPayload(payload.Scopes, payload.Capabilities)
+		if err != nil {
+			return ConnectRequest{}, err
+		}
+
+		return ConnectRequest{Label: payload.Label, Scopes: scopes}, nil
 	}
 
 	if err := r.ParseForm(); err != nil {
@@ -476,12 +479,17 @@ func decodeConnectRequest(r *http.Request) (ConnectRequest, error) {
 
 func decodeReconnectRequest(r *http.Request) (ReconnectRequest, error) {
 	if isJSONRequest(r) {
-		var req ReconnectRequest
-		if err := decodeJSONBody(r, &req); err != nil {
+		var payload capabilityPayload
+		if err := decodeJSONBody(r, &payload); err != nil {
 			return ReconnectRequest{}, err
 		}
 
-		return req, nil
+		scopes, err := scopesFromPayload(payload.Scopes, payload.Capabilities)
+		if err != nil {
+			return ReconnectRequest{}, err
+		}
+
+		return ReconnectRequest{AccountID: payload.AccountID, Scopes: scopes}, nil
 	}
 
 	if err := r.ParseForm(); err != nil {
@@ -489,6 +497,47 @@ func decodeReconnectRequest(r *http.Request) (ReconnectRequest, error) {
 	}
 
 	return ReconnectRequest{AccountID: r.FormValue("account_id"), Scopes: formScopes(r)}, nil
+}
+
+func jsonFieldPresent(raw json.RawMessage) bool {
+	trim := strings.TrimSpace(string(raw))
+
+	return trim != "" && trim != "null"
+}
+
+func scopesFromPayload(scopesRaw, capsRaw json.RawMessage) ([]string, error) {
+	hasScopes := jsonFieldPresent(scopesRaw)
+	hasCaps := jsonFieldPresent(capsRaw)
+
+	if !hasScopes && !hasCaps {
+		return nil, nil
+	}
+
+	out := make([]string, 0)
+
+	if hasScopes {
+		var scopes []string
+		if err := json.Unmarshal(scopesRaw, &scopes); err != nil {
+			return nil, fmt.Errorf("decode scopes: %w", err)
+		}
+
+		out = append(out, scopes...)
+	}
+
+	if hasCaps {
+		var caps []string
+		if err := json.Unmarshal(capsRaw, &caps); err != nil {
+			return nil, fmt.Errorf("decode capabilities: %w", err)
+		}
+
+		for _, cap := range caps {
+			if scope, ok := scopeForCapability(cap); ok {
+				out = append(out, scope)
+			}
+		}
+	}
+
+	return out, nil
 }
 
 func decodeDisconnectRequest(r *http.Request) (DisconnectRequest, error) {
@@ -509,7 +558,16 @@ func decodeDisconnectRequest(r *http.Request) (DisconnectRequest, error) {
 }
 
 func formScopes(r *http.Request) []string {
-	out := append([]string(nil), r.Form["scopes"]...)
+	_, hasCapabilities := r.Form["capabilities"]
+
+	_, hasScopes := r.Form["scopes"]
+	if !hasCapabilities && !hasScopes {
+		return nil
+	}
+
+	out := make([]string, 0, len(r.Form["scopes"])+len(r.Form["capabilities"]))
+
+	out = append(out, r.Form["scopes"]...)
 	for _, cap := range r.Form["capabilities"] {
 		if scope, ok := scopeForCapability(cap); ok {
 			out = append(out, scope)

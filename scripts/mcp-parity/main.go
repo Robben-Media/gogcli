@@ -9,6 +9,7 @@ import (
 
 	"github.com/alecthomas/kong"
 
+	"github.com/steipete/gogcli/internal/access"
 	"github.com/steipete/gogcli/internal/cmd"
 	"github.com/steipete/gogcli/internal/mcpcontract"
 )
@@ -52,7 +53,7 @@ func main() {
 		if len(path) == 0 {
 			return
 		}
-		service := strings.ReplaceAll(path[0], "-", "")
+		service := access.CanonicalService(path[0])
 
 		rest := strings.Join(path[1:], ".")
 		if service == "gmail" {

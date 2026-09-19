@@ -24,6 +24,7 @@ a { color: var(--accent); }
 .capabilities li:last-child { border-bottom: 0; }
 .capability-status { color: var(--success); font-size: .875rem; }
 .none { margin: 0 0 16px; color: var(--muted); }
+.state-note { margin: 0 0 16px; color: var(--muted); font-size: .8125rem; }
 .actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
 .reconnect-access { border: 0; margin: 0 0 14px; padding: 0; }
 .reconnect-access legend { margin-bottom: 7px; }
@@ -68,7 +69,8 @@ legend { margin-bottom: 7px; }
 <h2 class="label">{{if .Label}}{{.Label}}{{else}}Google account{{end}}</h2>
 </div>
 <p class="email">{{.Email}}</p>
-{{if .Capabilities}}
+{{if .StateNote}}<p class="state-note">{{.StateNote}}</p>{{end}}
+{{if .IsActive}}{{if .Capabilities}}
 <ul class="capabilities">
 {{range .Capabilities}}
 <li><span>{{.Name}}</span><span class="capability-status">{{.Status}}</span></li>
@@ -76,11 +78,26 @@ legend { margin-bottom: 7px; }
 </ul>
 {{else}}
 <p class="none">No supported capabilities are granted.</p>
-{{end}}
+{{end}}{{end}}
 <div class="actions">
+{{if .IsPending}}
 <form method="post" action="/reconnect">
 <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
 <input type="hidden" name="account_id" value="{{.AccountID}}">
+<button type="submit">Finish connection</button>
+</form>
+{{else if .IsDisconnecting}}
+<form method="post" action="/disconnect">
+<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+<input type="hidden" name="account_id" value="{{.AccountID}}">
+<button type="submit">Retry disconnect</button>
+<p class="warning">Disconnecting removes this connection. Other deployments using the same Google grant may be affected.</p>
+</form>
+{{else}}
+<form method="post" action="/reconnect">
+<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+<input type="hidden" name="account_id" value="{{.AccountID}}">
+<input type="hidden" name="capabilities" value="">
 {{if .AdditionalChoices}}
 <fieldset class="reconnect-access">
 <legend>Add Google access</legend>
@@ -102,6 +119,7 @@ legend { margin-bottom: 7px; }
 <button type="submit">Disconnect</button>
 <p class="warning">Disconnecting removes this connection. Other deployments using the same Google grant may be affected.</p>
 </form>
+{{end}}
 </div>
 </article>
 </li>
@@ -122,6 +140,7 @@ legend { margin-bottom: 7px; }
 <h2 id="connect-heading">{{.ConnectHeading}}</h2>
 <form method="post" action="/connect">
 <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+<input type="hidden" name="capabilities" value="">
 <div class="field">
 <label for="label">Display label</label>
 <input id="label" name="label" type="text" maxlength="80" autocomplete="off" placeholder="Personal">
@@ -132,13 +151,8 @@ legend { margin-bottom: 7px; }
 <ul class="choices">
 {{range $index, $choice := .CapabilityChoices}}
 <li class="choice">
-{{if $choice.Included}}
-<input id="scope-{{$index}}" type="checkbox" checked disabled>
-<label for="scope-{{$index}}">{{$choice.Name}} (always included)</label>
-{{else}}
 <input id="scope-{{$index}}" type="checkbox" name="capabilities" value="{{$choice.Capability}}"{{if $choice.Checked}} checked{{end}}>
 <label for="scope-{{$index}}">{{$choice.Name}}</label>
-{{end}}
 </li>
 {{end}}
 </ul>

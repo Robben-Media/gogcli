@@ -26,14 +26,9 @@ func capabilityPairs() []struct {
 }
 
 func capabilitiesForScopes(scopes []string) []string {
-	have := map[string]bool{}
-	for _, scope := range scopes {
-		have[strings.TrimSpace(scope)] = true
-	}
-
 	out := make([]string, 0, len(capabilityPairs()))
 	for _, pair := range capabilityPairs() {
-		if have[pair.scope] {
+		if mcpcontract.ScopeGranted(scopes, pair.scope) {
 			out = append(out, pair.name)
 		}
 	}
@@ -56,20 +51,22 @@ func scopeForCapability(name string) (string, bool) {
 
 func accountView(rec Record) AccountView {
 	return AccountView{
-		AccountID:    rec.AccountID,
-		Email:        rec.Email,
-		Label:        rec.Label,
-		ClientName:   rec.ClientName,
-		AuthMode:     rec.AuthMode,
-		Scopes:       append([]string(nil), rec.Scopes...),
-		Capabilities: capabilitiesForScopes(rec.Scopes),
-		UpdatedAt:    rec.UpdatedAt,
+		AccountID:      rec.AccountID,
+		Email:          rec.Email,
+		Label:          rec.Label,
+		ClientName:     rec.ClientName,
+		AuthMode:       rec.AuthMode,
+		Scopes:         append([]string(nil), rec.Scopes...),
+		Capabilities:   capabilitiesForScopes(rec.Scopes),
+		State:          rec.State,
+		CleanupPending: rec.Cleanup != nil,
+		UpdatedAt:      rec.UpdatedAt,
 	}
 }
 
-// DefaultConnectScopes is the initial consent set when the UI submits no
-// capabilities: OpenID identity plus Gmail readonly. Extra services are
-// requested only when explicitly submitted and listed in AllowedConnectScopes.
+// DefaultConnectScopes is the consent set when the UI submits no capabilities:
+// OpenID identity plus Gmail readonly. An explicit capability list requests
+// only those scopes plus OpenID identity.
 func DefaultConnectScopes() []string {
 	return []string{
 		scopeOpenID,
@@ -94,6 +91,7 @@ func AllowedConnectScopes() []string {
 }
 
 // ScopeChoices is the server-provided readonly capability list for the UI.
+// None are required; Gmail is a default checked selection, not a forced grant.
 func ScopeChoices() []ScopeChoice {
 	pairs := capabilityPairs()
 

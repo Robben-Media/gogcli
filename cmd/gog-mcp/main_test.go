@@ -121,6 +121,24 @@ func TestParseStartupFlags(t *testing.T) {
 	}
 }
 
+func TestDefaultCredentialBucketIsSeparateFromCLI(t *testing.T) {
+	t.Setenv("GOG_MCP_CLIENT_NAME", "")
+	if err := os.Unsetenv("GOG_MCP_CLIENT_NAME"); err != nil {
+		t.Fatal(err)
+	}
+	var flags cli
+	parser, err := kong.New(&flags, kong.Name("gog-mcp"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parser.Parse(nil); err != nil {
+		t.Fatal(err)
+	}
+	if flags.ClientName != "native-mcp" {
+		t.Fatalf("native server selected credential bucket %q", flags.ClientName)
+	}
+}
+
 func TestOpenRegistryDefaultsToPersistentFile(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())

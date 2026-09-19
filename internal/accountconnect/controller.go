@@ -18,6 +18,8 @@ import (
 
 const defaultSessionTTL = 10 * time.Minute
 
+const disconnectLocalRetryMessage = "Google revoke finished, but local cleanup needs a retry."
+
 // Options constructs a Controller. RedirectURL must be the exact registered callback.
 type Options struct {
 	Registry    Registry
@@ -156,15 +158,26 @@ func (c *Controller) ListAccounts(ctx context.Context, principalID string) ([]Ac
 		return nil, ErrInvalidPrincipal
 	}
 
+	if err := c.lifecycle.Lock(ctx); err != nil {
+		return nil, err
+	}
+
 	records, err := c.registry.List(ctx, principalID)
 	if err != nil {
+		c.lifecycle.Unlock()
 		return nil, fmt.Errorf("list accounts: %w", err)
 	}
 
 	views := make([]AccountView, 0, len(records))
 	for _, rec := range records {
+		if rec.Cleanup != nil && rec.Cleanup.Kind == CleanupTokenKey {
+			rec, _ = c.settleTokenCleanup(ctx, rec)
+		}
+
 		views = append(views, accountView(rec))
 	}
+
+	c.lifecycle.Unlock()
 
 	sort.Slice(views, func(i, j int) bool {
 		if views[i].Email == views[j].Email {
@@ -186,6 +199,10 @@ func (c *Controller) GetRecord(ctx context.Context, accountID string) (Record, e
 
 	if !ok {
 		return Record{}, ErrUnknownAccount
+	}
+
+	if !rec.IsActive() {
+		return Record{}, ErrAccountUnavailable
 	}
 
 	return rec, nil
@@ -215,6 +232,10 @@ func (c *Controller) StartReconnect(ctx context.Context, req ReconnectRequest) (
 	rec, err := c.ownedRecord(ctx, principalID, req.AccountID)
 	if err != nil {
 		return StartResult{}, err
+	}
+
+	if rec.State == RecordStateDisconnecting {
+		return StartResult{}, ErrRevokeInProgress
 	}
 
 	scopes := reconnectScopes(rec.Scopes, req.Scopes)
@@ -312,6 +333,11 @@ func (c *Controller) CompleteCallback(ctx context.Context, req CallbackRequest) 
 		return CallbackResult{}, err
 	}
 
+	beforeEpochs, err := c.registry.Epochs()
+	if err != nil {
+		return CallbackResult{}, fmt.Errorf("read revoke epochs: %w", err)
+	}
+
 	tok, err := c.oauth.Exchange(ctx, ExchangeParams{
 		ClientID:     creds.ClientID,
 		ClientSecret: creds.ClientSecret,
@@ -331,15 +357,34 @@ func (c *Controller) CompleteCallback(ctx context.Context, req CallbackRequest) 
 		return CallbackResult{}, ErrMissingGrantedScopes
 	}
 
-	c.lifecycle.Lock()
-	defer c.lifecycle.Unlock()
+	if lockErr := c.lifecycle.Lock(ctx); lockErr != nil {
+		return CallbackResult{}, lockErr
+	}
+
+	currentEpoch, epochErr := c.registry.RevokeEpoch(sess.ClientName, tok.Subject)
+	if epochErr != nil {
+		c.lifecycle.Unlock()
+		return CallbackResult{}, fmt.Errorf("read revoke epoch: %w", epochErr)
+	}
+
+	if beforeEpochs[epochKey(sess.ClientName, tok.Subject)] != currentEpoch {
+		c.lifecycle.Unlock()
+		return CallbackResult{}, ErrRevokeInProgress
+	}
 
 	existing, created, err := c.matchRecord(ctx, sess, tok.Subject)
 	if err != nil {
+		c.lifecycle.Unlock()
 		return CallbackResult{}, err
 	}
 
+	if !created && existing.State == RecordStateDisconnecting {
+		c.lifecycle.Unlock()
+		return CallbackResult{}, ErrRevokeInProgress
+	}
+
 	if !created && existing.Subject != tok.Subject {
+		c.lifecycle.Unlock()
 		return CallbackResult{}, ErrSubjectMismatch
 	}
 
@@ -358,6 +403,7 @@ func (c *Controller) CompleteCallback(ctx context.Context, req CallbackRequest) 
 
 		stored, _, getErr := c.tokens.Get(ctx, sess.ClientName, lookupEmail)
 		if getErr != nil || stored == "" {
+			c.lifecycle.Unlock()
 			return CallbackResult{}, ErrMissingRefresh
 		}
 
@@ -370,6 +416,7 @@ func (c *Controller) CompleteCallback(ctx context.Context, req CallbackRequest) 
 	if created {
 		id, idErr := c.newID()
 		if idErr != nil {
+			c.lifecycle.Unlock()
 			return CallbackResult{}, idErr
 		}
 
@@ -398,32 +445,70 @@ func (c *Controller) CompleteCallback(ctx context.Context, req CallbackRequest) 
 	rec.Scopes = append([]string(nil), tok.Scopes...)
 	rec.UpdatedAt = now
 	rec.AuthMode = AuthModeOAuth
+	rec.State = RecordStatePending
 
-	committed, err := c.persistConnection(ctx, rec, refresh, previousEmail)
+	rec.Generation = 0
+	if rec.Cleanup != nil && rec.Cleanup.Kind != CleanupTokenKey {
+		rec.Cleanup = nil
+	}
+
+	committed, cleanupPending, err := c.persistConnection(ctx, rec, refresh, previousEmail)
+	c.lifecycle.Unlock()
+
 	if err != nil {
 		return CallbackResult{}, err
 	}
 
-	c.invalidator.InvalidateAccount(committed.AccountID)
+	c.notifyConnectionsChanged()
 
-	return CallbackResult{Account: accountView(committed), Created: created}, nil
+	result := CallbackResult{Account: accountView(committed), Created: created, CleanupPending: cleanupPending}
+	if cleanupPending {
+		result.Message = "Connected. Previous credential cleanup is pending."
+	}
+
+	return result, nil
 }
 
-func (c *Controller) persistConnection(ctx context.Context, rec Record, refresh, previousEmail string) (Record, error) {
+func (c *Controller) persistConnection(ctx context.Context, rec Record, refresh, previousEmail string) (Record, bool, error) {
 	if rec.AccountID != "" {
+		live, ok, err := c.registry.Get(ctx, rec.AccountID)
+		if err != nil {
+			return Record{}, false, fmt.Errorf("load account: %w", err)
+		}
+
+		if ok && live.Cleanup != nil && live.Cleanup.Kind == CleanupTokenKey {
+			settled, pending := c.settleTokenCleanup(ctx, live)
+			if pending {
+				return settled, true, ErrCleanupPending
+			}
+
+			rec.Cleanup = settled.Cleanup
+		}
+
 		c.invalidator.InvalidateAccount(rec.AccountID)
+	}
+
+	rec.State = RecordStatePending
+	if previousEmail != "" && previousEmail != rec.Email {
+		rec.Cleanup = &Cleanup{Kind: CleanupTokenKey, ClientName: rec.ClientName, Email: previousEmail}
 	}
 
 	committed, previous, existed, err := c.registry.Commit(ctx, rec)
 	if err != nil {
-		return Record{}, fmt.Errorf("persist account: %w", err)
+		return Record{}, false, fmt.Errorf("persist account: %w", err)
 	}
 
 	if existed && committed.AccountID != rec.AccountID {
 		c.invalidator.InvalidateAccount(committed.AccountID)
 	}
 
-	if err := c.tokens.Put(ctx, committed.ClientName, committed.Email, refresh, committed.Scopes); err != nil {
+	if putErr := c.tokens.Put(ctx, committed.ClientName, committed.Email, refresh, committed.Scopes); putErr != nil {
+		c.invalidator.InvalidateAccount(committed.AccountID)
+
+		if tokenMutationUnknown(putErr) {
+			return committed, true, fmt.Errorf("store refresh token: %w", putErr)
+		}
+
 		var rollErr error
 		if existed {
 			rollErr = c.registry.Upsert(ctx, previous)
@@ -431,22 +516,55 @@ func (c *Controller) persistConnection(ctx context.Context, rec Record, refresh,
 			rollErr = c.registry.Delete(ctx, committed.AccountID)
 		}
 
-		c.invalidator.InvalidateAccount(committed.AccountID)
-
 		if rollErr != nil {
-			return Record{}, fmt.Errorf("store refresh token: %w (rollback: %w)", err, rollErr)
+			return Record{}, false, fmt.Errorf("store refresh token: %w (rollback: %w)", putErr, rollErr)
 		}
 
-		return Record{}, fmt.Errorf("store refresh token: %w", err)
+		return Record{}, false, fmt.Errorf("store refresh token: %w", putErr)
 	}
 
-	if previousEmail != "" && previousEmail != committed.Email {
-		if delErr := c.tokens.Delete(ctx, committed.ClientName, previousEmail); delErr != nil && !IsTokenNotFound(delErr) {
-			return committed, fmt.Errorf("cleanup previous token key: %w", delErr)
+	committed.State = RecordStateActive
+	if previousEmail == "" || previousEmail == committed.Email {
+		if committed.Cleanup != nil && committed.Cleanup.Kind != CleanupTokenKey {
+			committed.Cleanup = nil
 		}
 	}
 
-	return committed, nil
+	active, _, _, err := c.registry.Commit(ctx, committed)
+	if err != nil {
+		return Record{}, false, fmt.Errorf("activate account: %w", err)
+	}
+
+	active, cleanupPending := c.settleTokenCleanup(ctx, active)
+	c.invalidator.InvalidateAccount(active.AccountID)
+
+	return active, cleanupPending, nil
+}
+
+func (c *Controller) settleTokenCleanup(ctx context.Context, rec Record) (Record, bool) {
+	if rec.Cleanup == nil || rec.Cleanup.Kind != CleanupTokenKey || rec.Cleanup.Email == "" {
+		return rec, rec.Cleanup != nil
+	}
+
+	cleanup := rec.Cleanup
+	if delErr := c.tokens.Delete(ctx, cleanup.ClientName, cleanup.Email); delErr != nil && !IsTokenNotFound(delErr) {
+		c.persistCleanupDebt(ctx, rec)
+		return rec, true
+	}
+
+	rec.Cleanup = nil
+	if _, _, _, err := c.registry.Commit(ctx, rec); err != nil {
+		rec.Cleanup = cleanup
+		return rec, true
+	}
+
+	return rec, false
+}
+
+func (c *Controller) persistCleanupDebt(ctx context.Context, rec Record) {
+	if _, _, _, err := c.registry.Commit(ctx, rec); err != nil {
+		return
+	}
 }
 
 func (c *Controller) matchRecord(ctx context.Context, sess pendingSession, subject string) (Record, bool, error) {
@@ -479,7 +597,9 @@ func (c *Controller) matchRecord(ctx context.Context, sess pendingSession, subje
 
 // Disconnect deletes one local connection and attempts to revoke the Google grant.
 func (c *Controller) Disconnect(ctx context.Context, req DisconnectRequest) (DisconnectResult, error) {
-	c.lifecycle.Lock()
+	if err := c.lifecycle.Lock(ctx); err != nil {
+		return DisconnectResult{}, err
+	}
 
 	rec, err := c.ownedRecord(ctx, req.PrincipalID, req.AccountID)
 	if err != nil {
@@ -488,27 +608,153 @@ func (c *Controller) Disconnect(ctx context.Context, req DisconnectRequest) (Dis
 	}
 
 	refresh, _, tokenErr := c.tokens.Get(ctx, rec.ClientName, rec.Email)
-	c.invalidator.InvalidateAccount(rec.AccountID)
+	alreadyLocal := rec.State == RecordStateDisconnecting && rec.Cleanup != nil && rec.Cleanup.Stage == CleanupStageLocal
+	tokenMissing := refresh == "" || IsTokenNotFound(tokenErr)
+	tokenReadFailed := tokenErr != nil && !IsTokenNotFound(tokenErr)
 
-	if err := c.registry.Delete(ctx, rec.AccountID); err != nil {
-		c.lifecycle.Unlock()
-		return DisconnectResult{}, fmt.Errorf("delete account: %w", err)
+	if rec.State != RecordStateDisconnecting {
+		if rec.Cleanup != nil && rec.Cleanup.Kind == CleanupTokenKey {
+			var pending bool
+
+			rec, pending = c.settleTokenCleanup(ctx, rec)
+			if pending {
+				c.lifecycle.Unlock()
+
+				return DisconnectResult{
+					AccountID: rec.AccountID,
+					Retryable: true,
+					State:     rec.State,
+					Message:   "Previous credential cleanup is still pending. Retry disconnect after it completes.",
+				}, ErrCleanupPending
+			}
+		}
+
+		epoch, bumpErr := c.registry.BumpRevokeEpoch(rec.ClientName, rec.Subject)
+		if bumpErr != nil {
+			c.lifecycle.Unlock()
+			return DisconnectResult{}, fmt.Errorf("bump revoke epoch: %w", bumpErr)
+		}
+
+		rec.State = RecordStateDisconnecting
+		rec.RevokeEpoch = epoch
+		rec.Cleanup = &Cleanup{Kind: CleanupRevoke, ClientName: rec.ClientName, Email: rec.Email}
+		rec.UpdatedAt = c.now()
+
+		rec.Generation = 0
+		if _, _, _, err := c.registry.Commit(ctx, rec); err != nil {
+			c.lifecycle.Unlock()
+			return DisconnectResult{}, fmt.Errorf("mark disconnecting: %w", err)
+		}
 	}
 
-	if err := c.tokens.Delete(ctx, rec.ClientName, rec.Email); err != nil && !IsTokenNotFound(err) {
+	c.invalidator.InvalidateAccount(rec.AccountID)
+	c.lifecycle.Unlock()
+	c.notifyConnectionsChanged()
+
+	if tokenReadFailed && !alreadyLocal {
+		return DisconnectResult{
+			AccountID:                     rec.AccountID,
+			OtherDeploymentsMayBeAffected: true,
+			Retryable:                     true,
+			State:                         RecordStateDisconnecting,
+			Message:                       "Google revoke did not finish. The local connection is disabled; retry disconnect to keep the protected retry token.",
+		}, fmt.Errorf("read refresh token: %w", tokenErr)
+	}
+
+	revoked := alreadyLocal
+	revokeErr := error(nil)
+
+	needRevoke := !alreadyLocal && !tokenMissing
+	if needRevoke {
+		revokeErr = c.oauth.Revoke(ctx, refresh)
+		revoked = revokeErr == nil
+	}
+
+	if needRevoke && !revoked {
+		return DisconnectResult{
+			AccountID:                     rec.AccountID,
+			OtherDeploymentsMayBeAffected: true,
+			Retryable:                     true,
+			State:                         RecordStateDisconnecting,
+			Message:                       "Google revoke did not finish. The local connection is disabled; retry disconnect to keep the protected retry token.",
+		}, fmt.Errorf("revoke Google grant: %w", revokeErr)
+	}
+
+	if err := c.lifecycle.Lock(ctx); err != nil {
+		return DisconnectResult{
+			AccountID:                     rec.AccountID,
+			RevokedRemote:                 revoked,
+			OtherDeploymentsMayBeAffected: true,
+			Retryable:                     true,
+			State:                         RecordStateDisconnecting,
+			Message:                       disconnectLocalRetryMessage,
+		}, err
+	}
+
+	current, ok, getErr := c.registry.Get(ctx, rec.AccountID)
+	if getErr != nil {
 		c.lifecycle.Unlock()
-		return DisconnectResult{}, fmt.Errorf("delete refresh token: %w", err)
+
+		return DisconnectResult{
+			AccountID:                     rec.AccountID,
+			RevokedRemote:                 revoked,
+			OtherDeploymentsMayBeAffected: true,
+			Retryable:                     true,
+			State:                         RecordStateDisconnecting,
+			Message:                       disconnectLocalRetryMessage,
+		}, fmt.Errorf("reload disconnecting account: %w", getErr)
+	}
+
+	if !ok || current.State != RecordStateDisconnecting {
+		c.lifecycle.Unlock()
+		c.notifyConnectionsChanged()
+
+		return DisconnectResult{AccountID: rec.AccountID, RevokedRemote: revoked, OtherDeploymentsMayBeAffected: true, Message: "Local connection removed. Other connected Google accounts were not changed."}, nil
+	}
+
+	current.Cleanup = &Cleanup{Kind: CleanupRevoke, Stage: CleanupStageLocal, ClientName: current.ClientName, Email: current.Email}
+	if _, _, _, err := c.registry.Commit(ctx, current); err != nil {
+		c.lifecycle.Unlock()
+
+		return DisconnectResult{
+			AccountID: rec.AccountID, RevokedRemote: revoked, OtherDeploymentsMayBeAffected: true,
+			Retryable: true, State: RecordStateDisconnecting,
+			Message: disconnectLocalRetryMessage,
+		}, fmt.Errorf("record revoke stage: %w", err)
+	}
+
+	if _, err := c.registry.BumpRevokeEpoch(current.ClientName, current.Subject); err != nil {
+		c.lifecycle.Unlock()
+
+		return DisconnectResult{
+			AccountID: rec.AccountID, RevokedRemote: revoked, OtherDeploymentsMayBeAffected: true,
+			Retryable: true, State: RecordStateDisconnecting,
+			Message: disconnectLocalRetryMessage,
+		}, fmt.Errorf("bump completion epoch: %w", err)
+	}
+
+	if err := c.tokens.Delete(ctx, current.ClientName, current.Email); err != nil && !IsTokenNotFound(err) {
+		c.lifecycle.Unlock()
+
+		return DisconnectResult{
+			AccountID: rec.AccountID, RevokedRemote: revoked, OtherDeploymentsMayBeAffected: true,
+			Retryable: true, State: RecordStateDisconnecting,
+			Message: disconnectLocalRetryMessage,
+		}, fmt.Errorf("delete refresh token: %w", err)
+	}
+
+	if err := c.registry.Delete(ctx, current.AccountID); err != nil {
+		c.lifecycle.Unlock()
+
+		return DisconnectResult{
+			AccountID: rec.AccountID, RevokedRemote: revoked, OtherDeploymentsMayBeAffected: true,
+			Retryable: true, State: RecordStateDisconnecting,
+			Message: disconnectLocalRetryMessage,
+		}, fmt.Errorf("delete account: %w", err)
 	}
 
 	c.lifecycle.Unlock()
-
-	revoked := false
-
-	if tokenErr == nil && refresh != "" {
-		if err := c.oauth.Revoke(ctx, refresh); err == nil {
-			revoked = true
-		}
-	}
+	c.notifyConnectionsChanged()
 
 	msg := "Local connection removed. Other connected Google accounts were not changed."
 	if revoked {
@@ -523,6 +769,10 @@ func (c *Controller) Disconnect(ctx context.Context, req DisconnectRequest) (Dis
 		OtherDeploymentsMayBeAffected: true,
 		Message:                       msg,
 	}, nil
+}
+
+func (c *Controller) notifyConnectionsChanged() {
+	c.invalidator.ConnectionsChanged()
 }
 
 func (c *Controller) ownedRecord(ctx context.Context, principalID, accountID string) (Record, error) {
@@ -590,33 +840,23 @@ func (c *Controller) Lifecycle() *Lifecycle {
 }
 
 func filterRequestedScopes(requested []string) []string {
-	allowed := make(map[string]bool, len(AllowedConnectScopes()))
-	for _, scope := range AllowedConnectScopes() {
-		allowed[scope] = true
+	if requested == nil {
+		return append([]string(nil), DefaultConnectScopes()...)
 	}
 
-	out := append([]string(nil), DefaultConnectScopes()...)
-
-	seen := map[string]bool{}
-	for _, scope := range out {
-		seen[scope] = true
-	}
-
-	for _, scope := range requested {
-		scope = strings.TrimSpace(scope)
-		if !allowed[scope] || seen[scope] {
-			continue
-		}
-
-		out = append(out, scope)
-		seen[scope] = true
-	}
-
-	return out
+	return unionScopes(identityScopes(), requested)
 }
 
 func reconnectScopes(existing, requested []string) []string {
-	return unionScopes(DefaultConnectScopes(), existing, filterRequestedScopes(requested))
+	if requested == nil {
+		return unionScopes(identityScopes(), existing)
+	}
+
+	return unionScopes(identityScopes(), existing, requested)
+}
+
+func identityScopes() []string {
+	return []string{scopeOpenID, scopeEmail}
 }
 
 func unionScopes(sets ...[]string) []string {

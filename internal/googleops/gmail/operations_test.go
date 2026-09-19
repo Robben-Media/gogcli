@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -74,10 +75,15 @@ func TestOperationsDefinitionAndSchemas(t *testing.T) {
 }
 
 func TestSearchMetadataFirstPaginationAndLabels(t *testing.T) {
+	var requestsMu sync.Mutex
 	var requests []*http.Request
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestsMu.Lock()
+
 		requests = append(requests, r)
+		requestsMu.Unlock()
+
 		switch {
 		case r.URL.Path == "/gmail/v1/users/me/messages" && r.Method == http.MethodGet:
 			if r.URL.Query().Get("q") != "from:test@example.com" {
@@ -128,6 +134,12 @@ func TestSearchMetadataFirstPaginationAndLabels(t *testing.T) {
 	if !ok {
 		t.Fatalf("unexpected result type %T", resultAny)
 	}
+
+	requestsMu.Lock()
+
+	requests = append([]*http.Request(nil), requests...)
+
+	requestsMu.Unlock()
 
 	if result.AccountID != "acct" || result.AccountLabel != "Work mailbox" {
 		t.Fatalf("unexpected result identity: %#v", result)
