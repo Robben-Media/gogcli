@@ -430,21 +430,26 @@ func TestRecipeFactReferencesDeclared(t *testing.T) {
 
 func TestBusinessProfileRecipeReusesExactParent(t *testing.T) {
 	t.Parallel()
+
 	for _, parent := range []string{"", "accounts/123"} {
 		prepared, err := Prepare("businessprofile.resolve_location", "businessprofile_list_locations", map[string]string{"parent": parent})
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		want := 2
 		if parent != "" {
 			want = 1
 		}
+
 		if prepared.Status != StatusReady || len(prepared.Steps) != want || prepared.CallEstimate.Max != want {
 			t.Fatalf("parent %q: %+v", parent, prepared)
 		}
+
 		if hasLookup(prepared, "businessprofile_list_accounts") != (parent == "") {
 			t.Fatalf("unexpected account discovery: %+v", prepared)
 		}
+
 		if !hasLookup(prepared, "businessprofile_list_locations") || prepared.Gap == "" {
 			t.Fatalf("missing read or availability caveat: %+v", prepared)
 		}

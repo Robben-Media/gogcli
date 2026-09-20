@@ -407,10 +407,12 @@ func TestBusinessProfileInputSchemasMatchFrozenRequests(t *testing.T) {
 func TestAccountsContinuationPreservesOpaqueToken(t *testing.T) {
 	t.Parallel()
 	operation, _, recorder := fixture(t, "businessprofile_list_accounts", http.StatusOK, `{"accounts":[],"nextPageToken":"next"}`)
+
 	_, err := decodeRun(t, operation, `{"account_id":"a","page_token":"  A+/=?%  "}`, testIdentity("a"))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if recorder.calls != 1 || recorder.query.Get("pageToken") != "  A+/=?%  " {
 		t.Fatalf("continuation changed: calls=%d query=%v", recorder.calls, recorder.query)
 	}
@@ -418,12 +420,15 @@ func TestAccountsContinuationPreservesOpaqueToken(t *testing.T) {
 
 func TestParentPathMetacharactersRejectedBeforeProvider(t *testing.T) {
 	t.Parallel()
+
 	for _, parent := range []string{"accounts/.", "accounts/..", "accounts/a?x=y", "accounts/a#frag", "accounts/%2F", "accounts/a\\b", "accounts/a b", "accounts/a\n"} {
 		operation, provider, recorder := fixture(t, "businessprofile_list_locations", http.StatusOK, `{}`)
+
 		raw, err := json.Marshal(map[string]string{"account_id": "a", "parent": parent})
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		_, err = decodeRun(t, operation, string(raw), testIdentity("a"))
 		if !isInvalidInput(err) || len(provider.options) != 0 || recorder.calls != 0 {
 			t.Fatalf("parent %q: err=%v calls=%d", parent, err, recorder.calls)
