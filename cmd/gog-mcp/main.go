@@ -51,6 +51,8 @@ type cli struct {
 	Principal        string        `name:"principal" help:"Trusted caller principal ID" default:"local" env:"GOG_MCP_PRINCIPAL"`
 	AllowOperations  string        `name:"allow-operations" help:"Comma-separated enabled MCP operations" env:"GOG_MCP_ALLOW_OPERATIONS"`
 	GrantsFile       string        `name:"grants-file" help:"JSON file of caller account/client/action grants" env:"GOG_MCP_GRANTS_FILE"`
+	HTTPAddr         string        `name:"http-addr" help:"Streamable HTTP listen address. Empty keeps stdio (example: 0.0.0.0:8080)" env:"GOG_MCP_HTTP_ADDR"`
+	HTTPConfig       string        `name:"http-config" help:"JSON caller/token/grant file required with --http-addr" env:"GOG_MCP_HTTP_CONFIG"`
 	RegistryFile     string        `name:"registry-file" help:"Persistent account registry JSON path (defaults to <config-dir>/mcp-accounts.json). Memory registries are test-only." env:"GOG_MCP_REGISTRY_FILE"`
 	ClientName       string        `name:"client-name" help:"App-owned OAuth credential bucket" default:"native-mcp" env:"GOG_MCP_CLIENT_NAME"`
 	ConnectAddr      string        `name:"connect-addr" help:"Optional loopback address for the account connect page" env:"GOG_MCP_CONNECT_ADDR"`
@@ -78,7 +80,7 @@ func main() {
 func run(args []string) int {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	var flags cli
-	parser, err := kong.New(&flags, kong.Name("gog-mcp"), kong.Description("Native Google MCP server (stdio)."))
+	parser, err := kong.New(&flags, kong.Name("gog-mcp"), kong.Description("Native Google MCP server (stdio by default; Streamable HTTP with --http-addr)."))
 	if err != nil {
 		logger.Error("parser", "error", err)
 		return 1
@@ -111,16 +113,35 @@ func serve(flags cli, logger *slog.Logger) error {
 		flags.ClientName = "native-mcp"
 	}
 
-	principalID := strings.TrimSpace(flags.Principal)
-	if principalID == "" {
-		principalID = defaultPrincipal
+	if err := validateHTTPModeFlags(flags); err != nil {
+		return err
 	}
 
-	principal := mcpcontract.Principal{ID: principalID}
+	httpMode := strings.TrimSpace(flags.HTTPAddr) != ""
+	var httpCfg mcpserver.HTTPConfig
+	var principalID string
+	var principal mcpcontract.Principal
+	var grants []mcpcontract.Grant
+	var allow []string
+	var err error
 
-	grants, allow, err := loadGrants(flags, principalID)
-	if err != nil {
-		return err
+	if httpMode {
+		httpCfg, err = mcpserver.LoadHTTPConfig(flags.HTTPConfig)
+		if err != nil {
+			return fmt.Errorf("load http config: %w", err)
+		}
+	} else {
+		principalID = strings.TrimSpace(flags.Principal)
+		if principalID == "" {
+			principalID = defaultPrincipal
+		}
+
+		principal = mcpcontract.Principal{ID: principalID}
+
+		grants, allow, err = loadGrants(flags, principalID)
+		if err != nil {
+			return err
+		}
 	}
 
 	cfgFile, err := config.ReadConfig()
@@ -154,6 +175,18 @@ func serve(flags cli, logger *slog.Logger) error {
 	if flags.APICatalog {
 		artifacts = mediaartifact.New()
 		defer artifacts.Close()
+	}
+
+	if httpMode {
+		return serveHTTP(flags, logger, httpCfg, httpServeDeps{
+			cfgFile:   cfgFile,
+			registry:  registry,
+			tokens:    tokens,
+			lifecycle: lifecycle,
+			provider:  provider,
+			artifacts: artifacts,
+			syncer:    syncer,
+		})
 	}
 
 	runtime, err := mcpserver.New(mcpserver.Config{
@@ -386,8 +419,9 @@ type accountFencer interface {
 }
 
 type toolSyncInvalidator struct {
-	inner   accountFencer
-	runtime atomic.Pointer[mcpserver.Runtime]
+	inner    accountFencer
+	runtime  atomic.Pointer[mcpserver.Runtime]
+	runtimes atomic.Pointer[[]*mcpserver.Runtime]
 }
 
 func (t *toolSyncInvalidator) InvalidateAccount(accountID string) {
@@ -396,7 +430,25 @@ func (t *toolSyncInvalidator) InvalidateAccount(accountID string) {
 	}
 }
 
+func (t *toolSyncInvalidator) storeAll(runtimes []*mcpserver.Runtime) {
+	cloned := append([]*mcpserver.Runtime(nil), runtimes...)
+	t.runtimes.Store(&cloned)
+	if len(cloned) == 1 {
+		t.runtime.Store(cloned[0])
+	}
+}
+
 func (t *toolSyncInvalidator) ConnectionsChanged() {
+	if runtimes := t.runtimes.Load(); runtimes != nil {
+		for _, runtime := range *runtimes {
+			if runtime != nil {
+				runtime.ResyncTools()
+			}
+		}
+
+		return
+	}
+
 	if runtime := t.runtime.Load(); runtime != nil {
 		runtime.ResyncTools()
 	}

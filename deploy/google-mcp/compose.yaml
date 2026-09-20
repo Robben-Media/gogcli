@@ -1,0 +1,83 @@
+# Separate project: never add this service to the existing shared application stack.
+name: google-mcp
+x-service: &service
+  image: ${GOG_MCP_IMAGE:?Set a tested immutable Google MCP image tag or digest}
+  user: "10001:10001"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 128
+  mem_limit: 768m
+  cpus: 1.0
+  stop_grace_period: 40s
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=32m
+  environment:
+    XDG_CONFIG_HOME: /state
+    GOG_KEYRING_BACKEND: file
+    GOG_KEYRING_PASSWORD_FILE: /run/secrets/keyring-password
+  volumes:
+    - ${GOG_MCP_DEPLOY_DIR:?Set a protected absolute deployment directory}/state:/state
+  secrets:
+    - keyring-password
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  google-mcp:
+    <<: *service
+    restart: unless-stopped
+    command:
+      - gog-mcp
+      - --http-addr=0.0.0.0:8080
+      - --http-config=/run/secrets/http-config.json
+      - --registry-file=/state/gogcli/mcp-accounts.json
+      - --client-name=native-mcp
+      - --discovery=compact
+      - --api-catalog
+      - --max-upstream-calls=8
+      - --max-concurrency=8
+    secrets:
+      - keyring-password
+      - http-config
+    networks: [ingress]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${GOG_MCP_NETWORK:-traefik_network}
+      traefik.http.routers.google-mcp.rule: Host(`${GOG_MCP_HOST:?Set the approved MCP hostname}`) && Path(`/mcp`)
+      traefik.http.routers.google-mcp.entrypoints: websecure
+      traefik.http.routers.google-mcp.tls: "true"
+      traefik.http.routers.google-mcp.tls.certresolver: mytlschallenge
+      traefik.http.services.google-mcp.loadbalancer.server.port: "8080"
+      # Never attach Traefik retry middleware to Google write requests.
+    # No published ports. Only Traefik on the existing ingress network reaches HTTP.
+
+  # Stop google-mcp first: the registry and token store have one process owner.
+  onboarding:
+    <<: *service
+    profiles: [onboarding]
+    network_mode: host
+    stdin_open: true
+    command:
+      - gog-mcp
+      - --principal=${GOG_MCP_OWNER:?Set the account-owning principal for onboarding}
+      - --allow-operations=accounts_list
+      - --registry-file=/state/gogcli/mcp-accounts.json
+      - --client-name=native-mcp
+      - --connect-addr=127.0.0.1:8787
+      - --redirect-url=http://127.0.0.1:8787/oauth/callback
+    labels:
+      traefik.enable: "false"
+
+networks:
+  ingress:
+    external: true
+    name: ${GOG_MCP_NETWORK:-traefik_network}
+secrets:
+  keyring-password:
+    file: ${GOG_MCP_DEPLOY_DIR:?Set deployment directory}/secrets/keyring-password
+  http-config:
+    file: ${GOG_MCP_DEPLOY_DIR:?Set deployment directory}/secrets/http-config.json

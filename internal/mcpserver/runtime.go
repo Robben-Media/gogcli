@@ -18,7 +18,7 @@ import (
 	"github.com/steipete/gogcli/internal/mcpcontract"
 )
 
-// Runtime is the stdio MCP adapter. HTTP transport stays disabled here; write tools require EnableWrites.
+// Runtime is the MCP adapter for one trusted principal. Stdio remains the default transport; HTTP Streamable in http.go builds one Runtime per authenticated caller. Write tools require EnableWrites.
 type Runtime struct {
 	principal        mcpcontract.Principal
 	authorizer       *access.Authorizer

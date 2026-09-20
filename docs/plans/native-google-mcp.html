@@ -395,6 +395,13 @@
     <p>The deployment administrator stores the app-owned OAuth client once with the existing <code>gog --client native-mcp auth credentials /secure/oauth-client.json</code> command. Mailbox users then connect through the browser. Use an available protected keyring, or the existing encrypted file backend with its password supplied outside Git and model context. The stdio host launches the process and owns stdin/stdout; diagnostics use stderr. <code>SIGHUP</code> reloads the grants file and existing command policies. No live profile was edited to install this example.</p>
   </section>
 
+  <section id="http-deployment">
+    <h2>Shared HTTP deployment preparation</h2>
+    <p>The selected placement is a separate Google MCP container on Linode, behind its existing Traefik HTTPS routing. Future MCP services get separate containers, releases and protected state. RM Infra with Charlie owns deployment; implementation and local verification remain in this repository. No live service or profile has been changed.</p>
+    <p>The proposed hostname is <code>mcp-google.builtbyrobben.com</code>, pending confirmation. The <a href="../../deploy/google-mcp/README.md">deployment package</a> owns operational configuration, secret provisioning, serial browser onboarding, smoke checks and rollback. HTTP transport is opt-in; stdio and CLI remain available. HTTP does not imply write enablement or native Skills support.</p>
+    <p>Preparation is in progress. Acceptance requires authenticated HTTP integration tests, independent review, local CI, a built-container smoke test and actual target-client compatibility. Live OAuth, TLS/DNS and Google workflow checks remain rollout gates. The app-owned OAuth application, account owner and initial harness profile still need to be named.</p>
+  </section>
+
   <section id="verification">
     <h2>Verification and acceptance</h2>
     <h3>Representative workflows</h3>
@@ -429,7 +436,7 @@
     </table></div>
     <p>The original planning pass used source inspection, public SDK/protocol evidence, provider-route checks, and document validation. Application checks were subsequently run during implementation as recorded above. No live Google operation was performed.</p>
     <h3>Cutover and recovery</h3>
-    <p>No live target has been selected. Before sign-in or deployment, supply the app-owned Cloud project and OAuth client, External consent branding and publishing/verification status, enabled APIs, exact registered callback URI, protected store backend, named host and consumer profile, and account-grant owner. HTTP additionally needs its authenticated caller mapping, hostname, TLS termination, and allowed Origins. Writes additionally need named test resources and action-specific approval/reconciliation rules.</p>
+    <p>Linode is selected for deployment by RM Infra with Charlie; no service has been deployed. Before sign-in or deployment, supply the app-owned Cloud project and OAuth client, External consent branding and publishing/verification status, enabled APIs, exact registered callback URI, protected store backend, named host and consumer profile, and account-grant owner. HTTP additionally needs its authenticated caller mapping, hostname, TLS termination, and allowed Origins. Writes additionally need named test resources and action-specific approval/reconciliation rules.</p>
     <p>Prepare the app credential once in a dedicated credential bucket outside Git. Reuse that one app for personal and Workspace sign-in. Keep account registry and grants files outside the checkout with restricted permissions. Connect both accounts in the browser, obtain their opaque IDs from the local account catalog, then grant only the required account/client/action combinations in trusted startup configuration. Reconnect must retain the account ID; disconnect must remove local access and report any incomplete remote revocation.</p>
     <p>Roll out only after the local checks and target-specific evidence gates pass. Save the selected consumer's configuration outside Git before adding the read-only stdio server. Verify discovery, both accounts, denied selectors, cancellation, and resource retrieval in a fresh isolated session, then run paired workflow trials. Recovery restores that saved consumer configuration and the CLI route; it does not revoke Google grants or undo external side effects. Keep local workflow skills until the actual host proves native skill activation.</p>
     <ol>
@@ -461,7 +468,7 @@
     <h2>Questions and assumptions</h2>
     <ul>
       <li>Initial consumer assumption: the existing Hermes workflow is a pilot candidate. No profile is selected or modified by this plan.</li>
-      <li>Deployment assumption: local stdio first, private authenticated HTTP later. The machine, public/private hostname, and service identity must be selected before deployment.</li>
+      <li>Deployment selection: local stdio remains supported; authenticated HTTP is being prepared for Linode. The hostname and service identity must be confirmed before deployment.</li>
       <li>Product requirement: personal Gmail and Workspace can be connected simultaneously through user OAuth. Requests select the account explicitly, and caller grants keep them separate. No dependency on whichever CLI account happens to be the default.</li>
       <li>Deployment decision before live sign-in: select the app-owned Cloud project, consent branding/audience, registered redirect URI, and production publishing/verification path. This is one-time application administration; mailbox onboarding remains browser sign-in.</li>
       <li>Scope assumption: direct native MCP is the destination; existing useful internals can be reused. A new language, full rewrite, and CLI deletion require evidence of benefit rather than being goals themselves.</li>
