@@ -39,13 +39,15 @@ var now = func() time.Time {
 type Content struct {
 	Format mailcompose.ContentFormat `json:"format" jsonschema:"plain, html, plain_with_html_alternative, or plain_and_html_alternative; Markdown is unsupported"`
 	Plain  string                    `json:"plain,omitempty"`
-	HTML   string                    `json:"html,omitempty"`
+	HTML   string                    `json:"html,omitempty" jsonschema:"Bounded HTML subset with bounded inline CSS; includes text structure, links, tables, HTTPS or matching cid images, numeric image dimensions up to 9999, color, borders, spacing, dimensions, fonts, and text alignment. Unsafe CSS fails; unsupported safe declarations are removed with a warning"`
 }
 
 type Attachment struct {
 	Filename    string `json:"filename"`
 	ContentType string `json:"content_type"`
 	Data        []byte `json:"bytes" jsonschema:"Decoded attachment bytes; the JSON transport encodes them as base64"`
+	Disposition string `json:"disposition,omitempty" jsonschema:"attachment or inline; at most 10 inline attachments; inline requires HTML, PNG/JPEG/GIF/WebP, and content_id"`
+	ContentID   string `json:"content_id,omitempty" jsonschema:"RFC Content-ID without angle brackets, at most 255 ASCII bytes, unique case-insensitively; required for inline images and referenced as cid:ID"`
 }
 
 type ReplyContext struct {
@@ -66,7 +68,7 @@ type EmailRequest struct {
 	Content          Content       `json:"content"`
 	IncludeSignature bool          `json:"include_signature,omitempty"`
 	Reply            *ReplyContext `json:"reply,omitempty"`
-	Attachments      []Attachment  `json:"attachments,omitempty" jsonschema:"At most 25 decoded attachments totaling at most 20 MiB"`
+	Attachments      []Attachment  `json:"attachments,omitempty" jsonschema:"At most 25 decoded attachments totaling at most 20 MiB; also subject to server request limit, 8MiB by default including JSON/base64"`
 }
 
 type PrepareInput = EmailRequest
@@ -101,6 +103,8 @@ type PreparedEmail struct {
 	Reply             *mailcompose.ReplySummary       `json:"reply,omitempty"`
 	Attachments       []mailcompose.AttachmentSummary `json:"attachments,omitempty"`
 	Preview           mailcompose.ContentPreview      `json:"preview"`
+	Styles            []mailcompose.StyleDeclaration  `json:"styles,omitempty" jsonschema:"First 128 unique declarations; styles_truncated signals additional rendered styles"`
+	StylesTruncated   bool                            `json:"styles_truncated,omitempty"`
 	RawSize           int                             `json:"raw_size"`
 	Warnings          []string                        `json:"warnings,omitempty"`
 }
@@ -263,11 +267,13 @@ func resolvePreflight(
 		return resolvedEmail{}, err
 	}
 
-	plain, htmlText, _, err := mailcompose.Render(mailcompose.Content{
+	inlineIDs := inlineContentIDs(in.Attachments)
+
+	plain, htmlText, styles, _, err := mailcompose.Render(mailcompose.Content{
 		Format: in.Content.Format,
 		Plain:  in.Content.Plain,
 		HTML:   in.Content.HTML,
-	}, signature, in.IncludeSignature)
+	}, signature, in.IncludeSignature, inlineIDs)
 	if err != nil {
 		return resolvedEmail{}, composeError(fmt.Errorf("render email body: %w", err))
 	}
@@ -275,7 +281,7 @@ func resolvePreflight(
 	resolved := resolvedEmail{
 		reply:    reply,
 		result:   result,
-		prepared: newPrepared(alias, signature, reply, result, in.Attachments, plain, htmlText),
+		prepared: newPrepared(alias, signature, reply, result, in.Attachments, plain, htmlText, styles),
 	}
 
 	if expectedDigest != "" && subtle.ConstantTimeCompare([]byte(strings.ToLower(expectedDigest)), []byte(resolved.prepared.ContentDigest)) != 1 {
@@ -420,6 +426,8 @@ func attachments(in []Attachment) []mailcompose.Attachment {
 			Filename:    attachment.Filename,
 			ContentType: attachment.ContentType,
 			Data:        attachment.Data,
+			Disposition: attachment.Disposition,
+			ContentID:   attachment.ContentID,
 		})
 	}
 
@@ -491,11 +499,11 @@ func parseReferences(value string) ([]string, error) {
 	return references, nil
 }
 
-func newPrepared(alias *gmailapi.SendAs, signature mailcompose.Signature, reply *mailcompose.ReplySummary, result mailcompose.Result, inputAttachments []Attachment, plain, htmlText string) PreparedEmail {
+func newPrepared(alias *gmailapi.SendAs, signature mailcompose.Signature, reply *mailcompose.ReplySummary, result mailcompose.Result, inputAttachments []Attachment, plain, htmlText string, styles []mailcompose.StyleDeclaration) PreparedEmail {
 	summary := result.Summary
 
 	return PreparedEmail{
-		ContentDigest: contentDigest(alias, signature, summary, reply, inputAttachments, plain, htmlText),
+		ContentDigest: contentDigest(alias, signature, summary, reply, inputAttachments, plain, htmlText, styles),
 		Sender: SenderSummary{
 			Email:              alias.SendAsEmail,
 			DisplayName:        alias.DisplayName,
@@ -512,16 +520,36 @@ func newPrepared(alias *gmailapi.SendAs, signature mailcompose.Signature, reply 
 		Reply:             reply,
 		Attachments:       summary.Attachments,
 		Preview:           summary.Preview,
+		Styles:            summary.Styles,
+		StylesTruncated:   summary.StylesTruncated,
 		RawSize:           summary.RawSize,
 		Warnings:          summary.Warnings,
 	}
 }
 
-func contentDigest(alias *gmailapi.SendAs, signature mailcompose.Signature, summary mailcompose.Summary, reply *mailcompose.ReplySummary, inputAttachments []Attachment, plain, htmlText string) string {
+func inlineContentIDs(in []Attachment) map[string]string {
+	ids := make(map[string]string)
+
+	for _, attachment := range in {
+		if strings.EqualFold(strings.TrimSpace(attachment.Disposition), "inline") {
+			contentID := strings.TrimSpace(attachment.ContentID)
+			ids[strings.ToLower(contentID)] = contentID
+		}
+	}
+
+	return ids
+}
+
+func contentDigest(alias *gmailapi.SendAs, signature mailcompose.Signature, summary mailcompose.Summary, reply *mailcompose.ReplySummary, inputAttachments []Attachment, plain, htmlText string, styles []mailcompose.StyleDeclaration) string {
 	hash := sha256.New()
 	writeHash(hash, "sender", alias.SendAsEmail, alias.DisplayName, fmt.Sprintf("%t", alias.IsPrimary), alias.VerificationStatus)
 	writeHash(hash, "signature", fmt.Sprintf("%t", summary.SignatureIncluded), signature.Plain, signature.HTML)
 	writeHash(hash, "subject", summary.Subject, string(summary.Format), plain, htmlText)
+
+	for _, style := range styles {
+		writeHash(hash, "style", style.Property, style.Value)
+	}
+
 	writeAddresses(hash, "to", summary.To)
 	writeAddresses(hash, "cc", summary.Cc)
 	writeAddresses(hash, "bcc", summary.Bcc)
@@ -536,12 +564,12 @@ func contentDigest(alias *gmailapi.SendAs, signature mailcompose.Signature, summ
 	}
 
 	for _, attachment := range summary.Attachments {
-		writeHash(hash, "attachment", attachment.Filename, attachment.ContentType, fmt.Sprintf("%d", attachment.Size))
+		writeHash(hash, "attachment", attachment.Filename, attachment.ContentType, fmt.Sprintf("%d", attachment.Size), attachment.Disposition, attachment.ContentID)
 	}
 
 	for _, attachment := range inputAttachments {
 		digest := sha256.Sum256(attachment.Data)
-		writeHash(hash, "attachment-bytes", hex.EncodeToString(digest[:]))
+		writeHash(hash, "attachment-bytes", attachment.ContentID, hex.EncodeToString(digest[:]))
 	}
 
 	return hex.EncodeToString(hash.Sum(nil))

@@ -30,7 +30,7 @@ func ValidateSemantic(in Input) error {
 		return validationError("body is %d bytes, limit is %d", sourceSize, limits.MaxBodyBytes)
 	}
 
-	plain, htmlText, _, renderErr := renderContent(content, Signature{}, false)
+	plain, htmlText, _, _, renderErr := renderContent(content, Signature{}, false, inlineContentIDs(in.Attachments))
 	if renderErr != nil {
 		return renderErr
 	}
@@ -39,7 +39,7 @@ func ValidateSemantic(in Input) error {
 		return validationError("body is %d bytes, limit is %d", bodySize, limits.MaxBodyBytes)
 	}
 
-	_, attachmentErr := validateAttachments(in.Attachments, limits)
+	_, attachmentErr := validateAttachments(in.Attachments, limits, content.Format)
 
 	return attachmentErr
 }

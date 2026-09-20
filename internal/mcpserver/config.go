@@ -7,6 +7,7 @@ import (
 	"github.com/steipete/gogcli/internal/access"
 	"github.com/steipete/gogcli/internal/config"
 	"github.com/steipete/gogcli/internal/mcpcontract"
+	"github.com/steipete/gogcli/internal/mediaartifact"
 )
 
 // DiscoveryMode selects how Google operations are advertised over MCP.
@@ -46,6 +47,7 @@ const (
 // Config is trusted process startup configuration. Principal is never taken
 // from MCP client names, request metadata, or tool arguments.
 type Config struct {
+	MediaArtifacts   *mediaartifact.Store
 	Name             string
 	Version          string
 	Principal        mcpcontract.Principal

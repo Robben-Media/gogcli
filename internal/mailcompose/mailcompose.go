@@ -42,11 +42,22 @@ const (
 	maxMessageIDComponents = 50
 	maxFilenameBytes       = 255
 	maxContentTypeBytes    = 255
+	maxContentIDBytes      = 255
+	maxStyleBytes          = 8192
+	maxStyleDeclarations   = 64
+	maxSummaryStyles       = 128
 	maxHeaderLineBytes     = 998
 	base64LineWidth        = 76
 	maxBoundaryBytes       = 30
 	maxMIMEOverheadBytes   = 4096
 	maxPreviewBytes        = 64 << 10
+)
+
+const styleTruncationWarning = "Style inventory was truncated; rendered HTML and digest inputs remain complete."
+
+const (
+	dispositionAttachment = "attachment"
+	dispositionInline     = "inline"
 )
 
 // Limits constrain resource use. A nil Limits uses DefaultLimits. Callers may
@@ -55,6 +66,7 @@ type Limits struct {
 	MaxRecipientsPerField int
 	MaxReferences         int
 	MaxAttachments        int
+	MaxInlineAttachments  int
 	MaxBodyBytes          int
 	MaxAttachmentBytes    int
 	MaxMessageBytes       int
@@ -66,6 +78,7 @@ func DefaultLimits() Limits {
 		MaxRecipientsPerField: 100,
 		MaxReferences:         50,
 		MaxAttachments:        25,
+		MaxInlineAttachments:  10,
 		MaxBodyBytes:          2 << 20,
 		MaxAttachmentBytes:    20 << 20,
 		MaxMessageBytes:       20 << 20,
@@ -98,6 +111,14 @@ type Attachment struct {
 	Filename    string
 	ContentType string
 	Data        []byte
+	Disposition string
+	ContentID   string
+}
+
+// StyleDeclaration is one parsed and canonicalized inline style declaration.
+type StyleDeclaration struct {
+	Property string `json:"property"`
+	Value    string `json:"value"`
 }
 
 // Input is the complete composition request. From must already be a verified
@@ -136,6 +157,8 @@ type AttachmentSummary struct {
 	Filename    string `json:"filename"`
 	ContentType string `json:"content_type"`
 	Size        int    `json:"size"`
+	Disposition string `json:"disposition,omitempty"`
+	ContentID   string `json:"content_id,omitempty"`
 }
 
 // ContentPreview contains rendered body text, bounded for review. It is the
@@ -161,6 +184,8 @@ type Summary struct {
 	Reply             ReplySummary        `json:"reply,omitempty"`
 	SignatureIncluded bool                `json:"signature_included"`
 	Attachments       []AttachmentSummary `json:"attachments,omitempty"`
+	Styles            []StyleDeclaration  `json:"styles,omitempty"`
+	StylesTruncated   bool                `json:"styles_truncated,omitempty"`
 	RawSize           int                 `json:"raw_size"`
 	Base64URLSize     int                 `json:"base64url_size"`
 	Preview           ContentPreview      `json:"preview"`
@@ -239,7 +264,7 @@ func Compose(in Input) (Result, error) {
 		return Result{}, validationError("body is %d bytes, limit is %d", sourceSize, limits.MaxBodyBytes)
 	}
 
-	plain, htmlText, warnings, err := renderContent(normalized, signature, in.IncludeSignature)
+	plain, htmlText, styles, warnings, err := renderContent(normalized, signature, in.IncludeSignature, inlineContentIDs(in.Attachments))
 	if err != nil {
 		return Result{}, err
 	}
@@ -252,7 +277,7 @@ func Compose(in Input) (Result, error) {
 		return Result{}, validationError("body is %d bytes, limit is %d", bodySize, limits.MaxBodyBytes)
 	}
 
-	attachments, err := validateAttachments(in.Attachments, limits)
+	attachments, err := validateAttachments(in.Attachments, limits, normalized.Format)
 	if err != nil {
 		return Result{}, err
 	}
@@ -267,6 +292,11 @@ func Compose(in Input) (Result, error) {
 	raw, err := renderMIME(messageID, date, from, to, cc, bcc, subject, reply, normalized.Format, plain, htmlText, attachments)
 	if err != nil {
 		return Result{}, err
+	}
+
+	summaryStyles, stylesTruncated := boundedStyles(styles)
+	if stylesTruncated {
+		warnings = append(warnings, styleTruncationWarning)
 	}
 
 	if len(raw) > limits.MaxMessageBytes {
@@ -284,6 +314,8 @@ func Compose(in Input) (Result, error) {
 			Reply:             reply,
 			SignatureIncluded: in.IncludeSignature,
 			Attachments:       attachmentSummaries,
+			Styles:            summaryStyles,
+			StylesTruncated:   stylesTruncated,
 			RawSize:           len(raw), Base64URLSize: len(encoded),
 			Preview:  boundedPreview(plain, htmlText),
 			Warnings: warnings,
@@ -306,6 +338,7 @@ func effectiveLimits(limits *Limits) (Limits, error) {
 		{"MaxRecipientsPerField", &got.MaxRecipientsPerField, defaults.MaxRecipientsPerField},
 		{"MaxReferences", &got.MaxReferences, defaults.MaxReferences},
 		{"MaxAttachments", &got.MaxAttachments, defaults.MaxAttachments},
+		{"MaxInlineAttachments", &got.MaxInlineAttachments, defaults.MaxInlineAttachments},
 		{"MaxBodyBytes", &got.MaxBodyBytes, defaults.MaxBodyBytes},
 		{"MaxAttachmentBytes", &got.MaxAttachmentBytes, defaults.MaxAttachmentBytes},
 		{"MaxMessageBytes", &got.MaxMessageBytes, defaults.MaxMessageBytes},
@@ -546,32 +579,44 @@ func normalizeSignature(in Input, format ContentFormat) (Signature, error) {
 	return signature, nil
 }
 
-func renderContent(content Content, signature Signature, include bool) (plain, htmlText string, warnings []string, err error) {
+func renderContent(content Content, signature Signature, include bool, inlineIDs map[string]string) (plain, htmlText string, styles []StyleDeclaration, warnings []string, err error) {
 	plain = content.Plain
+	styles = []StyleDeclaration{}
+	var contentWarnings []string
+
 	switch content.Format {
 	case FormatPlainWithHTML:
 		htmlText = plainToHTML(content.Plain)
 	case FormatHTML:
-		htmlText, warnings, err = sanitizeHTML(content.HTML)
+		var declarations []StyleDeclaration
+
+		htmlText, contentWarnings, err = sanitizeHTML(content.HTML, inlineIDs, &declarations)
 		if err != nil {
-			return "", "", nil, err
+			return "", "", nil, nil, err
 		}
 
 		plain = content.Plain
 		if strings.TrimSpace(plain) == "" {
 			plain = htmlToText(htmlText)
 		}
+		styles = declarations
 	case FormatPlainAndHTML:
-		htmlText, warnings, err = sanitizeHTML(content.HTML)
+		var declarations []StyleDeclaration
+
+		htmlText, contentWarnings, err = sanitizeHTML(content.HTML, inlineIDs, &declarations)
 		if err != nil {
-			return "", "", nil, err
+			return "", "", nil, nil, err
 		}
+
 		plain = content.Plain
+		styles = declarations
 	}
 
 	if !include {
-		return plain, htmlText, warnings, nil
+		return plain, htmlText, styles, uniqueWarnings(contentWarnings), nil
 	}
+
+	var signatureWarnings []string
 
 	switch content.Format {
 	case FormatPlain:
@@ -579,25 +624,27 @@ func renderContent(content Content, signature Signature, include bool) (plain, h
 	case FormatPlainAndHTML:
 		plain = appendSignature(plain, signature.Plain)
 
-		signedHTML, signatureWarnings, err := sanitizeHTML(signature.HTML)
+		var signedHTML string
+
+		signedHTML, signatureWarnings, err = sanitizeHTML(signature.HTML, inlineIDs, &styles)
 		if err != nil {
-			return "", "", nil, err
+			return "", "", nil, nil, err
 		}
 
 		if strings.TrimSpace(signedHTML) == "" {
-			return "", "", nil, validationError("HTML signature contains no permitted content")
+			return "", "", nil, nil, validationError("HTML signature contains no permitted content")
 		}
 		htmlText = appendSignature(htmlText, signedHTML)
-
-		warnings = append(warnings, signatureWarnings...)
 	case FormatHTML:
-		signedHTML, signatureWarnings, err := sanitizeHTML(signature.HTML)
+		var signedHTML string
+
+		signedHTML, signatureWarnings, err = sanitizeHTML(signature.HTML, inlineIDs, &styles)
 		if err != nil {
-			return "", "", nil, err
+			return "", "", nil, nil, err
 		}
 
 		if strings.TrimSpace(signedHTML) == "" {
-			return "", "", nil, validationError("HTML signature contains no permitted content")
+			return "", "", nil, nil, validationError("HTML signature contains no permitted content")
 		}
 
 		plainSignature := signature.Plain
@@ -606,29 +653,89 @@ func renderContent(content Content, signature Signature, include bool) (plain, h
 		}
 		plain = appendSignature(strings.TrimRight(plain, "\r\n"), plainSignature)
 		htmlText = appendSignature(htmlText, signedHTML)
-
-		warnings = append(warnings, signatureWarnings...)
 	case FormatPlainWithHTML:
 		plain = appendSignature(plain, signature.Plain)
 		htmlText = plainToHTML(plain)
 	}
 
-	return plain, htmlText, uniqueWarnings(warnings), nil
+	allWarnings := make([]string, 0, len(contentWarnings)+len(signatureWarnings))
+	allWarnings = append(allWarnings, contentWarnings...)
+	allWarnings = append(allWarnings, signatureWarnings...)
+
+	return plain, htmlText, uniqueStyles(styles), uniqueWarnings(allWarnings), nil
 }
 
 // Render returns the exact plain and HTML bodies that Compose would embed. It is
 // for review and stable semantic digests before a caller creates a message.
-func Render(content Content, signature Signature, include bool) (plain, htmlText string, warnings []string, err error) {
-	return renderContent(content, signature, include)
+func Render(content Content, signature Signature, include bool, inlineIDs map[string]string) (plain, htmlText string, styles []StyleDeclaration, warnings []string, err error) {
+	normalized, err := normalizeContent(content)
+	if err != nil {
+		return "", "", nil, nil, err
+	}
+
+	normalizedSignature, err := normalizeSignature(Input{Content: normalized, Signature: signature, IncludeSignature: include}, normalized.Format)
+	if err != nil {
+		return "", "", nil, nil, err
+	}
+
+	return renderContent(normalized, normalizedSignature, include, inlineIDs)
 }
 
-func validateAttachments(attachments []Attachment, limits Limits) ([]attachmentInput, error) {
+func inlineContentIDs(attachments []Attachment) map[string]string {
+	ids := make(map[string]string)
+
+	for _, attachment := range attachments {
+		if strings.EqualFold(strings.TrimSpace(attachment.Disposition), dispositionInline) {
+			contentID := strings.TrimSpace(attachment.ContentID)
+			ids[strings.ToLower(contentID)] = contentID
+		}
+	}
+
+	return ids
+}
+
+func uniqueStyles(styles []StyleDeclaration) []StyleDeclaration {
+	if len(styles) == 0 {
+		return nil
+	}
+
+	out := make([]StyleDeclaration, 0, len(styles))
+
+	seen := make(map[StyleDeclaration]struct{}, len(styles))
+	for _, style := range styles {
+		if _, exists := seen[style]; exists {
+			continue
+		}
+
+		seen[style] = struct{}{}
+		out = append(out, style)
+	}
+
+	return out
+}
+
+func boundedStyles(styles []StyleDeclaration) ([]StyleDeclaration, bool) {
+	out := make([]StyleDeclaration, 0, min(len(styles), maxSummaryStyles))
+	for _, style := range uniqueStyles(styles) {
+		if len(out) == maxSummaryStyles {
+			return out, true
+		}
+
+		out = append(out, style)
+	}
+
+	return out, false
+}
+
+func validateAttachments(attachments []Attachment, limits Limits, format ContentFormat) ([]attachmentInput, error) {
 	if len(attachments) > limits.MaxAttachments {
 		return nil, validationError("message has %d attachments, limit is %d", len(attachments), limits.MaxAttachments)
 	}
 
 	out := make([]attachmentInput, 0, len(attachments))
 	estimatedSize := maxMIMEOverheadBytes
+	inlineCount := 0
+	contentIDs := make(map[string]struct{}, len(attachments))
 
 	for _, attachment := range attachments {
 		name := strings.TrimSpace(attachment.Filename)
@@ -657,8 +764,43 @@ func validateAttachments(attachments []Attachment, limits Limits) ([]attachmentI
 			return nil, validationError("attachment content type is %d bytes, limit is %d", len(contentType), maxContentTypeBytes)
 		}
 
-		if _, _, err := mime.ParseMediaType(contentType); err != nil {
+		mediaType, _, err := mime.ParseMediaType(contentType)
+		if err != nil {
 			return nil, fmt.Errorf("invalid content type for %s: %w", name, err)
+		}
+
+		disposition := strings.ToLower(strings.TrimSpace(attachment.Disposition))
+		if disposition == "" {
+			disposition = dispositionAttachment
+		}
+
+		if disposition != dispositionAttachment && disposition != dispositionInline {
+			return nil, validationError("attachment %s has an invalid disposition", name)
+		}
+
+		contentID := strings.TrimSpace(attachment.ContentID)
+		if disposition == dispositionInline {
+			inlineCount++
+			if inlineCount > limits.MaxInlineAttachments {
+				return nil, validationError("message has %d inline attachments, limit is %d", inlineCount, limits.MaxInlineAttachments)
+			}
+
+			if mediaType != "image/png" && mediaType != "image/jpeg" && mediaType != "image/gif" && mediaType != "image/webp" {
+				return nil, validationError("inline attachment %s must use PNG, JPEG, GIF, or WebP", name)
+			}
+
+			if err := validContentID(contentID); err != nil {
+				return nil, err
+			}
+
+			key := strings.ToLower(contentID)
+			if _, exists := contentIDs[key]; exists {
+				return nil, validationError("duplicate content ID %s", contentID)
+			}
+
+			contentIDs[key] = struct{}{}
+		} else if contentID != "" {
+			return nil, validationError("content ID requires inline disposition for %s", name)
 		}
 
 		if len(attachment.Data) == 0 {
@@ -669,7 +811,17 @@ func validateAttachments(attachments []Attachment, limits Limits) ([]attachmentI
 			return nil, validationError("attachment %s is %d bytes, limit is %d", name, len(attachment.Data), limits.MaxAttachmentBytes)
 		}
 
-		summary := AttachmentSummary{Filename: name, ContentType: contentType, Size: len(attachment.Data)}
+		if disposition == dispositionInline && format != FormatHTML && format != FormatPlainAndHTML {
+			return nil, validationError("inline attachment %s requires HTML content", name)
+		}
+
+		summary := AttachmentSummary{
+			Filename:    name,
+			ContentType: contentType,
+			Size:        len(attachment.Data),
+			Disposition: disposition,
+			ContentID:   contentID,
+		}
 
 		encodedSize := estimatedAttachmentSize(summary, attachment.Data)
 		if encodedSize > limits.MaxMessageBytes-estimatedSize {
@@ -682,6 +834,27 @@ func validateAttachments(attachments []Attachment, limits Limits) ([]attachmentI
 	}
 
 	return out, nil
+}
+
+func validContentID(value string) error {
+	if value == "" {
+		return validationError("inline attachment content ID is required")
+	}
+
+	if len(value) > maxContentIDBytes || !isASCII(value) {
+		return validationError("inline attachment content ID is invalid or too large")
+	}
+
+	if err := rejectHeaderValue(value, "attachment content ID"); err != nil {
+		return err
+	}
+
+	parsed, err := mail.ParseAddress("<" + value + ">")
+	if err != nil || parsed == nil || parsed.Address != value {
+		return validationError("inline attachment content ID is invalid")
+	}
+
+	return nil
 }
 
 func generatedMessageID(
@@ -706,7 +879,7 @@ func generatedMessageID(
 	}
 
 	for _, attachment := range attachments {
-		writeHashField(hash, attachment.summary.Filename, attachment.summary.ContentType)
+		writeHashField(hash, attachment.summary.Filename, attachment.summary.ContentType, attachment.summary.Disposition, attachment.summary.ContentID)
 		attachmentDigest := sha256.Sum256(attachment.data)
 		writeHashField(hash, hex.EncodeToString(attachmentDigest[:]))
 	}
@@ -813,12 +986,12 @@ func boundedUTF8(value string, limit int) (string, bool) {
 func estimatedAttachmentSize(summary AttachmentSummary, data []byte) int {
 	encoded := base64.StdEncoding.EncodedLen(len(data))
 	lines := (encoded + base64LineWidth - 1) / base64LineWidth
-	disposition := mime.FormatMediaType("attachment", map[string]string{"filename": summary.Filename})
+	disposition := mime.FormatMediaType(dispositionAttachment, map[string]string{"filename": summary.Filename})
 	headers := len("Content-Type: ") + len(summary.ContentType) +
 		len("Content-Transfer-Encoding: base64") +
 		len("Content-Disposition: ") + len(disposition)
 
-	return encoded + 2*lines + 2 + 2 + maxBoundaryBytes + 2 + headers + 6
+	return encoded + 2*lines + 2 + 2 + maxBoundaryBytes + 2 + headers + len(summary.Disposition) + 2*len(summary.ContentID) + 128
 }
 
 func safeURL(value string) bool {
@@ -850,25 +1023,4 @@ func writeTextPart(buffer *strings.Builder, boundary, contentType, body string) 
 	_ = writer.Close()
 
 	buffer.WriteString("\r\n")
-}
-
-func writeAttachment(buffer *strings.Builder, boundary string, summary AttachmentSummary, data []byte) error {
-	disposition := mime.FormatMediaType("attachment", map[string]string{"filename": summary.Filename})
-	if disposition == "" {
-		return validationError("invalid attachment filename %q", summary.Filename)
-	}
-
-	_, _ = fmt.Fprintf(buffer, "\r\n--%s\r\nContent-Type: %s\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: %s\r\n\r\n", boundary, summary.ContentType, disposition)
-
-	encoded := base64.StdEncoding.EncodeToString(data)
-	for len(encoded) > 76 {
-		buffer.WriteString(encoded[:76] + "\r\n")
-		encoded = encoded[76:]
-	}
-
-	if encoded != "" {
-		buffer.WriteString(encoded + "\r\n")
-	}
-
-	return nil
 }

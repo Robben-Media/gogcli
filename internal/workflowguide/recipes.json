@@ -1,0 +1,1487 @@
+[
+  {
+    "intent_id": "admin.change_user_lifecycle",
+    "service": "admin",
+    "applies_to": [
+      "google_admin_directory_users_get",
+      "google_admin_directory_users_patch"
+    ],
+    "required_facts": [
+      {
+        "key": "user_key",
+        "format": "immutable user ID preferred; exact primary email accepted",
+        "reason": "Resolves one Workspace user.",
+        "source": "caller"
+      },
+      {
+        "key": "lifecycle_patch",
+        "format": "User JSON containing only suspended or primaryEmail",
+        "reason": "Limits this recipe to suspend, unsuspend, or rename; deletion and restoration require separate contracts.",
+        "source": "caller"
+      },
+      {
+        "key": "immutable_user_id",
+        "format": "Directory immutable user id",
+        "reason": "users.get id; user_key/email never substitutes.",
+        "source": "lookup",
+        "produced_by": "google_admin_directory_users_get"
+      },
+      {
+        "key": "current_suspended",
+        "format": "boolean",
+        "reason": "Current User.suspended from users.get.",
+        "source": "lookup",
+        "produced_by": "google_admin_directory_users_get"
+      },
+      {
+        "key": "current_primary_email",
+        "format": "exact primaryEmail",
+        "reason": "Current User.primaryEmail from users.get.",
+        "source": "lookup",
+        "produced_by": "google_admin_directory_users_get"
+      }
+    ],
+    "steps": [
+      {
+        "operation": "google_admin_directory_users_get",
+        "kind": "lookup",
+        "inputs": [
+          {
+            "name": "userKey",
+            "location": "path",
+            "format": "string",
+            "source": "fact:user_key"
+          }
+        ],
+        "skip_if_facts": [
+          "immutable_user_id",
+          "current_suspended",
+          "current_primary_email"
+        ],
+        "produces": [
+          "immutable_user_id",
+          "current_suspended",
+          "current_primary_email"
+        ]
+      },
+      {
+        "operation": "google_admin_directory_users_patch",
+        "kind": "write",
+        "inputs": [
+          {
+            "name": "userKey",
+            "location": "path",
+            "format": "immutable user ID",
+            "source": "fact:immutable_user_id"
+          },
+          {
+            "name": "body",
+            "location": "body",
+            "format": "User with only suspended or primaryEmail",
+            "source": "fact:lifecycle_patch"
+          }
+        ]
+      }
+    ],
+    "call_estimate_min": 2,
+    "call_estimate_max": 2,
+    "stop_rules": {
+      "revision": "Call users.get unless caller facts include immutable_user_id and the current value of every lifecycle field being compared or changed; user_key or email alone never skips the lookup.",
+      "idempotency": "Use absolute suspended or primaryEmail values and retain the immutable user ID.",
+      "reconcile": "users.patch returns User. GET by immutable ID only if the patch outcome is unknown or the returned User is incomplete. Never infer state from the old or new email. Delete is out of scope."
+    }
+  },
+  {
+    "intent_id": "docs.edit_existing",
+    "service": "docs",
+    "applies_to": [
+      "google_docs_documents_get",
+      "google_docs_documents_batchupdate"
+    ],
+    "required_facts": [
+      {
+        "key": "document_id",
+        "format": "exact document ID",
+        "reason": "Bounds the edit to one document.",
+        "source": "caller"
+      },
+      {
+        "key": "requests",
+        "format": "1-25 ordered Docs API requests",
+        "reason": "Consequential edits remain explicit raw batchUpdate requests.",
+        "source": "caller"
+      },
+      {
+        "key": "revision_id",
+        "format": "Document.revisionId",
+        "reason": "writeControl.requiredRevisionId",
+        "source": "lookup",
+        "produced_by": "google_docs_documents_get"
+      }
+    ],
+    "steps": [
+      {
+        "operation": "google_docs_documents_get",
+        "kind": "lookup",
+        "inputs": [
+          {
+            "name": "documentId",
+            "location": "path",
+            "format": "string",
+            "source": "fact:document_id"
+          },
+          {
+            "name": "fields",
+            "location": "query",
+            "format": "revisionId plus only affected structural fields",
+            "source": "caller"
+          }
+        ],
+        "skip_if_facts": [
+          "revision_id"
+        ],
+        "produces": [
+          "revision_id"
+        ]
+      },
+      {
+        "operation": "google_docs_documents_batchupdate",
+        "kind": "write",
+        "inputs": [
+          {
+            "name": "documentId",
+            "location": "path",
+            "format": "string",
+            "source": "fact:document_id"
+          },
+          {
+            "name": "requests",
+            "location": "body",
+            "format": "Request array, max 25; validate affected ranges against the referenced revision",
+            "source": "fact:requests"
+          },
+          {
+            "name": "writeControl.requiredRevisionId",
+            "location": "body",
+            "format": "opaque revision ID",
+            "source": "fact:revision_id"
+          }
+        ]
+      }
+    ],
+    "call_estimate_min": 2,
+    "call_estimate_max": 2,
+    "stop_rules": {
+      "revision": "Use requiredRevisionId; stop on mismatch and rebuild from a fresh read.",
+      "idempotency": "Do not replay an old request batch against a newer revision.",
+      "reconcile": "Re-read affected content only if batchUpdate outcome is unknown or requiredRevisionId mismatches. Do not add an unconditional trailing get."
+    }
+  },
+  {
+    "intent_id": "slides.edit_existing",
+    "service": "slides",
+    "applies_to": [
+      "google_slides_presentations_get",
+      "google_slides_presentations_batchupdate"
+    ],
+    "required_facts": [
+      {
+        "key": "presentation_id",
+        "format": "exact presentation ID",
+        "reason": "Bounds the edit to one deck.",
+        "source": "caller"
+      },
+      {
+        "key": "requests",
+        "format": "1-25 ordered Slides API requests using exact object IDs",
+        "reason": "Prevents text-based object guessing.",
+        "source": "caller"
+      },
+      {
+        "key": "revision_id",
+        "format": "Presentation.revisionId",
+        "reason": "writeControl.requiredRevisionId",
+        "source": "lookup",
+        "produced_by": "google_slides_presentations_get"
+      }
+    ],
+    "steps": [
+      {
+        "operation": "google_slides_presentations_get",
+        "kind": "lookup",
+        "inputs": [
+          {
+            "name": "presentationId",
+            "location": "path",
+            "format": "string",
+            "source": "fact:presentation_id"
+          },
+          {
+            "name": "fields",
+            "location": "query",
+            "format": "revisionId and affected page/object fields",
+            "source": "caller"
+          }
+        ],
+        "skip_if_facts": [
+          "revision_id"
+        ],
+        "produces": [
+          "revision_id"
+        ]
+      },
+      {
+        "operation": "google_slides_presentations_batchupdate",
+        "kind": "write",
+        "inputs": [
+          {
+            "name": "presentationId",
+            "location": "path",
+            "format": "string",
+            "source": "fact:presentation_id"
+          },
+          {
+            "name": "requests",
+            "location": "body",
+            "format": "Request array, max 25; validate affected ranges against the referenced revision",
+            "source": "fact:requests"
+          },
+          {
+            "name": "writeControl.requiredRevisionId",
+            "location": "body",
+            "format": "opaque revision ID",
+            "source": "fact:revision_id"
+          }
+        ]
+      }
+    ],
+    "call_estimate_min": 2,
+    "call_estimate_max": 2,
+    "stop_rules": {
+      "revision": "Use requiredRevisionId and stop on any mismatch.",
+      "idempotency": "Never replay the old batch after a stale-revision or ambiguous result.",
+      "reconcile": "Re-read exact objects only if batchUpdate outcome is unknown or requiredRevisionId mismatches."
+    }
+  },
+  {
+    "intent_id": "sheets.update_cells_or_format",
+    "service": "sheets",
+    "applies_to": [
+      "google_sheets_spreadsheets_values_batchget",
+      "google_sheets_spreadsheets_values_batchupdate"
+    ],
+    "required_facts": [
+      {
+        "key": "spreadsheet_id",
+        "format": "exact spreadsheet ID",
+        "reason": "Bounds the value update.",
+        "source": "caller"
+      },
+      {
+        "key": "data",
+        "format": "1-10 ValueRange objects with exact A1 ranges",
+        "reason": "Defines the fixed cells and values.",
+        "source": "caller"
+      },
+      {
+        "key": "value_input_option",
+        "format": "RAW or USER_ENTERED",
+        "reason": "Makes value interpretation explicit.",
+        "source": "caller"
+      }
+    ],
+    "steps": [
+      {
+        "operation": "google_sheets_spreadsheets_values_batchget",
+        "kind": "lookup",
+        "inputs": [
+          {
+            "name": "spreadsheetId",
+            "location": "path",
+            "format": "string",
+            "source": "fact:spreadsheet_id"
+          },
+          {
+            "name": "ranges",
+            "location": "query",
+            "format": "repeated A1 ranges, max 10",
+            "source": "fact:data"
+          }
+        ]
+      },
+      {
+        "operation": "google_sheets_spreadsheets_values_batchupdate",
+        "kind": "write",
+        "inputs": [
+          {
+            "name": "spreadsheetId",
+            "location": "path",
+            "format": "string",
+            "source": "fact:spreadsheet_id"
+          },
+          {
+            "name": "data",
+            "location": "body",
+            "format": "ValueRange array, max 10",
+            "source": "fact:data"
+          },
+          {
+            "name": "valueInputOption",
+            "location": "body",
+            "format": "RAW or USER_ENTERED",
+            "source": "fact:value_input_option"
+          },
+          {
+            "name": "includeValuesInResponse",
+            "location": "body",
+            "format": "true",
+            "source": "caller"
+          }
+        ]
+      }
+    ],
+    "call_estimate_min": 2,
+    "call_estimate_max": 2,
+    "stop_rules": {
+      "revision": "Sheets values APIs expose no Docs/Slides WriteControl. The first read is evidence, not a provider-enforced precondition.",
+      "idempotency": "Use absolute bounded values; do not treat atomic batch validation as concurrency control.",
+      "reconcile": "On complete success, BatchUpdateValuesResponse.updatedData is sufficient. Exact values.batchGet readback only if the write outcome is unknown or updatedData is missing."
+    },
+    "gap": "Formatting or structure changes are not covered by this values recipe; use a separate sheets.update_format_or_structure recipe with google_sheets_spreadsheets_get and google_sheets_spreadsheets_batchupdate."
+  },
+  {
+    "intent_id": "calendar.create_meeting",
+    "service": "calendar",
+    "applies_to": [
+      "google_calendar_events_insert"
+    ],
+    "required_facts": [
+      {
+        "key": "calendar_id",
+        "format": "exact calendar ID",
+        "reason": "Selects the target calendar.",
+        "source": "caller"
+      },
+      {
+        "key": "event_id",
+        "format": "caller-generated base32hex ID, 5-1024 lowercase a-v or digits",
+        "reason": "Provides deterministic reconciliation.",
+        "source": "caller"
+      },
+      {
+        "key": "event",
+        "format": "default Event JSON with matching id, normalized start/end, summary and optional attendees",
+        "reason": "Defines one meeting without hidden planning.",
+        "source": "caller"
+      },
+      {
+        "key": "send_updates",
+        "format": "all, externalOnly, or none",
+        "reason": "Makes notification consequences explicit.",
+        "source": "caller"
+      },
+      {
+        "key": "time_zone",
+        "format": "IANA time zone",
+        "reason": "Required for timed start/end. Missing timed timezone blocks this recipe.",
+        "source": "caller",
+        "optional_when": {
+          "all_day": "true"
+        }
+      }
+    ],
+    "steps": [
+      {
+        "operation": "google_calendar_events_insert",
+        "kind": "write",
+        "inputs": [
+          {
+            "name": "calendarId",
+            "location": "path",
+            "format": "string",
+            "source": "fact:calendar_id"
+          },
+          {
+            "name": "sendUpdates",
+            "location": "query",
+            "format": "enum",
+            "source": "fact:send_updates"
+          },
+          {
+            "name": "body",
+            "location": "body",
+            "format": "Event with id equal to known_facts.event_id",
+            "source": "fact:event"
+          }
+        ]
+      }
+    ],
+    "call_estimate_min": 1,
+    "call_estimate_max": 1,
+    "stop_rules": {
+      "revision": "No event revision precondition applies to insert; reject missing timezone, mixed all-day/timed boundaries, or invalid exclusive all-day end.",
+      "idempotency": "Use the same caller-generated event ID for the logical meeting.",
+      "reconcile": "If insert returns no usable response, GET by the caller-generated event ID before considering another insert. Do not get after a complete insert response."
+    }
+  },
+  {
+    "intent_id": "drive.share_file",
+    "service": "drive",
+    "applies_to": [
+      "google_drive_files_get",
+      "google_drive_permissions_list",
+      "google_drive_permissions_create"
+    ],
+    "required_facts": [
+      {
+        "key": "file_id",
+        "format": "exact Drive file ID",
+        "reason": "Restricts all reads and writes to one file.",
+        "source": "caller"
+      },
+      {
+        "key": "permission",
+        "format": "non-owner Permission JSON with type, role and stable grantee identity",
+        "reason": "Ownership transfer is excluded.",
+        "source": "caller"
+      },
+      {
+        "key": "send_notification_email",
+        "format": "boolean",
+        "reason": "Makes external notification explicit.",
+        "source": "caller"
+      }
+    ],
+    "steps": [
+      {
+        "operation": "google_drive_files_get",
+        "kind": "lookup",
+        "inputs": [
+          {
+            "name": "fileId",
+            "location": "path",
+            "format": "string",
+            "source": "fact:file_id"
+          },
+          {
+            "name": "supportsAllDrives",
+            "location": "query",
+            "format": "true",
+            "source": "caller"
+          },
+          {
+            "name": "fields",
+            "location": "query",
+            "format": "id,driveId,capabilities(canShare)",
+            "source": "caller"
+          }
+        ]
+      },
+      {
+        "operation": "google_drive_permissions_list",
+        "kind": "lookup",
+        "inputs": [
+          {
+            "name": "fileId",
+            "location": "path",
+            "format": "string",
+            "source": "fact:file_id"
+          },
+          {
+            "name": "supportsAllDrives",
+            "location": "query",
+            "format": "true",
+            "source": "caller"
+          },
+          {
+            "name": "pageSize",
+            "location": "query",
+            "format": "100",
+            "source": "caller"
+          },
+          {
+            "name": "fields",
+            "location": "query",
+            "format": "nextPageToken,permissions(id,type,role,emailAddress,domain,allowFileDiscovery,expirationTime)",
+            "source": "caller"
+          }
+        ]
+      },
+      {
+        "operation": "google_drive_permissions_create",
+        "kind": "write",
+        "inputs": [
+          {
+            "name": "fileId",
+            "location": "path",
+            "format": "string",
+            "source": "fact:file_id"
+          },
+          {
+            "name": "supportsAllDrives",
+            "location": "query",
+            "format": "true",
+            "source": "caller"
+          },
+          {
+            "name": "sendNotificationEmail",
+            "location": "query",
+            "format": "boolean",
+            "source": "fact:send_notification_email"
+          },
+          {
+            "name": "body",
+            "location": "body",
+            "format": "Permission excluding owner",
+            "source": "fact:permission"
+          },
+          {
+            "name": "fields",
+            "location": "query",
+            "format": "id,type,role,emailAddress,domain",
+            "source": "caller"
+          }
+        ]
+      }
+    ],
+    "call_estimate_min": 3,
+    "call_estimate_max": 3,
+    "stop_rules": {
+      "revision": "Drive permission creation has no revision assertion; stop if file context or existing matching permission conflicts with caller facts.",
+      "idempotency": "Do not create when type plus stable grantee identity already matches; ownership transfer is not applicable.",
+      "reconcile": "Request fields on permissions.create so the created permission is returned. List/get an exact permission only if create outcome is unknown or the matching grantee was not returned."
+    }
+  },
+  {
+    "intent_id": "businessprofile.resolve_location",
+    "service": "businessprofile",
+    "applies_to": [],
+    "required_facts": [],
+    "steps": [],
+    "call_estimate_min": 0,
+    "call_estimate_max": 0,
+    "stop_rules": {
+      "revision": "Not applicable.",
+      "idempotency": "Not applicable.",
+      "reconcile": "Do not fabricate account, location, or verification calls."
+    },
+    "gap": "Unavailable at this baseline. google_mybusiness_business_information_accounts_locations_list, google_mybusiness_business_information_locations_get, google_mybusiness_verifications_locations_fetchverificationoptions, google_mybusiness_verifications_locations_verify, and google_mybusiness_verifications_locations_verifications_list declare no OAuth scopes and carry the missing_scopes gate, so APIDefinitions does not register them. Business Information and Verifications are separate APIs, and verification also requires a current eligible option."
+  },
+  {
+    "intent_id": "analytics.run_bounded_report",
+    "service": "analytics",
+    "applies_to": [
+      "google_analytics_data_properties_runreport"
+    ],
+    "required_facts": [
+      {
+        "key": "property",
+        "format": "properties/{property_id}",
+        "reason": "Selects one GA4 property.",
+        "source": "caller"
+      },
+      {
+        "key": "report",
+        "format": "RunReportRequest with explicit dateRanges, fields, offset and limit of 1-10000",
+        "reason": "Bounds rows and date exposure.",
+        "source": "caller"
+      }
+    ],
+    "steps": [
+      {
+        "operation": "google_analytics_data_properties_runreport",
+        "kind": "lookup",
+        "inputs": [
+          {
+            "name": "property",
+            "location": "path",
+            "format": "properties/{id}",
+            "source": "fact:property"
+          },
+          {
+            "name": "body",
+            "location": "body",
+            "format": "bounded RunReportRequest",
+            "source": "fact:report"
+          }
+        ]
+      }
+    ],
+    "call_estimate_min": 1,
+    "call_estimate_max": 1,
+    "stop_rules": {
+      "revision": "Reports are reads; retain property timezone and metadata qualifiers from the response.",
+      "idempotency": "Repeat only the identical bounded request when explicitly requested.",
+      "reconcile": "Stop at the requested limit, provider quota, or returned page. Return rowCount and offset; never auto-page."
+    }
+  },
+  {
+    "intent_id": "searchconsole.performance_report",
+    "service": "searchconsole",
+    "applies_to": [
+      "google_searchconsole_searchanalytics_query"
+    ],
+    "required_facts": [
+      {
+        "key": "site_url",
+        "format": "exact URL-prefix or sc-domain property",
+        "reason": "Selects one Search Console property.",
+        "source": "caller"
+      },
+      {
+        "key": "query",
+        "format": "SearchAnalyticsQueryRequest with dates, dimensions, startRow and rowLimit 1-25000",
+        "reason": "Bounds the report.",
+        "source": "caller"
+      }
+    ],
+    "steps": [
+      {
+        "operation": "google_searchconsole_searchanalytics_query",
+        "kind": "lookup",
+        "inputs": [
+          {
+            "name": "siteUrl",
+            "location": "path",
+            "format": "URL-prefix or sc-domain property",
+            "source": "fact:site_url"
+          },
+          {
+            "name": "body",
+            "location": "body",
+            "format": "bounded SearchAnalyticsQueryRequest",
+            "source": "fact:query"
+          }
+        ]
+      }
+    ],
+    "call_estimate_min": 1,
+    "call_estimate_max": 1,
+    "stop_rules": {
+      "revision": "Performance data is read-only and may be incomplete for page/query dimensions.",
+      "idempotency": "Use the identical property, dates, dimensions and startRow for a repeated page.",
+      "reconcile": "Stop on an empty page, rowLimit, 50000-row daily exposure, or provider quota. Never auto-page."
+    }
+  },
+  {
+    "intent_id": "chat.send_message",
+    "service": "chat",
+    "applies_to": [
+      "google_chat_spaces_messages_create"
+    ],
+    "required_facts": [
+      {
+        "key": "parent",
+        "format": "spaces/{space}",
+        "reason": "Selects the exact destination.",
+        "source": "caller"
+      },
+      {
+        "key": "message",
+        "format": "Message JSON containing final text and optional exact thread",
+        "reason": "Prevents generated outbound content.",
+        "source": "caller"
+      },
+      {
+        "key": "request_id",
+        "format": "unique non-empty request ID",
+        "reason": "Provides provider-supported deduplication.",
+        "source": "caller"
+      },
+      {
+        "key": "reply_option",
+        "format": "MESSAGE_REPLY_OPTION_UNSPECIFIED, REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD, or REPLY_MESSAGE_OR_FAIL",
+        "reason": "Makes thread fallback explicit.",
+        "source": "caller"
+      }
+    ],
+    "steps": [
+      {
+        "operation": "google_chat_spaces_messages_create",
+        "kind": "write",
+        "inputs": [
+          {
+            "name": "parent",
+            "location": "path",
+            "format": "spaces/{space}",
+            "source": "fact:parent"
+          },
+          {
+            "name": "requestId",
+            "location": "query",
+            "format": "string",
+            "source": "fact:request_id"
+          },
+          {
+            "name": "messageReplyOption",
+            "location": "query",
+            "format": "enum",
+            "source": "fact:reply_option"
+          },
+          {
+            "name": "body",
+            "location": "body",
+            "format": "Message",
+            "source": "fact:message"
+          }
+        ]
+      }
+    ],
+    "call_estimate_min": 1,
+    "call_estimate_max": 1,
+    "stop_rules": {
+      "revision": "Outbound text, space and reply policy must be final before the write.",
+      "idempotency": "Reuse the same requestId and identical body for the same logical send.",
+      "reconcile": "Use the create response name. GET the message only if create outcome is unknown."
+    }
+  },
+  {
+    "intent_id": "contacts.find_person",
+    "service": "people",
+    "applies_to": [
+      "google_people_people_get"
+    ],
+    "required_facts": [
+      {
+        "key": "resource_name",
+        "format": "people/{person_id}",
+        "reason": "Selects one already resolved contact or directory person.",
+        "source": "caller"
+      },
+      {
+        "key": "person_fields",
+        "format": "comma-separated Person fields",
+        "reason": "Limits returned personal data.",
+        "source": "caller"
+      }
+    ],
+    "steps": [
+      {
+        "operation": "google_people_people_get",
+        "kind": "lookup",
+        "inputs": [
+          {
+            "name": "resourceName",
+            "location": "path",
+            "format": "people/{id}",
+            "source": "fact:resource_name"
+          },
+          {
+            "name": "personFields",
+            "location": "query",
+            "format": "field mask",
+            "source": "fact:person_fields"
+          }
+        ]
+      }
+    ],
+    "call_estimate_min": 1,
+    "call_estimate_max": 1,
+    "stop_rules": {
+      "revision": "Return source kinds and etags when requested; do not merge source-distinct people.",
+      "idempotency": "Exact resource get is a safe read.",
+      "reconcile": "A different resource name or a search request is not applicable to this recipe."
+    }
+  },
+  {
+    "intent_id": "tasks.create_or_update",
+    "service": "tasks",
+    "applies_to": [
+      "google_tasks_tasks_get",
+      "google_tasks_tasks_patch"
+    ],
+    "required_facts": [
+      {
+        "key": "tasklist",
+        "format": "exact task-list ID",
+        "reason": "Selects one list.",
+        "source": "caller"
+      },
+      {
+        "key": "task",
+        "format": "exact task ID",
+        "reason": "Selects one existing task.",
+        "source": "caller"
+      },
+      {
+        "key": "patch",
+        "format": "Task JSON with only intended fields",
+        "reason": "Defines a bounded update.",
+        "source": "caller"
+      }
+    ],
+    "steps": [
+      {
+        "operation": "google_tasks_tasks_get",
+        "kind": "lookup",
+        "inputs": [
+          {
+            "name": "tasklist",
+            "location": "path",
+            "format": "string",
+            "source": "fact:tasklist"
+          },
+          {
+            "name": "task",
+            "location": "path",
+            "format": "string",
+            "source": "fact:task"
+          }
+        ]
+      },
+      {
+        "operation": "google_tasks_tasks_patch",
+        "kind": "write",
+        "inputs": [
+          {
+            "name": "tasklist",
+            "location": "path",
+            "format": "string",
+            "source": "fact:tasklist"
+          },
+          {
+            "name": "task",
+            "location": "path",
+            "format": "string",
+            "source": "fact:task"
+          },
+          {
+            "name": "body",
+            "location": "body",
+            "format": "partial Task",
+            "source": "fact:patch"
+          }
+        ]
+      }
+    ],
+    "call_estimate_min": 2,
+    "call_estimate_max": 2,
+    "stop_rules": {
+      "revision": "Tasks patch exposes no updateMask or conditional revision input; stop if the fetched state differs from the caller's expected state.",
+      "idempotency": "Patch absolute intended fields. A due value is stored as a date; its time component is discarded.",
+      "reconcile": "Use the write response task id. GET only if the write outcome is unknown."
+    }
+  },
+  {
+    "intent_id": "groups.change_membership",
+    "service": "groups",
+    "applies_to": [
+      "google_cloud_identity_groups_memberships_lookup",
+      "google_cloud_identity_groups_memberships_create"
+    ],
+    "required_facts": [
+      {
+        "key": "group",
+        "format": "groups/{group_id}",
+        "reason": "Selects one immutable group.",
+        "source": "caller"
+      },
+      {
+        "key": "member_key",
+        "format": "stable member email or entity ID",
+        "reason": "Checks duplicate membership.",
+        "source": "caller"
+      },
+      {
+        "key": "membership",
+        "format": "Membership JSON with preferredMemberKey and one explicit role",
+        "reason": "Defines one addition.",
+        "source": "caller"
+      }
+    ],
+    "steps": [
+      {
+        "operation": "google_cloud_identity_groups_memberships_lookup",
+        "kind": "lookup",
+        "inputs": [
+          {
+            "name": "parent",
+            "location": "query",
+            "format": "groups/{id}",
+            "source": "fact:group"
+          },
+          {
+            "name": "memberKey.id",
+            "location": "query",
+            "format": "string",
+            "source": "fact:member_key"
+          }
+        ]
+      },
+      {
+        "operation": "google_cloud_identity_groups_memberships_create",
+        "kind": "write",
+        "inputs": [
+          {
+            "name": "parent",
+            "location": "path",
+            "format": "groups/{id}",
+            "source": "fact:group"
+          },
+          {
+            "name": "body",
+            "location": "body",
+            "format": "Membership",
+            "source": "fact:membership"
+          }
+        ]
+      }
+    ],
+    "call_estimate_min": 2,
+    "call_estimate_max": 2,
+    "stop_rules": {
+      "revision": "Stop if membership already exists, the group changed, or the explicit role is invalid.",
+      "idempotency": "The stable group plus member key identifies the intended membership.",
+      "reconcile": "Return the create response long-running Operation as unresolved. The baseline has no executable Cloud Identity operations.get. A later invocation may perform exact membership lookup, but must not claim Operation polling or completed creation."
+    },
+    "gap": "No executable Cloud Identity operations.get exists at this baseline, so asynchronous create completion cannot be polled by this recipe."
+  },
+  {
+    "intent_id": "keep.list_or_get_notes",
+    "service": "keep",
+    "applies_to": [],
+    "required_facts": [],
+    "steps": [],
+    "call_estimate_min": 0,
+    "call_estimate_max": 0,
+    "stop_rules": {
+      "revision": "Not applicable.",
+      "idempotency": "Not applicable.",
+      "reconcile": "Return unsupported_identity; do not promise setup or call notes APIs."
+    },
+    "gap": "google_keep_notes_get and google_keep_notes_list exist in the manifest but support service_account identity only. Baseline APIDefinitions registers only supported user_oauth methods, so neither operation is registered by the native user-OAuth executor."
+  },
+  {
+    "intent_id": "classroom.resolve_course",
+    "service": "classroom",
+    "applies_to": [
+      "google_classroom_courses_get"
+    ],
+    "required_facts": [
+      {
+        "key": "course_id",
+        "format": "exact course ID or accepted alias",
+        "reason": "Selects one course without enumeration.",
+        "source": "caller"
+      }
+    ],
+    "steps": [
+      {
+        "operation": "google_classroom_courses_get",
+        "kind": "lookup",
+        "inputs": [
+          {
+            "name": "id",
+            "location": "path",
+            "format": "course ID or alias",
+            "source": "fact:course_id"
+          }
+        ]
+      }
+    ],
+    "call_estimate_min": 1,
+    "call_estimate_max": 1,
+    "stop_rules": {
+      "revision": "Return course state and caller role; do not infer authority for later writes.",
+      "idempotency": "Exact course get is a safe read.",
+      "reconcile": "If the alias is ambiguous or the role/state is insufficient, stop without listing other courses."
+    }
+  },
+  {
+    "intent_id": "bigquery.run_read_query",
+    "service": "bigquery",
+    "applies_to": [
+      "google_bigquery_jobs_query"
+    ],
+    "required_facts": [
+      {
+        "key": "project_id",
+        "format": "exact Google Cloud project ID",
+        "reason": "Owns the query job.",
+        "source": "caller"
+      },
+      {
+        "key": "location",
+        "format": "BigQuery location",
+        "reason": "Pins job and result lookup to one location.",
+        "source": "caller"
+      },
+      {
+        "key": "query",
+        "format": "GoogleSQL SELECT query with useLegacySql=false",
+        "reason": "Limits this recipe to read-only SQL.",
+        "source": "caller"
+      },
+      {
+        "key": "maximum_bytes_billed",
+        "format": "non-negative decimal int64 string",
+        "reason": "Provides the cost guard.",
+        "source": "caller"
+      },
+      {
+        "key": "request_id",
+        "format": "caller-stable request ID",
+        "reason": "Deduplicates the actual query request.",
+        "source": "caller"
+      }
+    ],
+    "steps": [
+      {
+        "operation": "google_bigquery_jobs_query",
+        "kind": "lookup",
+        "inputs": [
+          {
+            "name": "projectId",
+            "location": "path",
+            "format": "string",
+            "source": "fact:project_id"
+          },
+          {
+            "name": "query",
+            "location": "body",
+            "format": "GoogleSQL",
+            "source": "fact:query"
+          },
+          {
+            "name": "useLegacySql",
+            "location": "body",
+            "format": "false",
+            "source": "caller"
+          },
+          {
+            "name": "dryRun",
+            "location": "body",
+            "format": "true",
+            "source": "caller"
+          },
+          {
+            "name": "maximumBytesBilled",
+            "location": "body",
+            "format": "int64 string",
+            "source": "fact:maximum_bytes_billed"
+          },
+          {
+            "name": "location",
+            "location": "body",
+            "format": "string",
+            "source": "fact:location"
+          }
+        ]
+      },
+      {
+        "operation": "google_bigquery_jobs_query",
+        "kind": "write",
+        "inputs": [
+          {
+            "name": "projectId",
+            "location": "path",
+            "format": "string",
+            "source": "fact:project_id"
+          },
+          {
+            "name": "query",
+            "location": "body",
+            "format": "GoogleSQL",
+            "source": "fact:query"
+          },
+          {
+            "name": "useLegacySql",
+            "location": "body",
+            "format": "false",
+            "source": "caller"
+          },
+          {
+            "name": "maximumBytesBilled",
+            "location": "body",
+            "format": "int64 string",
+            "source": "fact:maximum_bytes_billed"
+          },
+          {
+            "name": "location",
+            "location": "body",
+            "format": "string",
+            "source": "fact:location"
+          },
+          {
+            "name": "requestId",
+            "location": "body",
+            "format": "string",
+            "source": "fact:request_id"
+          }
+        ]
+      }
+    ],
+    "call_estimate_min": 2,
+    "call_estimate_max": 2,
+    "stop_rules": {
+      "revision": "Stop before execution if dry-run bytes exceed maximumBytesBilled or SQL is not read-only.",
+      "idempotency": "Reuse the same requestId for the same query and project.",
+      "reconcile": "jobs.query may return rows inline. Call jobs.getQueryResults only if jobComplete is false or rows are absent."
+    }
+  },
+  {
+    "intent_id": "youtube.list_channel_videos",
+    "service": "youtube",
+    "applies_to": [
+      "google_youtube_channels_list",
+      "google_youtube_playlistitems_list"
+    ],
+    "required_facts": [
+      {
+        "key": "channel_id",
+        "format": "exact YouTube channel ID",
+        "reason": "Avoids search-based channel selection.",
+        "source": "caller"
+      },
+      {
+        "key": "max_results",
+        "format": "integer 1-50",
+        "reason": "Bounds the uploads page.",
+        "source": "caller"
+      },
+      {
+        "key": "uploads_playlist_id",
+        "format": "exact uploads playlist ID from contentDetails.relatedPlaylists.uploads",
+        "reason": "Routes the next page read to the selected channel uploads.",
+        "source": "lookup",
+        "produced_by": "google_youtube_channels_list"
+      }
+    ],
+    "steps": [
+      {
+        "operation": "google_youtube_channels_list",
+        "kind": "lookup",
+        "inputs": [
+          {
+            "name": "part",
+            "location": "query",
+            "format": "contentDetails",
+            "source": "caller"
+          },
+          {
+            "name": "id",
+            "location": "query",
+            "format": "single channel ID",
+            "source": "fact:channel_id"
+          },
+          {
+            "name": "maxResults",
+            "location": "query",
+            "format": "1",
+            "source": "caller"
+          }
+        ],
+        "produces": [
+          "uploads_playlist_id"
+        ]
+      },
+      {
+        "operation": "google_youtube_playlistitems_list",
+        "kind": "lookup",
+        "inputs": [
+          {
+            "name": "part",
+            "location": "query",
+            "format": "snippet,contentDetails,status",
+            "source": "caller"
+          },
+          {
+            "name": "playlistId",
+            "location": "query",
+            "format": "uploads playlist ID",
+            "source": "fact:uploads_playlist_id"
+          },
+          {
+            "name": "maxResults",
+            "location": "query",
+            "format": "integer 1-50",
+            "source": "fact:max_results"
+          }
+        ]
+      }
+    ],
+    "call_estimate_min": 2,
+    "call_estimate_max": 2,
+    "stop_rules": {
+      "revision": "Stop if the channel lookup returns other than one exact channel or lacks an uploads playlist.",
+      "idempotency": "Both steps are bounded safe reads.",
+      "reconcile": "Return nextPageToken when present; do not fetch another page or hydrate video records automatically."
+    }
+  },
+  {
+    "intent_id": "tagmanager.inspect_container",
+    "service": "tagmanager",
+    "applies_to": [
+      "google_tagmanager_accounts_containers_get"
+    ],
+    "required_facts": [
+      {
+        "key": "container_path",
+        "format": "accounts/{account_id}/containers/{container_id}",
+        "reason": "Selects one exact GTM container.",
+        "source": "caller"
+      }
+    ],
+    "steps": [
+      {
+        "operation": "google_tagmanager_accounts_containers_get",
+        "kind": "lookup",
+        "inputs": [
+          {
+            "name": "path",
+            "location": "path",
+            "format": "accounts/{account}/containers/{container}",
+            "source": "fact:container_path"
+          }
+        ]
+      }
+    ],
+    "call_estimate_min": 1,
+    "call_estimate_max": 1,
+    "stop_rules": {
+      "revision": "Retain the returned container path and fingerprint for any separately described workspace operation.",
+      "idempotency": "Exact container get is a safe read.",
+      "reconcile": "A workspace, entity, publish, or different container operation is not applicable."
+    }
+  },
+  {
+    "intent_id": "gmail.find_message",
+    "service": "gmail",
+    "applies_to": [
+      "google_gmail_users_messages_list",
+      "google_gmail_users_messages_get"
+    ],
+    "required_facts": [
+      {
+        "key": "user_id",
+        "format": "me or exact mailbox address",
+        "reason": "Selects the mailbox.",
+        "source": "caller"
+      },
+      {
+        "key": "query",
+        "format": "bounded Gmail search query",
+        "reason": "Defines the message search.",
+        "source": "caller"
+      },
+      {
+        "key": "max_results",
+        "format": "integer 1-20",
+        "reason": "Bounds candidate exposure.",
+        "source": "caller"
+      },
+      {
+        "key": "metadata_headers",
+        "format": "array of required header names",
+        "reason": "Avoids body, attachment, raw-message, and rendering work.",
+        "source": "caller"
+      },
+      {
+        "key": "message_id",
+        "format": "exact ID of the single selected message",
+        "reason": "Do not guess when the search has zero or multiple matches.",
+        "source": "lookup",
+        "produced_by": "google_gmail_users_messages_list"
+      }
+    ],
+    "steps": [
+      {
+        "operation": "google_gmail_users_messages_list",
+        "kind": "lookup",
+        "inputs": [
+          {
+            "name": "userId",
+            "location": "path",
+            "format": "me or email",
+            "source": "fact:user_id"
+          },
+          {
+            "name": "q",
+            "location": "query",
+            "format": "Gmail search syntax",
+            "source": "fact:query"
+          },
+          {
+            "name": "maxResults",
+            "location": "query",
+            "format": "integer 1-20",
+            "source": "fact:max_results"
+          },
+          {
+            "name": "includeSpamTrash",
+            "location": "query",
+            "format": "false",
+            "source": "caller"
+          }
+        ],
+        "skip_if_facts": [
+          "message_id"
+        ],
+        "produces": [
+          "message_id"
+        ]
+      },
+      {
+        "operation": "google_gmail_users_messages_get",
+        "kind": "lookup",
+        "inputs": [
+          {
+            "name": "userId",
+            "location": "path",
+            "format": "me or email",
+            "source": "fact:user_id"
+          },
+          {
+            "name": "id",
+            "location": "path",
+            "format": "message ID",
+            "source": "fact:message_id"
+          },
+          {
+            "name": "format",
+            "location": "query",
+            "format": "metadata",
+            "source": "caller"
+          },
+          {
+            "name": "metadataHeaders",
+            "location": "query",
+            "format": "repeated header names",
+            "source": "fact:metadata_headers"
+          }
+        ]
+      }
+    ],
+    "call_estimate_min": 2,
+    "call_estimate_max": 2,
+    "stop_rules": {
+      "revision": "Stop when zero or multiple candidates remain; do not guess a message.",
+      "idempotency": "List and metadata get are safe reads.",
+      "reconcile": "Return message ID, thread ID, labels and requested headers only. Do not fetch attachments, bodies, raw MIME, Drive media, or rendered mail."
+    }
+  },
+  {
+    "intent_id": "devices.resolve_resource",
+    "service": "devices",
+    "applies_to": [
+      "google_cloud_identity_devices_get"
+    ],
+    "required_facts": [
+      {
+        "key": "device_name",
+        "format": "devices/{device_id}",
+        "reason": "Selects one immutable Device resource.",
+        "source": "caller"
+      },
+      {
+        "key": "customer",
+        "format": "customers/{customer_id} or customers/my_customer",
+        "reason": "Pins the tenant context.",
+        "source": "caller"
+      }
+    ],
+    "steps": [
+      {
+        "operation": "google_cloud_identity_devices_get",
+        "kind": "lookup",
+        "inputs": [
+          {
+            "name": "name",
+            "location": "path",
+            "format": "devices/{id}",
+            "source": "fact:device_name"
+          },
+          {
+            "name": "customer",
+            "location": "query",
+            "format": "customers/{id}",
+            "source": "fact:customer"
+          }
+        ]
+      }
+    ],
+    "call_estimate_min": 1,
+    "call_estimate_max": 1,
+    "stop_rules": {
+      "revision": "Return the immutable Device name and observed management, compromise, and sync fields without inferring DeviceUser state.",
+      "idempotency": "Exact device get is a safe read.",
+      "reconcile": "A DeviceUser, ClientState, list, wipe, block, or lifecycle operation is not applicable."
+    }
+  },
+  {
+    "intent_id": "sheets.update_format_or_structure",
+    "service": "sheets",
+    "applies_to": [
+      "google_sheets_spreadsheets_get",
+      "google_sheets_spreadsheets_batchupdate"
+    ],
+    "required_facts": [
+      {
+        "key": "spreadsheet_id",
+        "format": "exact spreadsheet ID",
+        "reason": "Bounds the structural/format update.",
+        "source": "caller"
+      },
+      {
+        "key": "requests",
+        "format": "1-25 spreadsheets.batchUpdate Request objects using numeric sheetId",
+        "reason": "Format/structure only. Not values.batchUpdate.",
+        "source": "caller"
+      }
+    ],
+    "steps": [
+      {
+        "operation": "google_sheets_spreadsheets_get",
+        "kind": "lookup",
+        "inputs": [
+          {
+            "name": "spreadsheetId",
+            "location": "path",
+            "format": "string",
+            "source": "fact:spreadsheet_id"
+          },
+          {
+            "name": "includeGridData",
+            "location": "query",
+            "format": "false",
+            "source": "caller"
+          }
+        ],
+        "produces": [
+          "sheet_id"
+        ]
+      },
+      {
+        "operation": "google_sheets_spreadsheets_batchupdate",
+        "kind": "write",
+        "inputs": [
+          {
+            "name": "spreadsheetId",
+            "location": "path",
+            "format": "string",
+            "source": "fact:spreadsheet_id"
+          },
+          {
+            "name": "requests",
+            "location": "body",
+            "format": "Request[]",
+            "source": "fact:requests"
+          },
+          {
+            "name": "includeSpreadsheetInResponse",
+            "location": "body",
+            "format": "false",
+            "source": "caller"
+          }
+        ]
+      }
+    ],
+    "call_estimate_min": 2,
+    "call_estimate_max": 2,
+    "stop_rules": {
+      "revision": "spreadsheets.batchUpdate has no Docs/Slides WriteControl revision token.",
+      "idempotency": "Rebuild requests from a fresh metadata get. Do not reuse stale sheet indexes.",
+      "reconcile": "GET sheet properties and exact affected ranges before considering a retry."
+    }
+  }
+]

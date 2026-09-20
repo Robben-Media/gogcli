@@ -2,6 +2,7 @@ package mailcompose
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -74,6 +75,27 @@ func renderMIME(
 		}
 	}
 
+	inline := make([]attachmentInput, 0, len(attachments))
+
+	regular := make([]attachmentInput, 0, len(attachments))
+	for _, attachment := range attachments {
+		if attachment.summary.Disposition == dispositionInline {
+			inline = append(inline, attachment)
+			continue
+		}
+
+		regular = append(regular, attachment)
+	}
+
+	if len(inline) > 0 && htmlText == "" {
+		return nil, validationError("inline attachments require HTML content")
+	}
+
+	relatedType := "text/html"
+	if plain != "" && htmlText != "" {
+		relatedType = "multipart/alternative"
+	}
+
 	var body strings.Builder
 
 	if len(attachments) == 0 {
@@ -105,56 +127,93 @@ func renderMIME(
 			return []byte(headers.String()), nil
 		}
 
-		alternativeBoundary := chooseBoundary("alternative", plain+htmlText, htmlText)
-		if err := writeHeader(&headers, "Content-Type", "multipart/alternative; boundary="+quoteBoundary(alternativeBoundary)); err != nil {
+		boundary := chooseBoundary("alternative", plain+htmlText, htmlText)
+		if err := writeHeader(&headers, "Content-Type", "multipart/alternative; boundary="+quoteBoundary(boundary)); err != nil {
 			return nil, err
 		}
 
 		headers.WriteString("\r\n")
-
-		writeTextPart(&body, alternativeBoundary, "text/plain", plain)
-		writeTextPart(&body, alternativeBoundary, "text/html", htmlText)
-		_, _ = fmt.Fprintf(&body, "--%s--\r\n", alternativeBoundary)
+		writeAlternativeBody(&body, boundary, plain, htmlText)
 
 		return []byte(headers.String() + body.String()), nil
 	}
 
-	mixedBoundary := chooseBoundary("mixed", plain+htmlText, htmlText)
-	if err := writeHeader(&headers, "Content-Type", "multipart/mixed; boundary="+quoteBoundary(mixedBoundary)); err != nil {
+	if len(regular) == 0 {
+		boundary := chooseBoundary("related", plain+htmlText, htmlText)
+
+		contentType := `multipart/related; type="` + relatedType + `"; boundary=` + quoteBoundary(boundary)
+
+		if err := writeHeader(&headers, "Content-Type", contentType); err != nil {
+			return nil, err
+		}
+
+		headers.WriteString("\r\n")
+		writeRelatedBody(&body, boundary, format, plain, htmlText, inline)
+
+		return []byte(headers.String() + body.String()), nil
+	}
+
+	boundary := chooseBoundary("mixed", plain+htmlText, htmlText)
+	if err := writeHeader(&headers, "Content-Type", "multipart/mixed; boundary="+quoteBoundary(boundary)); err != nil {
 		return nil, err
 	}
 
 	headers.WriteString("\r\n")
 
-	hasAlternative := htmlText != "" && plain != ""
-	if hasAlternative {
-		alternativeBoundary := chooseBoundary("mixed-alternative", plain+htmlText, htmlText)
-		_, _ = fmt.Fprintf(&body, "--%s\r\nContent-Type: multipart/alternative; boundary=%s\r\n\r\n", mixedBoundary, quoteBoundary(alternativeBoundary))
-		writeTextPart(&body, alternativeBoundary, "text/plain", plain)
-		writeTextPart(&body, alternativeBoundary, "text/html", htmlText)
-		_, _ = fmt.Fprintf(&body, "--%s--\r\n", alternativeBoundary)
+	if len(inline) > 0 {
+		relatedBoundary := chooseBoundary("mixed-related", plain+htmlText, htmlText)
+		_, _ = fmt.Fprintf(&body, "--%s\r\nContent-Type: multipart/related; type=\"%s\"; boundary=%s\r\n\r\n", boundary, relatedType, quoteBoundary(relatedBoundary))
+		writeRelatedBody(&body, relatedBoundary, format, plain, htmlText, inline)
 	} else {
-		contentType := "text/plain"
-		if format == FormatHTML {
-			contentType = "text/html"
-		}
-
-		content := plain
-		if format == FormatHTML {
-			content = htmlText
-		}
-
-		writeTextPart(&body, mixedBoundary, contentType, content)
+		writeBodyPart(&body, boundary, format, plain, htmlText)
 	}
 
-	for _, attachment := range attachments {
-		if err := writeAttachment(&body, mixedBoundary, attachment.summary, attachment.data); err != nil {
+	for _, attachment := range regular {
+		if err := writeAttachmentPart(&body, boundary, attachment.summary, attachment.data); err != nil {
 			return nil, err
 		}
 	}
-	_, _ = fmt.Fprintf(&body, "--%s--\r\n", mixedBoundary)
+
+	_, _ = fmt.Fprintf(&body, "--%s--\r\n", boundary)
 
 	return []byte(headers.String() + body.String()), nil
+}
+
+func writeBodyPart(buffer *strings.Builder, boundary string, format ContentFormat, plain, htmlText string) {
+	hasAlternative := htmlText != "" && plain != ""
+	if !hasAlternative {
+		contentType := "text/plain"
+		content := plain
+
+		if format == FormatHTML {
+			contentType = "text/html"
+			content = htmlText
+		}
+
+		writeTextPart(buffer, boundary, contentType, content)
+
+		return
+	}
+
+	alternativeBoundary := chooseBoundary("nested-alternative", plain+htmlText, htmlText)
+	_, _ = fmt.Fprintf(buffer, "--%s\r\nContent-Type: multipart/alternative; boundary=%s\r\n\r\n", boundary, quoteBoundary(alternativeBoundary))
+	writeAlternativeBody(buffer, alternativeBoundary, plain, htmlText)
+}
+
+func writeRelatedBody(buffer *strings.Builder, boundary string, format ContentFormat, plain, htmlText string, inline []attachmentInput) {
+	writeBodyPart(buffer, boundary, format, plain, htmlText)
+
+	for _, attachment := range inline {
+		_ = writeAttachmentPart(buffer, boundary, attachment.summary, attachment.data)
+	}
+
+	_, _ = fmt.Fprintf(buffer, "--%s--\r\n", boundary)
+}
+
+func writeAlternativeBody(buffer *strings.Builder, boundary, plain, htmlText string) {
+	writeTextPart(buffer, boundary, "text/plain", plain)
+	writeTextPart(buffer, boundary, "text/html", htmlText)
+	_, _ = fmt.Fprintf(buffer, "--%s--\r\n", boundary)
 }
 
 type attachmentInput struct {
@@ -313,6 +372,37 @@ func writeQuotedPrintable(writer io.Writer, value string) error {
 
 	if err := qp.Close(); err != nil {
 		return fmt.Errorf("close quoted-printable body: %w", err)
+	}
+
+	return nil
+}
+
+func writeAttachmentPart(buffer *strings.Builder, boundary string, summary AttachmentSummary, data []byte) error {
+	disposition := summary.Disposition
+	if disposition == "" {
+		disposition = dispositionAttachment
+	}
+
+	dispositionHeader := mime.FormatMediaType(disposition, map[string]string{"filename": summary.Filename})
+	if dispositionHeader == "" {
+		return validationError("invalid attachment filename %q", summary.Filename)
+	}
+
+	_, _ = fmt.Fprintf(buffer, "\r\n--%s\r\nContent-Type: %s\r\n", boundary, summary.ContentType)
+	if summary.ContentID != "" {
+		_, _ = fmt.Fprintf(buffer, "Content-ID: <%s>\r\n", summary.ContentID)
+	}
+
+	_, _ = fmt.Fprintf(buffer, "Content-Transfer-Encoding: base64\r\nContent-Disposition: %s\r\n\r\n", dispositionHeader)
+
+	encoded := base64.StdEncoding.EncodeToString(data)
+	for len(encoded) > 76 {
+		buffer.WriteString(encoded[:76] + "\r\n")
+		encoded = encoded[76:]
+	}
+
+	if encoded != "" {
+		buffer.WriteString(encoded + "\r\n")
 	}
 
 	return nil

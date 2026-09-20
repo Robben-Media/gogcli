@@ -154,8 +154,12 @@
   {
     "command": "drive download",
     "action": "drive:download",
-    "status": "deferred",
-    "reason": "Retained CLI operation; migrate after measured pilot and named consumer need."
+    "status": "native_bounded_media",
+    "tools": [
+      "drive_download_file",
+      "drive_export_file"
+    ],
+    "reason": "Opt-in native media supports bounded bytes (2 MiB maximum); CLI filesystem, larger/resumable transfers and other flags remain separately supported."
   },
   {
     "command": "drive copy",
@@ -166,8 +170,12 @@
   {
     "command": "drive upload",
     "action": "drive:upload",
-    "status": "deferred",
-    "reason": "Retained CLI operation; migrate after measured pilot and named consumer need."
+    "status": "native_bounded_media",
+    "tools": [
+      "drive_create_file",
+      "drive_update_file"
+    ],
+    "reason": "Opt-in native media supports bounded bytes (2 MiB maximum); CLI filesystem, larger/resumable transfers and other flags remain separately supported."
   },
   {
     "command": "drive mkdir",
@@ -1235,8 +1243,11 @@
   {
     "command": "gmail attachment",
     "action": "gmail:attachment",
-    "status": "deferred",
-    "reason": "Retained CLI operation; migrate after measured pilot and named consumer need."
+    "status": "native_bounded_media",
+    "tools": [
+      "gmail_get_attachment"
+    ],
+    "reason": "Opt-in native media supports bounded bytes (2 MiB maximum); CLI filesystem, larger/resumable transfers and other flags remain separately supported."
   },
   {
     "command": "gmail url",

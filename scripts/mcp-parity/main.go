@@ -15,11 +15,12 @@ import (
 )
 
 type entry struct {
-	Command string `json:"command"`
-	Action  string `json:"action"`
-	Status  string `json:"status"`
-	Tool    string `json:"tool,omitempty"`
-	Reason  string `json:"reason"`
+	Command string   `json:"command"`
+	Action  string   `json:"action"`
+	Status  string   `json:"status"`
+	Tool    string   `json:"tool,omitempty"`
+	Tools   []string `json:"tools,omitempty"`
+	Reason  string   `json:"reason"`
 }
 
 func main() {
@@ -33,6 +34,16 @@ func main() {
 	for _, d := range mcpcontract.Catalog() {
 		for _, a := range d.Actions {
 			byAction[a] = d.Name
+		}
+	}
+	mediaByAction := map[string][]string{}
+
+	for _, definition := range mcpcontract.WorkflowCatalog() {
+		for _, action := range definition.Actions {
+			switch action {
+			case "gmail:attachment", "drive:download", "drive:upload":
+				mediaByAction[action] = append(mediaByAction[action], definition.Name)
+			}
 		}
 	}
 	var rows []entry
@@ -72,6 +83,12 @@ func main() {
 			row.Status = "native_pilot"
 			row.Tool = tool
 			row.Reason = "Native read primitive covers this action; CLI flags and output remain separately supported."
+		}
+
+		if tools := mediaByAction[action]; len(tools) > 0 {
+			row.Status = "native_bounded_media"
+			row.Tools = tools
+			row.Reason = "Opt-in native media supports bounded bytes (2 MiB maximum); CLI filesystem, larger/resumable transfers and other flags remain separately supported."
 		}
 
 		rows = append(rows, row)

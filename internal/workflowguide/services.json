@@ -220,11 +220,19 @@
       },
       {
         "intent_id": "sheets.update_cells_or_format",
-        "intent": "Apply a bounded values/format/structure batch",
-        "minimum_calls": "1 exact affected-state read plus 1 batch write for destructive changes",
+        "intent": "Apply a bounded typed values batch",
+        "minimum_calls": "1 values.batchGet plus 1 values.batchUpdate; optional 1 exact readback",
         "approval": "required_for_formula_overwrite_clear_delete_or_bulk_threshold",
         "stop_condition": "Ambiguous range, protected content, or invalid subrequest",
-        "next_action": "Return exact failed subrequest/range and require a revised preview."
+        "next_action": "Compare exact A1 ranges. Use sheets.update_format_or_structure for format or sheet structure."
+      },
+      {
+        "intent_id": "sheets.update_format_or_structure",
+        "intent": "Apply a bounded format or structure batch",
+        "minimum_calls": "1 spreadsheets.get plus 1 spreadsheets.batchUpdate",
+        "approval": "required_for_delete_merge_or_protected_range_changes",
+        "stop_condition": "Ambiguous sheetId, protected range, or invalid subrequest",
+        "next_action": "Rebuild requests from a fresh metadata get. Do not use values.batchUpdate for format or structure."
       }
     ],
     "sources": [
@@ -1250,7 +1258,8 @@
       "Prefer mail_compose_prepare followed by the explicitly authorized draft or send workflow. Supply HTML/plain formatting deliberately; Markdown is not automatically HTML.",
       "Review normalized recipients, sending identity, rendered content and signature. An expected_content_digest is only a stale-preview guard, never proof of human approval.",
       "Threaded replies require Gmail threadId, valid References and In-Reply-To, and matching subject; derive headers from the selected source message.",
-      "After an unknown send or draft outcome, reconcile that mailbox. A Message-ID is not a provider idempotency key and must not justify blind replay."
+      "After an unknown send or draft outcome, reconcile that mailbox. A Message-ID is not a provider idempotency key and must not justify blind replay.",
+      "HTML supports a bounded inline CSS subset and matching CID image attachments. HTTPS image references are preserved without fetching; recipients may load them. Include a verified sender signature explicitly. Unsupported safe formatting may be removed with warnings; preview truncation and style-summary truncation do not mean the full message was reviewed."
     ],
     "quota_caveats": [
       "Gmail uses method-specific quota units; messages.send costs 100 units, not one. Check current project/user limits at rollout.",
@@ -1273,6 +1282,22 @@
         "approval": "permission_only_read",
         "stop_condition": "Ambiguous mailbox/recipient, page limit, or sufficient evidence found",
         "next_action": "Return source IDs and truncation; continue only if the task still requires more evidence."
+      },
+      {
+        "intent_id": "gmail.change_labels",
+        "intent": "Modify labels on an explicit bounded set of message or thread IDs.",
+        "minimum_calls": "One modify or batchModify request for known IDs; search only if IDs are missing.",
+        "approval": "Requires explicit mutation grant; permanent deletion and sending are separate actions.",
+        "stop_condition": "Stop on incomplete search results, ambiguous target scope, or an unknown write outcome.",
+        "next_action": "Use exact label IDs and explicit addLabelIds/removeLabelIds; reconcile a failed write by reading only the selected message/thread metadata."
+      },
+      {
+        "intent_id": "gmail.manage_filters_or_settings",
+        "intent": "Inspect or change one named Gmail filter or setting.",
+        "minimum_calls": "One exact read or mutation when the resource ID and desired value are known; list only to resolve missing IDs.",
+        "approval": "Use the method-specific Gmail settings scope and explicit write grant; forwarding or delegate changes may require separate Google verification.",
+        "stop_condition": "Stop when the scope or verification prerequisite is absent; never treat creation as verification.",
+        "next_action": "Describe the exact settings method, supply only its writable fields, and reconcile uncertain creation before retrying."
       }
     ],
     "sources": [

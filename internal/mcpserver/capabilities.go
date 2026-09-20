@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -34,23 +35,26 @@ type capabilitiesSearchOutput struct {
 }
 
 type capabilitiesDescribeInput struct {
-	Name       string `json:"name" jsonschema:"Granted operation name returned by capabilities_search"`
-	SchemaPath string `json:"schema_path,omitempty" jsonschema:"Optional dotted path into input or output, such as input.properties.requests.items"`
+	Name       string            `json:"name" jsonschema:"Granted operation name returned by capabilities_search"`
+	SchemaPath string            `json:"schema_path,omitempty" jsonschema:"Optional dotted path into input or output, such as input.properties.requests.items"`
+	IntentID   string            `json:"intent_id,omitempty" jsonschema:"Optional explicit workflow intent_id; recipes are never auto-selected"`
+	KnownFacts map[string]string `json:"known_facts,omitempty" jsonschema:"Optional caller-supplied facts for one recipe; never treated as verified provider state"`
 }
 
 type capabilitiesDescribeOutput struct {
-	Name            string              `json:"name"`
-	Service         string              `json:"service"`
-	Description     string              `json:"description"`
-	Retry           string              `json:"retry"`
-	Required        []string            `json:"required"`
-	Guidance        string              `json:"guidance"`
-	ServiceGuidance workflowguide.Guide `json:"service_guidance"`
-	InputSchema     json.RawMessage     `json:"input_schema"`
-	OutputSchema    json.RawMessage     `json:"output_schema"`
-	SchemaPath      string              `json:"schema_path,omitempty"`
-	Truncated       bool                `json:"truncated"`
-	InspectPaths    []string            `json:"inspect_paths,omitempty"`
+	Name            string                        `json:"name"`
+	Service         string                        `json:"service"`
+	Description     string                        `json:"description"`
+	Retry           string                        `json:"retry"`
+	Required        []string                      `json:"required"`
+	Guidance        string                        `json:"guidance"`
+	ServiceGuidance workflowguide.Guide           `json:"service_guidance"`
+	InputSchema     json.RawMessage               `json:"input_schema"`
+	OutputSchema    json.RawMessage               `json:"output_schema"`
+	SchemaPath      string                        `json:"schema_path,omitempty"`
+	Truncated       bool                          `json:"truncated"`
+	InspectPaths    []string                      `json:"inspect_paths,omitempty"`
+	Preparation     *workflowguide.PreparedRecipe `json:"preparation,omitempty"`
 }
 
 type capabilitiesExecuteInput struct {
@@ -96,6 +100,7 @@ func describeOutputSchema() *jsonschema.Schema {
 			"schema_path":      {Type: schemaTypeString},
 			"truncated":        {Type: schemaTypeBoolean},
 			"inspect_paths":    {Type: schemaTypeArray, Items: &jsonschema.Schema{Type: schemaTypeString}},
+			"preparation":      {Type: schemaTypeObject},
 		},
 		Required: []string{"name", "service", "description", "retry", "required", "guidance", "service_guidance", "input_schema", "output_schema", "truncated"},
 	}
@@ -246,7 +251,7 @@ func (rt *Runtime) handleCapabilitiesDescribe(ctx context.Context, request *mcp.
 		action = operation.Definition.Actions[0]
 	}
 
-	result, err := rt.resultFor(capabilitiesDescribeOutput{
+	output := capabilitiesDescribeOutput{
 		Name:            operation.Definition.Name,
 		Service:         servicePrefix(operation),
 		Description:     clipRunes(operation.Definition.Description, maxDescribeDescriptionRunes),
@@ -259,7 +264,17 @@ func (rt *Runtime) handleCapabilitiesDescribe(ctx context.Context, request *mcp.
 		SchemaPath:      schemaPath,
 		Truncated:       truncated,
 		InspectPaths:    inspectPaths,
-	})
+	}
+
+	if strings.TrimSpace(input.IntentID) != "" {
+		prepared, prepErr := rt.prepareDescribeRecipe(ctx, input, operation.Definition.Name)
+		if prepErr != nil {
+			return rt.finish(ctx, capabilitiesDescribeName, traceID, started, toolErrorResult(prepErr)), nil
+		}
+		output.Preparation = prepared
+	}
+
+	result, err := rt.resultFor(output)
 	if err != nil {
 		result = toolErrorResult(err)
 	}
@@ -387,4 +402,98 @@ func schemaRequired(schema *jsonschema.Schema) []string {
 	}
 
 	return append([]string(nil), schema.Required...)
+}
+
+const maxPreparationBytes = 4 << 10
+
+func (rt *Runtime) prepareDescribeRecipe(ctx context.Context, input capabilitiesDescribeInput, selected string) (*workflowguide.PreparedRecipe, error) {
+	intentID := strings.TrimSpace(input.IntentID)
+	if reason := workflowguide.ValidateKnownFacts(input.KnownFacts); reason != "" {
+		return nil, &mcpcontract.Error{Category: mcpcontract.InvalidInput, Message: reason, Retryable: false}
+	}
+
+	prepared, err := workflowguide.Prepare(intentID, selected, input.KnownFacts)
+	if err != nil {
+		if errors.Is(err, workflowguide.ErrUnknownIntent) {
+			return nil, &mcpcontract.Error{Category: mcpcontract.InvalidInput, Message: "unknown intent_id", Retryable: false}
+		}
+
+		return nil, &mcpcontract.Error{Category: mcpcontract.InvalidInput, Message: "intent_id is invalid", Retryable: false}
+	}
+
+	if err := rt.gatePreparation(ctx, &prepared); err != nil {
+		return nil, err
+	}
+
+	boundPreparation(&prepared)
+
+	return &prepared, nil
+}
+
+func (rt *Runtime) gatePreparation(ctx context.Context, prepared *workflowguide.PreparedRecipe) error {
+	if prepared == nil || prepared.Status == workflowguide.StatusNotApplicable {
+		return nil
+	}
+
+	unavailable := false
+
+	for i := range prepared.Steps {
+		step := &prepared.Steps[i]
+
+		operation, ok := rt.lookupOperation(step.Operation)
+		if !ok {
+			step.Availability = "not_registered"
+			step.RequiredInputs = nil
+			unavailable = true
+
+			continue
+		}
+
+		if writeOperation(operation) && !rt.enableWrites {
+			step.Availability = "write_disabled"
+			step.RequiredInputs = nil
+			unavailable = true
+
+			continue
+		}
+
+		visible, err := rt.operationDiscoverable(ctx, rt.authorizer, operation)
+		if err != nil {
+			return err
+		}
+
+		if !visible {
+			step.Availability = "missing_grant"
+			step.RequiredInputs = nil
+			unavailable = true
+
+			continue
+		}
+
+		step.Availability = "executable"
+	}
+
+	if unavailable {
+		prepared.Status = workflowguide.StatusUnavailable
+	}
+
+	return nil
+}
+
+func boundPreparation(prepared *workflowguide.PreparedRecipe) {
+	if prepared == nil {
+		return
+	}
+
+	encoded, err := json.Marshal(prepared)
+	if err == nil && len(encoded) <= maxPreparationBytes {
+		return
+	}
+
+	*prepared = workflowguide.PreparedRecipe{
+		IntentID: prepared.IntentID, Service: prepared.Service,
+		Status: workflowguide.StatusUnavailable, FactsStatus: workflowguide.FactsCallerSupplied,
+		CallEstimate: workflowguide.CallEstimate{ExcludesRetries: true},
+		Gap:          "Preparation exceeds its response bound; describe the individual operations instead. No steps are executable from this response.",
+	}
 }

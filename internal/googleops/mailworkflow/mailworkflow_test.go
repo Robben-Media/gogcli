@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/mail"
 	"strings"
@@ -383,5 +385,216 @@ func TestOperationsRejectInvalidArgumentsBeforeProvider(t *testing.T) {
 
 	if len(f.identities) != 0 {
 		t.Fatalf("invalid operations reached provider: %#v", f.identities)
+	}
+}
+
+func TestPreparePreservesStylesInlineImagesAndRemoteSignatureLogo(t *testing.T) {
+	f := newFixture(`<div style="font-weight:700">Alice Example</div><img src="https://brand.example/logo.png" alt="Alice" style="width:96px">`)
+	in := validRequest()
+	in.Content.HTML = `<div style="color:#0a0b0c"><img src="cid:logo@example.com" alt="Logo">Hello</div>`
+	in.Attachments = []Attachment{{
+		Filename:    "logo.png",
+		ContentType: "image/png",
+		Data:        []byte("PNG-bytes"),
+		Disposition: "inline",
+		ContentID:   "logo@example.com",
+	}}
+
+	out, err := prepare(testContext(t, 1), f, identity(), in)
+	if err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+
+	if len(f.transport.paths) != 1 || !strings.HasSuffix(f.transport.paths[0], "/settings/sendAs") {
+		t.Fatalf("paths = %#v, want only sendAs", f.transport.paths)
+	}
+
+	if !strings.Contains(out.Data.Preview.HTML, `style="color:#0a0b0c"`) ||
+		!strings.Contains(out.Data.Preview.HTML, `src="cid:logo@example.com"`) ||
+		!strings.Contains(out.Data.Preview.HTML, `src="https://brand.example/logo.png"`) {
+		t.Fatalf("preview = %q", out.Data.Preview.HTML)
+	}
+
+	wantStyles := []mailcompose.StyleDeclaration{
+		{Property: "color", Value: "#0a0b0c"},
+		{Property: "font-weight", Value: "700"},
+		{Property: "width", Value: "96px"},
+	}
+	if len(out.Data.Styles) != len(wantStyles) {
+		t.Fatalf("styles = %#v, want %#v", out.Data.Styles, wantStyles)
+	}
+
+	for index, style := range wantStyles {
+		if out.Data.Styles[index] != style {
+			t.Fatalf("style %d = %#v, want %#v", index, out.Data.Styles[index], style)
+		}
+	}
+
+	if len(out.Data.Attachments) != 1 || out.Data.Attachments[0].ContentID != "logo@example.com" {
+		t.Fatalf("attachments = %#v", out.Data.Attachments)
+	}
+
+	if !containsWarning(out.Data.Warnings, mailcompose.RemoteImageWarningName()) {
+		t.Fatalf("warnings = %#v", out.Data.Warnings)
+	}
+}
+
+func TestContentDigestIncludesStyleCIDAndInlineBytes(t *testing.T) {
+	digest := func(style, cid string, data []byte) string {
+		f := newFixture(`<p>Alice Example</p>`)
+		in := validRequest()
+		in.IncludeSignature = false
+		in.Content.HTML = `<div style="` + style + `"><img src="cid:` + cid + `" alt="Logo"></div>`
+		in.Attachments = []Attachment{{
+			Filename:    "logo.png",
+			ContentType: "image/png",
+			Data:        data,
+			Disposition: "inline",
+			ContentID:   cid,
+		}}
+
+		out, err := prepare(testContext(t, 1), f, identity(), in)
+		if err != nil {
+			t.Fatalf("prepare(%q, %q): %v", style, cid, err)
+		}
+
+		return out.Data.ContentDigest
+	}
+
+	base := digest("color:#0a0b0c", "logo@example.com", []byte("PNG-one"))
+	if base == digest("color:#0a0b0c", "logo@example.com", []byte("PNG-two")) {
+		t.Fatalf("attachment bytes were absent from digest")
+	}
+
+	if base == digest("color:#111111", "logo@example.com", []byte("PNG-one")) {
+		t.Fatalf("style semantics were absent from digest")
+	}
+
+	if base == digest("color:#0a0b0c", "other@example.com", []byte("PNG-one")) {
+		t.Fatalf("content ID was absent from digest")
+	}
+}
+
+func containsWarning(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+
+	return false
+}
+
+func TestFormattedPrepareToWriteAdapters(t *testing.T) {
+	for _, write := range []string{"draft", "send"} {
+		t.Run(write, func(t *testing.T) {
+			f := newFixture(`<p style="font-weight:700">Alice signature</p>`)
+			in := validRequest()
+			in.Content.HTML = `<p style="color:#123456">Hello<img src="cid:logo@example.com" alt="Logo"></p>`
+			in.Attachments = []Attachment{{Filename: "logo.png", ContentType: "image/png", Data: []byte("PNG-bytes"), Disposition: "inline", ContentID: "logo@example.com"}}
+
+			preview, err := prepare(testContext(t, 1), f, identity(), in)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if write == "draft" {
+				_, err = draft(testContext(t, 2), f, identity(), DraftInput{EmailRequest: in, ExpectedContentDigest: preview.Data.ContentDigest})
+			} else {
+				_, err = send(testContext(t, 2), f, identity(), SendInput{EmailRequest: in, ExpectedContentDigest: preview.Data.ContentDigest})
+			}
+
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(f.transport.paths) != 3 {
+				t.Fatalf("provider calls: %#v", f.transport.paths)
+			}
+
+			wantPath := "/gmail/v1/users/me/drafts"
+			if write == "send" {
+				wantPath = "/gmail/v1/users/me/messages/send"
+			}
+
+			if f.transport.paths[2] != wantPath {
+				t.Fatalf("write path: %q", f.transport.paths[2])
+			}
+
+			message, err := mail.ReadMessage(bytes.NewReader(f.transport.writeBody))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			typ, params, err := mime.ParseMediaType(message.Header.Get("Content-Type"))
+			if err != nil || typ != "multipart/related" || params["type"] != "multipart/alternative" {
+				t.Fatalf("related MIME: %s %#v %v", typ, params, err)
+			}
+			related := multipart.NewReader(message.Body, params["boundary"])
+
+			alternative, err := related.NextPart()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			_, params, err = mime.ParseMediaType(alternative.Header.Get("Content-Type"))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			parts := multipart.NewReader(alternative, params["boundary"])
+			if _, err = parts.NextPart(); err != nil {
+				t.Fatal(err)
+			}
+
+			htmlPart, err := parts.NextPart()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			html, err := io.ReadAll(htmlPart)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			for _, want := range []string{`style="color:#123456"`, `cid:logo@example.com`, `style="font-weight:700"`, `Alice signature`} {
+				if !bytes.Contains(html, []byte(want)) {
+					t.Fatalf("HTML missing %q: %s", want, html)
+				}
+			}
+
+			image, err := related.NextPart()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if image.Header.Get("Content-ID") != "<logo@example.com>" {
+				t.Fatalf("CID: %q", image.Header.Get("Content-ID"))
+			}
+
+			data, err := io.ReadAll(base64.NewDecoder(base64.StdEncoding, image))
+			if err != nil || string(data) != "PNG-bytes" {
+				t.Fatalf("image bytes: %q %v", data, err)
+			}
+		})
+	}
+}
+
+func TestPaddedFormatDigestRejectsChangedHTML(t *testing.T) {
+	f := newFixture("")
+	in := validRequest()
+	in.IncludeSignature = false
+	in.Content = Content{Format: " html ", HTML: "<p>A</p>"}
+
+	preview, err := prepare(testContext(t, 1), f, identity(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.Content.HTML = "<p>B</p>"
+	_, err = send(testContext(t, 2), f, identity(), SendInput{EmailRequest: in, ExpectedContentDigest: preview.Data.ContentDigest})
+	requireSafeError(t, err, mcpcontract.InvalidInput)
+
+	if len(f.transport.paths) != 2 || len(f.transport.writeBody) != 0 {
+		t.Fatalf("stale preview caused write: %#v", f.transport.paths)
 	}
 }

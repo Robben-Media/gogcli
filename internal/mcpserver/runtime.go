@@ -129,6 +129,10 @@ func New(cfg Config) (*Runtime, error) {
 		slots:            make(chan struct{}, maxConcurrency),
 		registered:       make(map[string]struct{}),
 	}
+	if cfg.MediaArtifacts != nil {
+		runtime.registerMediaResources(cfg.MediaArtifacts)
+	}
+
 	if err := runtime.syncTools(); err != nil {
 		return nil, err
 	}

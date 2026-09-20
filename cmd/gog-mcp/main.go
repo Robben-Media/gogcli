@@ -26,8 +26,10 @@ import (
 	"github.com/steipete/gogcli/internal/googleops/apiexec"
 	"github.com/steipete/gogcli/internal/googleops/authoring"
 	"github.com/steipete/gogcli/internal/googleops/mailworkflow"
+	"github.com/steipete/gogcli/internal/googleops/media"
 	"github.com/steipete/gogcli/internal/mcpcontract"
 	"github.com/steipete/gogcli/internal/mcpserver"
+	"github.com/steipete/gogcli/internal/mediaartifact"
 	"github.com/steipete/gogcli/internal/secrets"
 )
 
@@ -148,6 +150,11 @@ func serve(flags cli, logger *slog.Logger) error {
 	}
 
 	syncer := &toolSyncInvalidator{inner: provider}
+	var artifacts *mediaartifact.Store
+	if flags.APICatalog {
+		artifacts = mediaartifact.New()
+		defer artifacts.Close()
+	}
 
 	runtime, err := mcpserver.New(mcpserver.Config{
 		Name:            "gog-mcp",
@@ -156,7 +163,8 @@ func serve(flags cli, logger *slog.Logger) error {
 		Grants:          grants,
 		Policies:        cfgFile.Policies,
 		AllowOperations: allow,
-		Operations:      configuredOperations(flags, provider),
+		Operations:      configuredOperationsWithMedia(flags, provider, artifacts),
+		MediaArtifacts:  artifacts,
 		Accounts:        registryAccounts{registry: registry},
 
 		Logger:           logger,
@@ -412,8 +420,13 @@ func splitCSV(raw string) []string {
 
 // configuredOperations preserves the original curated tool surface by default.
 func configuredOperations(flags cli, provider mcpcontract.ClientProvider) []mcpcontract.Operation {
+	return configuredOperationsWithMedia(flags, provider, nil)
+}
+
+func configuredOperationsWithMedia(flags cli, provider mcpcontract.ClientProvider, artifacts mcpcontract.MediaArtifacts) []mcpcontract.Operation {
 	operations := googleops.Operations(provider)
 	if flags.APICatalog {
+		operations = append(operations, media.OperationsWithArtifacts(provider, artifacts)...)
 		operations = append(operations, authoring.Operations(provider)...)
 		operations = append(operations, mailworkflow.Operations(provider)...)
 		operations = append(operations, apiexec.Operations(provider)...)

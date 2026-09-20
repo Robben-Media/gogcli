@@ -3,6 +3,7 @@ package mailcompose
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -192,10 +193,14 @@ func TestComposeAddsExplicitSignatureAndSanitizesHTML(t *testing.T) {
 		t.Fatalf("signature was not added exactly once: plain %q, HTML %q", plainText, htmlText)
 	}
 
-	for _, forbidden := range []string{"<script", "<iframe", "onclick", "https://tracking.example", "javascript:"} {
+	for _, forbidden := range []string{"<script", "<iframe", "onclick", "javascript:"} {
 		if strings.Contains(htmlText, forbidden) {
 			t.Fatalf("HTML contains forbidden content %q: %s", forbidden, htmlText)
 		}
+	}
+
+	if !strings.Contains(htmlText, `<img src="https://tracking.example/pixel" alt="Logo">`) {
+		t.Fatalf("HTTPS image reference was removed: %q", htmlText)
 	}
 
 	if !strings.Contains(htmlText, `<a href="https://example.com">good</a>`) {
@@ -427,7 +432,7 @@ func TestComposeRejectsInvalidRecipientsAndThreading(t *testing.T) {
 	}
 }
 
-func TestComposeSanitizerRemovesUnsafeLinksAndRemoteImages(t *testing.T) {
+func TestComposeSanitizerRemovesUnsafeLinksAndKeepsHTTPSImages(t *testing.T) {
 	in := validInput()
 	in.Content = Content{
 		Format: FormatHTML,
@@ -441,12 +446,494 @@ func TestComposeSanitizerRemovesUnsafeLinksAndRemoteImages(t *testing.T) {
 	}
 
 	html := decodedBody(t, htmlParts[0])
-	if strings.Contains(html, "javascript:") || strings.Contains(html, "<img") || strings.Contains(html, "tracking.example") {
+	if strings.Contains(html, "javascript:") {
 		t.Fatalf("unsafe HTML remained: %q", html)
 	}
 
 	if !strings.Contains(html, `<a href="https://example.com">Example</a>`) {
 		t.Fatalf("safe link lost: %q", html)
+	}
+
+	if !strings.Contains(html, `<img src="https://tracking.example/pixel" alt="Pixel">`) {
+		t.Fatalf("HTTPS image reference lost: %q", html)
+	}
+
+	if !containsStringWarning(result.Summary.Warnings, remoteImageWarning) {
+		t.Fatalf("remote image warning missing: %#v", result.Summary.Warnings)
+	}
+}
+
+func containsStringWarning(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+
+	return false
+}
+
+func TestComposePreservesSafeStylesAndSignatureRemoteLogo(t *testing.T) {
+	in := validInput()
+	in.Content = Content{
+		Format: FormatPlainAndHTML,
+		Plain:  "Hello",
+		HTML:   `<div style="color: RGB(255, 0, 0); padding:12px; font-family:'Helvetica Neue', Arial; border:1px solid #000">Hello</div>`,
+	}
+	in.Signature = Signature{
+		Plain: "Alice",
+		HTML:  `<div style="font-weight:700">Alice<br>Robben Media</div><img src="https://brand.example/logo.png" alt="Robben Media" style="width:120px">`,
+	}
+	in.IncludeSignature = true
+	result := compose(t, in)
+	htmlParts := findParts(parseMessageParts(t, result.Raw), "text/html")
+
+	if len(htmlParts) != 1 {
+		t.Fatalf("HTML parts = %#v", htmlParts)
+	}
+
+	html := decodedBody(t, htmlParts[0])
+	for _, want := range []string{
+		`style="color:rgb(255, 0, 0);padding:12px;font-family:&#39;Helvetica Neue&#39;, Arial;border:1px solid #000000"`,
+		`style="font-weight:700"`,
+		`<img src="https://brand.example/logo.png" alt="Robben Media" style="width:120px">`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("formatted HTML missing %q: %q", want, html)
+		}
+	}
+
+	wantStyles := []StyleDeclaration{
+		{Property: "color", Value: "rgb(255, 0, 0)"},
+		{Property: "padding", Value: "12px"},
+		{Property: "font-family", Value: `'Helvetica Neue', Arial`},
+		{Property: "border", Value: "1px solid #000000"},
+		{Property: "font-weight", Value: "700"},
+		{Property: "width", Value: "120px"},
+	}
+	if len(result.Summary.Styles) != len(wantStyles) {
+		t.Fatalf("styles = %#v, want %#v", result.Summary.Styles, wantStyles)
+	}
+
+	for index, want := range wantStyles {
+		if result.Summary.Styles[index] != want {
+			t.Fatalf("style %d = %#v, want %#v", index, result.Summary.Styles[index], want)
+		}
+	}
+
+	if !containsStringWarning(result.Summary.Warnings, remoteImageWarning) {
+		t.Fatalf("remote image warning missing: %#v", result.Summary.Warnings)
+	}
+}
+
+func TestComposeRejectsUnsafeOrUnparseableCSS(t *testing.T) {
+	cases := []string{
+		`background-color:url(https://example.invalid/image.png)`,
+		`width:expression(alert(1))`,
+		`font-family:"</style>"`,
+		`background-color:rgb(999, 0, 0)`,
+		`color:#zzz`,
+	}
+
+	for _, style := range cases {
+		in := validInput()
+		in.Content = Content{
+			Format: FormatHTML,
+			HTML:   `<div style="` + style + `">Hello</div>`,
+		}
+
+		_, err := Compose(in)
+
+		var validation ValidationError
+		if err == nil || !errors.As(err, &validation) {
+			t.Fatalf("unsafe style %q was accepted: %v", style, err)
+		}
+	}
+}
+
+func TestComposeRejectsNonFiniteCSSNumbers(t *testing.T) {
+	cases := []string{
+		`width:NaNpx`,
+		`width:Infinitypx`,
+		`line-height:NaN`,
+		`line-height:-Infinity`,
+		`background-color:rgba(0,0,0,NaN)`,
+	}
+
+	for _, style := range cases {
+		in := validInput()
+		in.Content = Content{
+			Format: FormatHTML,
+			HTML:   `<div style="` + style + `">Hello</div>`,
+		}
+
+		_, err := Compose(in)
+
+		var validation ValidationError
+		if err == nil || !errors.As(err, &validation) {
+			t.Fatalf("non-finite style %q was accepted: %v", style, err)
+		}
+	}
+}
+
+func TestComposeStripsUnsupportedCSSAndKeepsSafeDeclarations(t *testing.T) {
+	in := validInput()
+	in.Content = Content{
+		Format: FormatHTML,
+		HTML:   `<div style="color:#0a0b0c;display:flex;font-variant-ligatures:common-ligatures">Hello</div>`,
+	}
+
+	result := compose(t, in)
+
+	if !strings.Contains(result.Summary.Preview.HTML, `style="color:#0a0b0c"`) {
+		t.Fatalf("safe declaration was not preserved: %q", result.Summary.Preview.HTML)
+	}
+
+	if len(result.Summary.Styles) != 1 || result.Summary.Styles[0].Property != "color" {
+		t.Fatalf("styles = %#v", result.Summary.Styles)
+	}
+
+	if !containsStringWarning(result.Summary.Warnings, unsupportedCSSWarning) {
+		t.Fatalf("warnings = %#v", result.Summary.Warnings)
+	}
+}
+
+func TestComposePreservesCommonSignatureCSSKeywords(t *testing.T) {
+	in := validInput()
+	in.Content = Content{
+		Format: FormatHTML,
+		HTML:   `<div style="color:inherit;font-size:small;line-height:normal;width:auto">Hello</div>`,
+	}
+
+	result := compose(t, in)
+
+	if got := result.Summary.Preview.HTML; !strings.Contains(got, `style="color:inherit;font-size:small;line-height:normal;width:auto"`) {
+		t.Fatalf("common CSS keywords were not preserved: %q", got)
+	}
+
+	want := []StyleDeclaration{
+		{Property: "color", Value: "inherit"},
+		{Property: "font-size", Value: "small"},
+		{Property: "line-height", Value: "normal"},
+		{Property: "width", Value: "auto"},
+	}
+	if len(result.Summary.Styles) != len(want) {
+		t.Fatalf("styles = %#v, want %#v", result.Summary.Styles, want)
+	}
+
+	for index, declaration := range want {
+		if result.Summary.Styles[index] != declaration {
+			t.Fatalf("style %d = %#v, want %#v", index, result.Summary.Styles[index], declaration)
+		}
+	}
+}
+
+func TestComposeBoundsStyleSummaryWithoutStrippingFormatting(t *testing.T) {
+	var html strings.Builder
+
+	for index := 0; index < 110000; index++ {
+		if index%64 == 0 {
+			html.WriteString(`<span style="`)
+		}
+
+		fmt.Fprintf(&html, "width:%.5fpx;", float64(index)/100000)
+
+		if index%64 == 63 || index == 109999 {
+			html.WriteString(`"></span>`)
+		}
+	}
+
+	in := validInput()
+	in.Content = Content{Format: FormatHTML, HTML: html.String()}
+	result := compose(t, in)
+
+	if len(result.Summary.Styles) != maxSummaryStyles || !result.Summary.StylesTruncated {
+		t.Fatalf("styles = %d, truncated = false", len(result.Summary.Styles))
+	}
+
+	htmlParts := findParts(parseMessageParts(t, result.Raw), "text/html")
+	if len(htmlParts) != 1 {
+		t.Fatalf("HTML parts = %#v", htmlParts)
+	}
+
+	renderedHTML := decodedBody(t, htmlParts[0])
+	if !strings.Contains(renderedHTML, "width:1.09999px") {
+		t.Fatalf("late rendered style was stripped: %.200q", renderedHTML)
+	}
+
+	if !containsStringWarning(result.Summary.Warnings, styleTruncationWarning) {
+		t.Fatalf("warnings = %#v", result.Summary.Warnings)
+	}
+
+	encoded, err := json.Marshal(result.Summary)
+	if err != nil {
+		t.Fatalf("marshal summary: %v", err)
+	}
+
+	if limit := 1 << 20; len(encoded) >= limit {
+		t.Fatalf("summary = %d bytes, limit %d", len(encoded), limit)
+	}
+}
+
+func TestComposeDropsImagesWithoutSource(t *testing.T) {
+	for _, source := range []string{"", `src=""`} {
+		in := validInput()
+		in.Content = Content{
+			Format: FormatHTML,
+			HTML:   `<img ` + source + ` alt="Logo"><p>Hello</p>`,
+		}
+
+		result := compose(t, in)
+		if strings.Contains(result.Summary.Preview.HTML, "<img") {
+			t.Fatalf("sourceless image was retained: %q", result.Summary.Preview.HTML)
+		}
+
+		if !containsStringWarning(result.Summary.Warnings, emptyImageSourceWarning) {
+			t.Fatalf("warnings = %#v", result.Summary.Warnings)
+		}
+	}
+}
+
+func TestComposePreservesBoundedNumericImageDimensions(t *testing.T) {
+	in := validInput()
+	in.Content = Content{
+		Format: FormatHTML,
+		HTML:   `<img src="https://brand.example/logo.png" alt="Logo" width="96" height="48"><img src="https://brand.example/wide.png" alt="Wide" width="99999" height="+48">`,
+	}
+
+	result := compose(t, in)
+	html := result.Summary.Preview.HTML
+
+	if !strings.Contains(html, `<img src="https://brand.example/logo.png" alt="Logo" width="96" height="48">`) {
+		t.Fatalf("bounded numeric dimensions were not preserved: %q", html)
+	}
+
+	if strings.Contains(html, `width="99999"`) || strings.Contains(html, `height="+48"`) {
+		t.Fatalf("unbounded or non-canonical dimensions were retained: %q", html)
+	}
+}
+
+func TestComposeClosesInlineOnlyRelatedMIME(t *testing.T) {
+	in := validInput()
+	in.Content = Content{Format: FormatHTML, HTML: `<img src="cid:logo@example.com" alt="Logo">`}
+	in.Attachments = []Attachment{{
+		Filename: "logo.png", ContentType: "image/png", Data: []byte("PNG"),
+		Disposition: "inline", ContentID: "logo@example.com",
+	}}
+
+	result := compose(t, in)
+
+	message, err := mail.ReadMessage(bytes.NewReader(result.Raw))
+	if err != nil {
+		t.Fatalf("read inline-only MIME: %v", err)
+	}
+
+	mediaType, params, err := mime.ParseMediaType(message.Header.Get("Content-Type"))
+	if err != nil || mediaType != "multipart/related" {
+		t.Fatalf("top-level content type = %q, params %#v, err %v", mediaType, params, err)
+	}
+
+	if params["type"] != "multipart/alternative" {
+		t.Fatalf("related root type = %q", params["type"])
+	}
+
+	reader := multipart.NewReader(message.Body, params["boundary"])
+	for {
+		part, err := reader.NextPart()
+		if errors.Is(err, io.EOF) {
+			return
+		}
+
+		if err != nil {
+			t.Fatalf("read related part: %v", err)
+		}
+
+		if _, err := io.Copy(io.Discard, part); err != nil {
+			t.Fatalf("read part body: %v", err)
+		}
+	}
+}
+
+func TestComposeEmbedsInlineImagesInMultipartRelated(t *testing.T) {
+	image := []byte("PNG-image-bytes")
+	in := validInput()
+	in.Content = Content{
+		Format: FormatPlainAndHTML,
+		Plain:  "Hello",
+		HTML:   `<div style="color:#0a0b0c"><img src="cid:LOGO@example.com" alt="Logo"></div>`,
+	}
+	in.Attachments = []Attachment{
+		{
+			Filename:    "logo.png",
+			ContentType: "image/png",
+			Data:        image,
+			Disposition: "inline",
+			ContentID:   "logo@example.com",
+		},
+		{
+			Filename:    "notes.txt",
+			ContentType: "text/plain",
+			Data:        []byte("notes"),
+		},
+	}
+	result := compose(t, in)
+
+	message, err := mail.ReadMessage(bytes.NewReader(result.Raw))
+	if err != nil {
+		t.Fatalf("read MIME: %v", err)
+	}
+
+	mediaType, params, err := mime.ParseMediaType(message.Header.Get("Content-Type"))
+	if err != nil || mediaType != "multipart/mixed" {
+		t.Fatalf("top-level MIME = %q, params %#v, err %v", mediaType, params, err)
+	}
+
+	mixed := multipart.NewReader(message.Body, params["boundary"])
+
+	relatedPart, err := mixed.NextPart()
+	if err != nil {
+		t.Fatalf("read related part: %v", err)
+	}
+
+	mediaType, params, err = mime.ParseMediaType(relatedPart.Header.Get("Content-Type"))
+	if err != nil || mediaType != "multipart/related" {
+		t.Fatalf("related MIME = %q, params %#v, err %v", mediaType, params, err)
+	}
+
+	if params["type"] != "multipart/alternative" {
+		t.Fatalf("related root type = %q", params["type"])
+	}
+
+	related := multipart.NewReader(relatedPart, params["boundary"])
+
+	alternativePart, err := related.NextPart()
+	if err != nil {
+		t.Fatalf("read alternative part: %v", err)
+	}
+
+	mediaType, params, err = mime.ParseMediaType(alternativePart.Header.Get("Content-Type"))
+	if err != nil || mediaType != "multipart/alternative" {
+		t.Fatalf("alternative MIME = %q, params %#v, err %v", mediaType, params, err)
+	}
+
+	alternative := multipart.NewReader(alternativePart, params["boundary"])
+
+	plainPart, err := alternative.NextPart()
+	if err != nil {
+		t.Fatalf("read plain part: %v", err)
+	}
+
+	htmlPart, err := alternative.NextPart()
+	if err != nil {
+		t.Fatalf("read HTML part: %v", err)
+	}
+
+	if plainPart.Header.Get("Content-Type") != `text/plain; charset=utf-8` || htmlPart.Header.Get("Content-Type") != `text/html; charset=utf-8` {
+		t.Fatalf("body part headers = %q and %q", plainPart.Header.Get("Content-Type"), htmlPart.Header.Get("Content-Type"))
+	}
+
+	imagePart, err := related.NextPart()
+	if err != nil {
+		t.Fatalf("read inline image: %v", err)
+	}
+
+	if got, want := imagePart.Header.Get("Content-ID"), "<logo@example.com>"; got != want {
+		t.Fatalf("Content-ID = %q, want %q", got, want)
+	}
+
+	disposition, dispositionParams, err := mime.ParseMediaType(imagePart.Header.Get("Content-Disposition"))
+	if err != nil || disposition != "inline" || dispositionParams["filename"] != "logo.png" {
+		t.Fatalf("inline disposition = %q, params %#v, err %v", disposition, dispositionParams, err)
+	}
+
+	embedded, err := io.ReadAll(base64.NewDecoder(base64.StdEncoding, imagePart))
+	if err != nil {
+		t.Fatalf("decode inline image: %v", err)
+	}
+
+	if !bytes.Equal(embedded, image) {
+		t.Fatalf("inline image bytes = %q", embedded)
+	}
+
+	regularPart, err := mixed.NextPart()
+	if err != nil {
+		t.Fatalf("read regular attachment: %v", err)
+	}
+
+	disposition, dispositionParams, err = mime.ParseMediaType(regularPart.Header.Get("Content-Disposition"))
+	if err != nil || disposition != "attachment" || dispositionParams["filename"] != "notes.txt" {
+		t.Fatalf("regular disposition = %q, params %#v, err %v", disposition, dispositionParams, err)
+	}
+
+	if _, err := mixed.NextPart(); !errors.Is(err, io.EOF) {
+		t.Fatalf("expected end of mixed MIME: %v", err)
+	}
+
+	if len(result.Summary.Styles) != 1 || result.Summary.Styles[0].Value != "#0a0b0c" {
+		t.Fatalf("summary styles = %#v", result.Summary.Styles)
+	}
+
+	if len(result.Summary.Attachments) != 2 || result.Summary.Attachments[0].ContentID != "logo@example.com" {
+		t.Fatalf("summary attachments = %#v", result.Summary.Attachments)
+	}
+}
+
+func TestComposeRejectsInvalidInlineResources(t *testing.T) {
+	valid := func() Input {
+		in := validInput()
+		in.Content = Content{
+			Format: FormatPlainAndHTML,
+			Plain:  "Hello",
+			HTML:   `<img src="cid:logo@example.com" alt="Logo">`,
+		}
+		in.Attachments = []Attachment{{
+			Filename:    "logo.png",
+			ContentType: "image/png",
+			Data:        []byte("image"),
+			Disposition: "inline",
+			ContentID:   "logo@example.com",
+		}}
+
+		return in
+	}
+
+	cases := map[string]func(*Input){
+		"unknown-cid": func(in *Input) {
+			in.Attachments[0].ContentID = "other@example.com"
+		},
+		"duplicate-id": func(in *Input) {
+			in.Attachments = append(in.Attachments, Attachment{
+				Filename: "logo2.png", ContentType: "image/png", Data: []byte("image"),
+				Disposition: "inline", ContentID: "LOGO@example.com",
+			})
+			in.Content.HTML += `<img src="cid:LOGO@example.com" alt="Second">`
+		},
+		"inline-non-image": func(in *Input) {
+			in.Attachments[0].ContentType = "text/plain"
+		},
+		"cid-on-attachment": func(in *Input) {
+			in.Attachments[0].Disposition = "attachment"
+		},
+		"header-injection": func(in *Input) {
+			in.Attachments[0].ContentID = "a@example.com\r\nBcc: evil@example.com"
+		},
+		"oversize-id": func(in *Input) {
+			in.Attachments[0].ContentID = strings.Repeat("a", 240) + "@example.com"
+		},
+		"inline-without-html": func(in *Input) {
+			in.Content = Content{Format: FormatPlain, Plain: "Hello"}
+		},
+	}
+
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			in := valid()
+			mutate(&in)
+
+			if _, err := Compose(in); err == nil {
+				t.Fatalf("expected %q rejection", name)
+			}
+		})
 	}
 }
 
