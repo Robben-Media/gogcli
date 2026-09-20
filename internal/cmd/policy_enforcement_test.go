@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/steipete/gogcli/internal/access"
 	"github.com/steipete/gogcli/internal/config"
 )
 
@@ -232,7 +233,7 @@ func TestPolicyEnforcement_NormalizesHyphenatedServicesAndAliases(t *testing.T) 
 				if !hasPolicyForService(explicitDeny, service) {
 					t.Fatalf("explicit deny policy not discovered for %q", command)
 				}
-				if decision := evaluatePolicies(explicitDeny, action, "", ""); !decision.Denied || decision.ImplicitAllowlist {
+				if decision := access.Evaluate(explicitDeny, action, "", ""); !decision.Denied || decision.ImplicitAllowlist {
 					t.Fatalf("explicit deny decision for %q = %#v", command, decision)
 				}
 
@@ -240,7 +241,7 @@ func TestPolicyEnforcement_NormalizesHyphenatedServicesAndAliases(t *testing.T) 
 				if !hasPolicyForService(allowlist, service) {
 					t.Fatalf("allowlist policy not discovered for %q", command)
 				}
-				if decision := evaluatePolicies(allowlist, action, "", ""); !decision.Denied || !decision.ImplicitAllowlist {
+				if decision := access.Evaluate(allowlist, action, "", ""); !decision.Denied || !decision.ImplicitAllowlist {
 					t.Fatalf("implicit allowlist decision for %q = %#v", command, decision)
 				}
 			}
@@ -305,7 +306,7 @@ func TestPolicyActionMatches(t *testing.T) {
 		{pattern: "gsc:sites.list", action: "search-console:sites.list", match: true},
 	}
 	for _, tt := range tests {
-		got := policyActionMatches(normalizePolicyAction(tt.pattern), normalizePolicyAction(tt.action))
+		got := access.MatchAction(tt.pattern, tt.action)
 		if got != tt.match {
 			t.Fatalf("pattern=%q action=%q got=%v want=%v", tt.pattern, tt.action, got, tt.match)
 		}

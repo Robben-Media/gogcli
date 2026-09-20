@@ -10,8 +10,6 @@ import (
 	"github.com/steipete/gogcli/internal/config"
 )
 
-type policyDecision = access.Decision
-
 func enforceCommandPolicies(kctx *kong.Context, flags *RootFlags) error {
 	if isSchemaCommand(kctx.Command()) {
 		return nil
@@ -46,7 +44,7 @@ func enforceCommandPolicies(kctx *kong.Context, flags *RootFlags) error {
 		return err
 	}
 
-	decision := evaluatePolicies(cfg.Policies, action, account, client)
+	decision := access.Evaluate(cfg.Policies, action, account, client)
 	if !decision.Denied {
 		return nil
 	}
@@ -77,18 +75,6 @@ func hasPolicyForService(policies []config.Policy, service string) bool {
 	return false
 }
 
-func evaluatePolicies(policies []config.Policy, action string, account string, client string) policyDecision {
-	return access.Evaluate(policies, action, account, client)
-}
-
-func mostSpecificApplicablePolicies(policies []config.Policy, account string, client string) []config.Policy {
-	return access.ApplicablePolicies(policies, account, client)
-}
-
-func normalizeCommandService(raw string) string {
-	return access.CanonicalService(raw)
-}
-
 func commandActionID(kctx *kong.Context) string {
 	parts := commandPath(kctx)
 	if len(parts) < 2 {
@@ -101,18 +87,6 @@ func commandActionID(kctx *kong.Context) string {
 		segments = segments[1:]
 	}
 	return service + ":" + strings.Join(segments, ".")
-}
-
-func policyActionMatches(pattern string, action string) bool {
-	return access.MatchAction(pattern, action)
-}
-
-func normalizePolicyInputs(actions []string) []string {
-	return access.CanonicalActions(actions)
-}
-
-func normalizePolicyAction(raw string) string {
-	return access.CanonicalAction(raw)
 }
 
 func validatePolicyActions(policy config.Policy) error {

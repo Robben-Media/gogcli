@@ -9,6 +9,7 @@ import (
 
 	"github.com/alecthomas/kong"
 
+	"github.com/steipete/gogcli/internal/access"
 	"github.com/steipete/gogcli/internal/config"
 	"github.com/steipete/gogcli/internal/outfmt"
 )
@@ -272,7 +273,7 @@ func buildSchemaPolicyState(policies []config.Policy, account string, client str
 		return schemaPolicyState{Status: "unresolved", UnresolvedReason: resolutionErr, Effects: []schemaPolicyEffect{}}
 	}
 
-	applicable := mostSpecificApplicablePolicies(policies, account, client)
+	applicable := access.ApplicablePolicies(policies, account, client)
 	effects := make([]schemaPolicyEffect, 0, len(applicable))
 	for _, policy := range applicable {
 		effects = append(effects, schemaPolicyEffect{

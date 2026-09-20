@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	"github.com/alecthomas/kong"
+
+	"github.com/steipete/gogcli/internal/access"
 )
 
 // enforceEnabledCommands applies invocation-scoped enablement.
@@ -115,7 +117,7 @@ func canonicalizeEnabledPath(kctx *kong.Context, segments []string) string {
 	// Fallback when the entry cannot be resolved against the model: still
 	// normalize the top-level service alias so mail/email/bq entries work.
 	segments = append([]string(nil), segments...)
-	segments[0] = normalizeCommandService(segments[0])
+	segments[0] = access.CanonicalService(segments[0])
 	return strings.Join(segments, " ")
 }
 
