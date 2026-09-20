@@ -18,16 +18,17 @@ func requestHost(r *http.Request) string {
 func loopbackHostEquivalent(got, want string) bool {
 	ports := func(host string) (string, bool) {
 		h := strings.ToLower(strings.TrimSpace(host))
-		_, port, err := net.SplitHostPort(h)
+
+		name, port, err := net.SplitHostPort(h)
 		if err != nil {
 			return "", false
 		}
-		ip := net.ParseIP(h)
-		isLoopbackIP := ip != nil && ip.IsLoopback()
-		return port, isLoopbackIP || h == "localhost"
+
+		return port, name == "localhost" || name == "127.0.0.1" || name == "::1"
 	}
 	gotPort, gotOK := ports(got)
 	wantPort, wantOK := ports(want)
+
 	return gotOK && wantOK && gotPort == wantPort
 }
 
@@ -38,7 +39,12 @@ func checkRequestHost(r *http.Request, redirectURL string) error {
 	}
 
 	got := requestHost(r)
-	if got == "" || (!strings.EqualFold(got, wantURL.Host) && !loopbackHostEquivalent(got, wantURL.Host)) {
+	if got == "" {
+		return ErrInvalidHost
+	}
+
+	allowAlias := r.Method == http.MethodGet && (r.URL.Path == PathAccounts || r.URL.Path == PathStatus)
+	if got == "" || (!strings.EqualFold(got, wantURL.Host) && !(allowAlias && loopbackHostEquivalent(got, wantURL.Host))) {
 		return ErrInvalidHost
 	}
 
@@ -48,15 +54,15 @@ func checkRequestHost(r *http.Request, redirectURL string) error {
 	}
 
 	parsed, parseErr := url.Parse(origin)
-	if parseErr != nil || parsed.Host == "" {
+	if parseErr != nil || parsed.Host == "" || parsed.Scheme == "" || parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" {
 		return ErrInvalidOrigin
 	}
 
-	if !strings.EqualFold(parsed.Host, wantURL.Host) && !loopbackHostEquivalent(parsed.Host, wantURL.Host) {
+	if !strings.EqualFold(parsed.Host, wantURL.Host) && !(allowAlias && loopbackHostEquivalent(parsed.Host, wantURL.Host)) {
 		return ErrInvalidOrigin
 	}
 
-	if parsed.Scheme != "" && wantURL.Scheme != "" && parsed.Scheme != wantURL.Scheme {
+	if !strings.EqualFold(parsed.Scheme, wantURL.Scheme) {
 		return ErrInvalidOrigin
 	}
 

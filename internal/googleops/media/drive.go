@@ -128,6 +128,10 @@ func (s *service) createFile(ctx context.Context, id mcpcontract.Identity, in Cr
 	}
 
 	metadata := map[string]any{"name": in.Name}
+	if in.FileID != "" {
+		metadata["id"] = in.FileID
+	}
+
 	if in.MimeType != "" {
 		metadata["mimeType"] = in.MimeType
 	}
@@ -157,10 +161,20 @@ func (s *service) createFile(ctx context.Context, id mcpcontract.Identity, in Cr
 		return mcpcontract.Result[DriveWriteData]{}, err
 	}
 
+	if in.FileID != "" && parsed.FileID != in.FileID {
+		return mcpcontract.Result[DriveWriteData]{}, outcomeUnknown("Drive returned a different file ID; reconcile before repeating")
+	}
+
 	return mcpcontract.NewResult(id, parsed), nil
 }
 
 func (s *service) updateFile(ctx context.Context, id mcpcontract.Identity, in UpdateInput) (mcpcontract.Result[DriveWriteData], error) {
+	if in.ExpectedVersion > 0 {
+		if err := requireBudget(ctx, 2); err != nil {
+			return mcpcontract.Result[DriveWriteData]{}, err
+		}
+	}
+
 	bundle, err := s.identityClient(ctx, id, opUpdate)
 	if err != nil {
 		return mcpcontract.Result[DriveWriteData]{}, err
@@ -184,14 +198,42 @@ func (s *service) updateFile(ctx context.Context, id mcpcontract.Identity, in Up
 		metadata["description"] = in.Description
 	}
 
+	method := http.MethodPatch
+	endpoint := "https://www.googleapis.com/upload/drive/v3/files/" + url.PathEscape(in.FileID) + "?uploadType=multipart&supportsAllDrives=true"
+	var etag string
+
+	if in.ExpectedVersion > 0 {
+		lookup := "https://www.googleapis.com/drive/v2/files/" + url.PathEscape(in.FileID) + "?fields=id,version,etag&supportsAllDrives=true"
+
+		payload, _, lookupErr := bundle.do(ctx, http.MethodGet, lookup, nil, "", maxDecodedBytes)
+		if lookupErr != nil {
+			return mcpcontract.Result[DriveWriteData]{}, lookupErr
+		}
+
+		var current struct {
+			ID      string `json:"id"`
+			Version int64  `json:"version,string"`
+			ETag    string `json:"etag"`
+		}
+		if json.Unmarshal(payload, &current) != nil || current.ID != in.FileID || current.Version != in.ExpectedVersion || current.ETag == "" || strings.ContainsAny(current.ETag, "\r\n") {
+			return mcpcontract.Result[DriveWriteData]{}, invalid("Drive version changed or concurrency metadata unavailable; no upload attempted")
+		}
+		etag = current.ETag
+		method = http.MethodPut
+
+		endpoint = "https://www.googleapis.com/upload/drive/v2/files/" + url.PathEscape(in.FileID) + "?uploadType=multipart&supportsAllDrives=true"
+		if in.Name != "" {
+			delete(metadata, "name")
+			metadata["title"] = in.Name
+		}
+	}
+
 	body, contentType, err := multipartUpload(metadata, raw, in.MimeType)
 	if err != nil {
 		return mcpcontract.Result[DriveWriteData]{}, err
 	}
 
-	endpoint := "https://www.googleapis.com/upload/drive/v3/files/" + url.PathEscape(in.FileID) + "?uploadType=multipart&supportsAllDrives=true"
-
-	payload, _, err := bundle.do(ctx, http.MethodPatch, endpoint, body, contentType, maxDecodedBytes)
+	payload, _, err := bundle.do(ctx, method, endpoint, body, contentType, maxDecodedBytes, etag)
 	if err != nil {
 		return mcpcontract.Result[DriveWriteData]{}, err
 	}
@@ -199,6 +241,10 @@ func (s *service) updateFile(ctx context.Context, id mcpcontract.Identity, in Up
 	parsed, err := parseDriveWrite(payload)
 	if err != nil {
 		return mcpcontract.Result[DriveWriteData]{}, err
+	}
+
+	if parsed.FileID != in.FileID {
+		return mcpcontract.Result[DriveWriteData]{}, outcomeUnknown("Drive returned a different file ID; reconcile before repeating")
 	}
 
 	return mcpcontract.NewResult(id, parsed), nil
@@ -224,7 +270,7 @@ func (s *service) getDriveMetadata(ctx context.Context, bundle *httpClientBundle
 		return driveFileMeta{}, publicError(err)
 	}
 
-	meta := driveFileMeta{ID: parsed.ID, Name: parsed.Name, MimeType: parsed.MIMEType}
+	meta := driveFileMeta{ID: parsed.ID, Name: firstNonEmpty(parsed.Name, parsed.Title), MimeType: parsed.MIMEType}
 	if parsed.Size != "" {
 		size, parseErr := strconv.ParseInt(parsed.Size, 10, 64)
 		if parseErr == nil {
@@ -283,6 +329,7 @@ func multipartUpload(metadata map[string]any, data []byte, mimeType string) ([]b
 
 type driveAPIFile struct {
 	ID       string `json:"id"`
+	Title    string `json:"title"`
 	Name     string `json:"name"`
 	MIMEType string `json:"mimeType"` //nolint:tagliatelle // Drive API wire name.
 	Size     string `json:"size"`
@@ -298,7 +345,7 @@ func parseDriveWrite(payload []byte) (DriveWriteData, error) {
 		return DriveWriteData{}, outcomeUnknown("Google returned no Drive file ID; reconcile before repeating")
 	}
 
-	out := DriveWriteData{FileID: parsed.ID, Name: parsed.Name, MimeType: parsed.MIMEType}
+	out := DriveWriteData{FileID: parsed.ID, Name: firstNonEmpty(parsed.Name, parsed.Title), MimeType: parsed.MIMEType}
 	if parsed.Size != "" {
 		if size, parseErr := strconv.ParseInt(parsed.Size, 10, 64); parseErr == nil {
 			out.SizeBytes = size

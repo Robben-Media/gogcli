@@ -143,7 +143,9 @@ func (p *GoogleProvider) AuthCodeURL(params AuthCodeParams) (string, error) {
 	opts := []oauth2.AuthCodeOption{
 		oauth2.AccessTypeOffline,
 		oauth2.S256ChallengeOption(params.Verifier),
-		oauth2.SetAuthURLParam("include_granted_scopes", "true"),
+		// The controller carries this connection's existing scopes on reconnect.
+		// Do not merge unrelated project grants (including other OAuth clients).
+		oauth2.SetAuthURLParam("include_granted_scopes", "false"),
 	}
 
 	prompt := make([]string, 0, 2)
