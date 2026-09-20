@@ -574,6 +574,10 @@ func parseCSSBorder(value string) (string, error) {
 		return "", err
 	}
 
+	if len(tokens) == 1 && (strings.EqualFold(tokens[0], "none") || tokens[0] == "0") {
+		return strings.ToLower(tokens[0]), nil
+	}
+
 	if len(tokens) < 2 || len(tokens) > 3 {
 		return "", validationError("inline CSS border must contain a width, style, and optional color")
 	}

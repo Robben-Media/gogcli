@@ -598,3 +598,25 @@ func TestPaddedFormatDigestRejectsChangedHTML(t *testing.T) {
 		t.Fatalf("stale preview caused write: %#v", f.transport.paths)
 	}
 }
+
+func TestPrepareAcceptsBorderlessGmailSignature(t *testing.T) {
+	for _, border := range []string{"none", "0"} {
+		t.Run(border, func(t *testing.T) {
+			f := newFixture(`<table style="border:` + border + `"><tr><td>Alice Example</td></tr></table>`)
+			in := validRequest()
+
+			out, err := prepare(testContext(t, 1), f, identity(), in)
+			if err != nil {
+				t.Fatalf("prepare borderless signature: %v", err)
+			}
+
+			if !out.Data.SignatureIncluded || !strings.Contains(out.Data.Preview.HTML, "Alice Example") || !strings.Contains(out.Data.Preview.Plain, "Alice Example") {
+				t.Fatalf("signature omitted: %#v", out.Data)
+			}
+
+			if len(f.transport.paths) != 1 || !strings.HasSuffix(f.transport.paths[0], "/settings/sendAs") {
+				t.Fatalf("expected only sender read: %#v", f.transport.paths)
+			}
+		})
+	}
+}

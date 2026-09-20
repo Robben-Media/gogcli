@@ -37,7 +37,7 @@ var now = func() time.Time {
 }
 
 type Content struct {
-	Format mailcompose.ContentFormat `json:"format" jsonschema:"plain, html, plain_with_html_alternative, or plain_and_html_alternative; Markdown is unsupported"`
+	Format mailcompose.ContentFormat `json:"format" jsonschema:"plain uses plain text; html uses HTML; plain_with_html_alternative generates HTML from plain and forbids supplied HTML; plain_and_html_alternative requires both plain and HTML. Markdown is unsupported"`
 	Plain  string                    `json:"plain,omitempty"`
 	HTML   string                    `json:"html,omitempty" jsonschema:"Bounded HTML subset with bounded inline CSS; includes text structure, links, tables, HTTPS or matching cid images, numeric image dimensions up to 9999, color, borders, spacing, dimensions, fonts, and text alignment. Unsafe CSS fails; unsupported safe declarations are removed with a warning"`
 }
