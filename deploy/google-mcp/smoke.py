@@ -123,6 +123,7 @@ def main():
             assert request()[0] == 200
             assert request(bearer=rotated)[0] == 401
             docker("restart", "--time=10", container)
+            endpoint = "http://" + docker("port", container, "8080/tcp") + "/mcp"
             wait_ready()
             assert request()[0] == 401
             assert request(bearer=rotated)[0] == 200

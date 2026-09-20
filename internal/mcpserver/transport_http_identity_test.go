@@ -266,3 +266,88 @@ func TestHTTPConfigRequiresSingleJSONDocument(t *testing.T) {
 		}
 	}
 }
+
+func TestHTTPLegacyBatchSharesOwnerToolQuota(t *testing.T) {
+	t.Parallel()
+	token, digest := testBearer(t)
+	otherToken, otherDigest := distinctBearer(t, token)
+
+	callers := []map[string]any{minimalCaller("first", digest), minimalCaller("second", otherDigest)}
+	for _, caller := range callers {
+		caller["allow_operations"] = []string{"gmail_search"}
+	}
+
+	cfg, err := mcpserver.ParseHTTPConfig(mustJSON(t, map[string]any{"host": httpTestHost, "callers": callers}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := make(chan struct{}, 3)
+
+	release := make(chan struct{})
+	defer close(release)
+	op := mcpcontract.NewOperation("gmail_search", nil, func(ctx context.Context, id mcpcontract.Identity, in searchInput) (mcpcontract.Result[searchData], error) {
+		started <- struct{}{}
+
+		select {
+		case <-release:
+		case <-ctx.Done():
+			return mcpcontract.Result[searchData]{}, ctx.Err()
+		}
+
+		return mcpcontract.NewResult(id, searchData{Account: id.AccountID, Query: in.Query}), nil
+	})
+
+	gateway, err := mcpserver.NewHTTPGateway(mcpserver.HTTPHandlerConfig{HTTP: cfg, Accounts: httpFixtureAccounts(), Operations: []mcpcontract.Operation{op}, MaxConcurrency: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture := &httpFixture{handler: gateway}
+	call := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"gmail_search","arguments":{"account_id":"work","query":"bounded"}}}`
+	batch := "[" + call + "," + strings.Replace(call, `"id":1`, `"id":2`, 1) + "]"
+
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	request := fixture.raw(t, http.MethodPost, "/mcp", token, httpTestHost, "", nil, []byte(batch)).WithContext(ctx)
+
+	done := make(chan rawResult, 1)
+	go func() { done <- doRaw(t, gateway, request) }()
+
+	for range 2 {
+		select {
+		case <-started:
+		case <-ctx.Done():
+			t.Fatal("legacy batch did not start both calls")
+		}
+	}
+
+	second := fixture.raw(t, http.MethodPost, "/mcp", otherToken, httpTestHost, "", nil, []byte(call)).WithContext(ctx)
+
+	secondDone := make(chan rawResult, 1)
+	go func() { secondDone <- doRaw(t, gateway, second) }()
+
+	select {
+	case <-started:
+		t.Fatal("second credential exceeded owner tool quota through legacy batch")
+	case <-time.After(100 * time.Millisecond):
+	}
+	// Let the batch finish; the waiting caller must then be able to proceed.
+	release <- struct{}{}
+
+	release <- struct{}{}
+
+	select {
+	case <-started:
+	case <-ctx.Done():
+		t.Fatal("waiting caller did not resume")
+	}
+
+	release <- struct{}{}
+
+	if response := <-secondDone; response.StatusCode != http.StatusOK || strings.Contains(response.Body, `"isError":true`) {
+		t.Fatalf("waiting caller failed: %+v", response)
+	}
+
+	if response := <-done; response.StatusCode != http.StatusOK {
+		t.Fatalf("batch failed: %+v", response)
+	}
+}

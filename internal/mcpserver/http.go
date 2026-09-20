@@ -128,9 +128,12 @@ func NewHTTPGateway(cfg HTTPHandlerConfig) (*HTTPGateway, error) {
 	}
 
 	principalSlots := make(map[string]chan struct{})
+	principalToolSlots := make(map[string]chan struct{})
+
 	for _, caller := range cfg.HTTP.Callers {
 		if principalSlots[caller.PrincipalID] == nil {
 			principalSlots[caller.PrincipalID] = make(chan struct{}, maxConcurrency)
+			principalToolSlots[caller.PrincipalID] = make(chan struct{}, maxConcurrency)
 		}
 
 		runtime, err := New(Config{
@@ -154,6 +157,10 @@ func NewHTTPGateway(cfg HTTPHandlerConfig) (*HTTPGateway, error) {
 		if err != nil {
 			return nil, fmt.Errorf("mcpserver: http caller %s: %w", caller.ID, err)
 		}
+
+		// Older protocol versions allow several tool calls in one HTTP request.
+		// Share their execution limit separately from the HTTP request slots.
+		runtime.slots = principalToolSlots[caller.PrincipalID]
 
 		state := &httpCallerState{
 			tokenSHA256: caller.TokenSHA256,
