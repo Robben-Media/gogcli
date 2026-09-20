@@ -101,7 +101,7 @@ type ConnectRequest struct {
 	Scopes      []string `json:"scopes"`
 }
 
-// ScopeChoice is a server-provided readonly capability the UI may offer.
+// ScopeChoice is a server-provided optional capability the UI may offer.
 type ScopeChoice struct {
 	Capability string `json:"capability"`
 	Scope      string `json:"scope"`

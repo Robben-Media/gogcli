@@ -2,7 +2,6 @@ package accountconnect
 
 import (
 	"slices"
-	"strings"
 
 	"github.com/steipete/gogcli/internal/mcpcontract"
 )
@@ -36,17 +35,6 @@ func capabilitiesForScopes(scopes []string) []string {
 	slices.Sort(out)
 
 	return out
-}
-
-func scopeForCapability(name string) (string, bool) {
-	name = strings.TrimSpace(name)
-	for _, pair := range capabilityPairs() {
-		if pair.name == name {
-			return pair.scope, true
-		}
-	}
-
-	return "", false
 }
 
 func accountView(rec Record) AccountView {

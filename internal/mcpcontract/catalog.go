@@ -10,6 +10,8 @@ type Definition struct {
 	Local       bool
 	// AnyAction means discovery requires any listed action; calls still authorize all selected actions.
 	AnyAction bool
+	// AnyScope means the provider accepts any one of Scopes, as in Google discovery.
+	AnyScope bool
 }
 
 const (
@@ -60,5 +62,11 @@ func Lookup(name string) (Definition, bool) {
 		}
 	}
 
-	return Definition{}, false
+	for _, d := range WorkflowCatalog() {
+		if d.Name == name {
+			return d, true
+		}
+	}
+
+	return lookupAPI(name)
 }

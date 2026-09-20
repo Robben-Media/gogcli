@@ -36,7 +36,7 @@ func (a *Authorizer) identityEligible(snapshot Snapshot, principalID string, ide
 		return false
 	}
 
-	if len(missingScopes(identity.Scopes, def.Scopes)) > 0 {
+	if !mcpcontract.ScopesSatisfied(identity.Scopes, def) {
 		return false
 	}
 

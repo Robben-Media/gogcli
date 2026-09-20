@@ -93,6 +93,7 @@ const (
 	AuthRequired      ErrorCategory = "authentication_required"
 	InsufficientScope ErrorCategory = "insufficient_scope"
 	NotFound          ErrorCategory = "not_found"
+	BudgetExhausted   ErrorCategory = "budget_exhausted"
 	QuotaExhausted    ErrorCategory = "quota_exhausted"
 	DeadlineExceeded  ErrorCategory = "deadline_exceeded"
 	UpstreamFailure   ErrorCategory = "upstream_failure"

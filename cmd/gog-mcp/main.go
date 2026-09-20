@@ -23,6 +23,9 @@ import (
 	"github.com/steipete/gogcli/internal/accountconnect/web"
 	"github.com/steipete/gogcli/internal/config"
 	"github.com/steipete/gogcli/internal/googleops"
+	"github.com/steipete/gogcli/internal/googleops/apiexec"
+	"github.com/steipete/gogcli/internal/googleops/authoring"
+	"github.com/steipete/gogcli/internal/googleops/mailworkflow"
 	"github.com/steipete/gogcli/internal/mcpcontract"
 	"github.com/steipete/gogcli/internal/mcpserver"
 	"github.com/steipete/gogcli/internal/secrets"
@@ -35,22 +38,29 @@ const (
 )
 
 var (
+	errAPICallBudget      = errors.New("gog-mcp: --max-upstream-calls must be between 1 and 256")
+	errCompactCatalog     = errors.New("gog-mcp: --api-catalog requires --discovery=compact")
 	errGrantsRequired     = errors.New("gog-mcp: --allow-operations or --grants-file is required")
 	errGrantsPrincipal    = errors.New("gog-mcp: grants file principal_id does not match --principal")
 	errNonLoopbackConnect = errors.New("gog-mcp: --connect-addr must be a loopback host")
 )
 
 type cli struct {
-	Principal       string        `name:"principal" help:"Trusted caller principal ID" default:"local" env:"GOG_MCP_PRINCIPAL"`
-	AllowOperations string        `name:"allow-operations" help:"Comma-separated enabled MCP operations" env:"GOG_MCP_ALLOW_OPERATIONS"`
-	GrantsFile      string        `name:"grants-file" help:"JSON file of caller account/client/action grants" env:"GOG_MCP_GRANTS_FILE"`
-	RegistryFile    string        `name:"registry-file" help:"Persistent account registry JSON path (defaults to <config-dir>/mcp-accounts.json). Memory registries are test-only." env:"GOG_MCP_REGISTRY_FILE"`
-	ClientName      string        `name:"client-name" help:"App-owned OAuth credential bucket" default:"native-mcp" env:"GOG_MCP_CLIENT_NAME"`
-	ConnectAddr     string        `name:"connect-addr" help:"Optional loopback address for the account connect page" env:"GOG_MCP_CONNECT_ADDR"`
-	RedirectURL     string        `name:"redirect-url" help:"Exact OAuth callback URL registered for the connect page" env:"GOG_MCP_REDIRECT_URL"`
-	RequestTimeout  time.Duration `name:"request-timeout" help:"Per-tool deadline" default:"30s" env:"GOG_MCP_REQUEST_TIMEOUT"`
-	MaxConcurrency  int           `name:"max-concurrency" help:"In-flight tool calls" default:"32" env:"GOG_MCP_MAX_CONCURRENCY"`
-	Version         bool          `name:"version" help:"Print version and exit"`
+	Principal        string        `name:"principal" help:"Trusted caller principal ID" default:"local" env:"GOG_MCP_PRINCIPAL"`
+	AllowOperations  string        `name:"allow-operations" help:"Comma-separated enabled MCP operations" env:"GOG_MCP_ALLOW_OPERATIONS"`
+	GrantsFile       string        `name:"grants-file" help:"JSON file of caller account/client/action grants" env:"GOG_MCP_GRANTS_FILE"`
+	RegistryFile     string        `name:"registry-file" help:"Persistent account registry JSON path (defaults to <config-dir>/mcp-accounts.json). Memory registries are test-only." env:"GOG_MCP_REGISTRY_FILE"`
+	ClientName       string        `name:"client-name" help:"App-owned OAuth credential bucket" default:"native-mcp" env:"GOG_MCP_CLIENT_NAME"`
+	ConnectAddr      string        `name:"connect-addr" help:"Optional loopback address for the account connect page" env:"GOG_MCP_CONNECT_ADDR"`
+	RedirectURL      string        `name:"redirect-url" help:"Exact OAuth callback URL registered for the connect page" env:"GOG_MCP_REDIRECT_URL"`
+	RequestTimeout   time.Duration `name:"request-timeout" help:"Per-tool deadline" default:"30s" env:"GOG_MCP_REQUEST_TIMEOUT"`
+	MaxConcurrency   int           `name:"max-concurrency" help:"In-flight tool calls" default:"32" env:"GOG_MCP_MAX_CONCURRENCY"`
+	ConnectScopes    string        `name:"connect-scopes" help:"Comma-separated additional OAuth scope URIs to offer explicitly in the account page" env:"GOG_MCP_CONNECT_SCOPES"`
+	Discovery        string        `name:"discovery" help:"Tool discovery: expanded legacy tools or compact capability search" default:"expanded" enum:"expanded,compact" env:"GOG_MCP_DISCOVERY"`
+	APICatalog       bool          `name:"api-catalog" help:"Load the extended Google API catalog and task workflows; requires --discovery=compact" env:"GOG_MCP_API_CATALOG"`
+	EnableWrites     bool          `name:"enable-writes" help:"Permit explicitly granted write operations; disabled by default" env:"GOG_MCP_ENABLE_WRITES"`
+	MaxUpstreamCalls int64         `name:"max-upstream-calls" help:"Maximum Google API attempts per tool request, including retries (1-256)" default:"32" env:"GOG_MCP_MAX_UPSTREAM_CALLS"`
+	Version          bool          `name:"version" help:"Print version and exit"`
 }
 
 type grantsFile struct {
@@ -89,6 +99,12 @@ func run(args []string) int {
 }
 
 func serve(flags cli, logger *slog.Logger) error {
+	if flags.MaxUpstreamCalls < 1 || flags.MaxUpstreamCalls > 256 {
+		return errAPICallBudget
+	}
+	if flags.APICatalog && flags.Discovery != string(mcpserver.DiscoveryCompact) {
+		return errCompactCatalog
+	}
 	if strings.TrimSpace(flags.ClientName) == "" {
 		flags.ClientName = "native-mcp"
 	}
@@ -140,13 +156,16 @@ func serve(flags cli, logger *slog.Logger) error {
 		Grants:          grants,
 		Policies:        cfgFile.Policies,
 		AllowOperations: allow,
-		Operations:      googleops.Operations(provider),
+		Operations:      configuredOperations(flags, provider),
 		Accounts:        registryAccounts{registry: registry},
 
-		Logger:         logger,
-		RequestTimeout: flags.RequestTimeout,
-		MaxConcurrency: flags.MaxConcurrency,
-		MaxBodyBytes:   defaultMaxBodyBytes,
+		Logger:           logger,
+		RequestTimeout:   flags.RequestTimeout,
+		MaxConcurrency:   flags.MaxConcurrency,
+		MaxBodyBytes:     defaultMaxBodyBytes,
+		DiscoveryMode:    mcpserver.DiscoveryMode(flags.Discovery),
+		EnableWrites:     flags.EnableWrites,
+		MaxUpstreamCalls: flags.MaxUpstreamCalls,
 	})
 	if err != nil {
 		return fmt.Errorf("start mcp runtime: %w", err)
@@ -280,14 +299,20 @@ func startConnectServer(flags cli, principal mcpcontract.Principal, registry acc
 		redirect = "http://" + host + accountconnect.PathCallback
 	}
 
+	additionalScopes, err := configuredConnectScopes(flags.ConnectScopes)
+	if err != nil {
+		return nil, err
+	}
+
 	controller, err := accountconnect.NewController(accountconnect.Options{
-		Registry:    registry,
-		Tokens:      tokens,
-		OAuth:       accountconnect.NewGoogleProvider(),
-		Invalidator: invalidator,
-		RedirectURL: redirect,
-		ClientName:  flags.ClientName,
-		Lifecycle:   lifecycle,
+		Registry:         registry,
+		Tokens:           tokens,
+		OAuth:            accountconnect.NewGoogleProvider(),
+		Invalidator:      invalidator,
+		RedirectURL:      redirect,
+		ClientName:       flags.ClientName,
+		Lifecycle:        lifecycle,
+		AdditionalScopes: additionalScopes,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("oauth controller: %w", err)
@@ -383,4 +408,15 @@ func splitCSV(raw string) []string {
 	}
 
 	return out
+}
+
+// configuredOperations preserves the original curated tool surface by default.
+func configuredOperations(flags cli, provider mcpcontract.ClientProvider) []mcpcontract.Operation {
+	operations := googleops.Operations(provider)
+	if flags.APICatalog {
+		operations = append(operations, authoring.Operations(provider)...)
+		operations = append(operations, mailworkflow.Operations(provider)...)
+		operations = append(operations, apiexec.Operations(provider)...)
+	}
+	return operations
 }

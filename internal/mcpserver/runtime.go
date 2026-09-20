@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -17,18 +18,22 @@ import (
 	"github.com/steipete/gogcli/internal/mcpcontract"
 )
 
-// Runtime is the stdio MCP adapter. HTTP and write tools stay disabled here.
+// Runtime is the stdio MCP adapter. HTTP transport stays disabled here; write tools require EnableWrites.
 type Runtime struct {
-	principal      mcpcontract.Principal
-	authorizer     *access.Authorizer
-	server         *mcp.Server
-	logger         *slog.Logger
-	operations     []mcpcontract.Operation
-	requestTimeout time.Duration
-	maxBodyBytes   int64
-	slots          chan struct{}
-	toolsMu        sync.Mutex
-	registered     map[string]struct{}
+	principal        mcpcontract.Principal
+	authorizer       *access.Authorizer
+	server           *mcp.Server
+	implementation   *mcp.Implementation
+	logger           *slog.Logger
+	operations       []mcpcontract.Operation
+	requestTimeout   time.Duration
+	maxBodyBytes     int64
+	maxUpstreamCalls int64
+	discoveryMode    DiscoveryMode
+	enableWrites     bool
+	slots            chan struct{}
+	toolsMu          sync.Mutex
+	registered       map[string]struct{}
 }
 
 func New(cfg Config) (*Runtime, error) {
@@ -41,6 +46,19 @@ func New(cfg Config) (*Runtime, error) {
 		return nil, errAccountSource
 	}
 
+	mode := cfg.DiscoveryMode
+	if mode == "" {
+		mode = DiscoveryExpanded
+	}
+
+	if mode != DiscoveryExpanded && mode != DiscoveryCompact {
+		return nil, errDiscoveryMode
+	}
+
+	if cfg.MaxUpstreamCalls < 0 || cfg.MaxUpstreamCalls > maxMaxUpstreamCalls {
+		return nil, errMaxUpstreamCalls
+	}
+
 	name := strings.TrimSpace(cfg.Name)
 	if name == "" {
 		name = defaultName
@@ -49,6 +67,10 @@ func New(cfg Config) (*Runtime, error) {
 	version := strings.TrimSpace(cfg.Version)
 	if version == "" {
 		version = defaultVersion
+	}
+
+	if cfg.MaxBodyBytes < 0 {
+		return nil, errMaxBodyBytes
 	}
 
 	timeout := cfg.RequestTimeout
@@ -66,6 +88,15 @@ func New(cfg Config) (*Runtime, error) {
 		maxBody = defaultMaxBodyBytes
 	}
 
+	if maxBody < bodyLimitFloor(name, version) {
+		return nil, errMaxBodyBytes
+	}
+
+	maxUpstream := cfg.MaxUpstreamCalls
+	if maxUpstream == 0 {
+		maxUpstream = defaultMaxUpstreamCalls
+	}
+
 	logger := cfg.Logger
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -76,22 +107,27 @@ func New(cfg Config) (*Runtime, error) {
 		return nil, fmt.Errorf("mcpserver: authorizer: %w", err)
 	}
 
-	server := mcp.NewServer(&mcp.Implementation{Name: name, Version: version}, &mcp.ServerOptions{
+	implementation := &mcp.Implementation{Name: name, Version: version}
+	server := mcp.NewServer(implementation, &mcp.ServerOptions{
 		Logger:       logger,
 		Capabilities: &mcp.ServerCapabilities{},
 	})
 	RegisterWorkflowResources(server)
 
 	runtime := &Runtime{
-		principal:      mcpcontract.Principal{ID: principalID},
-		authorizer:     authorizer,
-		server:         server,
-		logger:         logger,
-		operations:     append([]mcpcontract.Operation(nil), cfg.Operations...),
-		requestTimeout: timeout,
-		maxBodyBytes:   maxBody,
-		slots:          make(chan struct{}, maxConcurrency),
-		registered:     make(map[string]struct{}),
+		principal:        mcpcontract.Principal{ID: principalID},
+		authorizer:       authorizer,
+		server:           server,
+		implementation:   implementation,
+		logger:           logger,
+		operations:       append([]mcpcontract.Operation(nil), cfg.Operations...),
+		requestTimeout:   timeout,
+		maxBodyBytes:     maxBody,
+		maxUpstreamCalls: maxUpstream,
+		discoveryMode:    mode,
+		enableWrites:     cfg.EnableWrites,
+		slots:            make(chan struct{}, maxConcurrency),
+		registered:       make(map[string]struct{}),
 	}
 	if err := runtime.syncTools(); err != nil {
 		return nil, err
@@ -167,10 +203,10 @@ func (rt *Runtime) syncTools() error {
 }
 
 func (rt *Runtime) collectWanted(authorizer *access.Authorizer) ([]string, map[string]struct{}, error) {
-	wanted := make([]string, 0, len(rt.operations)+1)
-	wantedSet := make(map[string]struct{}, len(rt.operations)+1)
+	wanted := make([]string, 0, len(rt.operations)+4)
+	wantedSet := make(map[string]struct{}, len(rt.operations)+4)
 
-	visible, err := authorizer.Visible(rt.principal, accountsListName)
+	visible, err := authorizer.Visible(context.Background(), rt.principal, accountsListName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("account tool visibility: %w", err)
 	}
@@ -180,20 +216,27 @@ func (rt *Runtime) collectWanted(authorizer *access.Authorizer) ([]string, map[s
 		wantedSet[accountsListName] = struct{}{}
 	}
 
+	if rt.discoveryMode == DiscoveryCompact {
+		for _, name := range compactToolNames() {
+			wanted = append(wanted, name)
+			wantedSet[name] = struct{}{}
+		}
+
+		return wanted, wantedSet, nil
+	}
+
 	for _, operation := range rt.operations {
-		if operation.Definition.Local {
+		ok, visErr := rt.operationDiscoverable(context.Background(), authorizer, operation)
+		if visErr != nil {
+			return nil, nil, visErr
+		}
+
+		if !ok {
 			continue
 		}
 
-		ok, visErr := authorizer.Visible(rt.principal, operation.Definition.Name)
-		if visErr != nil {
-			return nil, nil, fmt.Errorf("google tool visibility: %w", visErr)
-		}
-
-		if ok {
-			wanted = append(wanted, operation.Definition.Name)
-			wantedSet[operation.Definition.Name] = struct{}{}
-		}
+		wanted = append(wanted, operation.Definition.Name)
+		wantedSet[operation.Definition.Name] = struct{}{}
 	}
 
 	return wanted, wantedSet, nil
@@ -236,6 +279,10 @@ func (rt *Runtime) addNamedTool(name string) {
 		return
 	}
 
+	if rt.addCompactTool(name) {
+		return
+	}
+
 	for _, operation := range rt.operations {
 		if operation.Definition.Name == name {
 			rt.server.AddTool(rt.toolFor(operation), rt.handlerFor(operation))
@@ -245,14 +292,12 @@ func (rt *Runtime) addNamedTool(name string) {
 }
 
 func (rt *Runtime) toolFor(operation mcpcontract.Operation) *mcp.Tool {
-	readOnly := true
-
 	return &mcp.Tool{
 		Name:         operation.Definition.Name,
 		Description:  operation.Definition.Description,
 		InputSchema:  operation.InputSchema,
 		OutputSchema: operation.OutputSchema,
-		Annotations:  &mcp.ToolAnnotations{ReadOnlyHint: readOnly, Title: operation.Definition.Name},
+		Annotations:  &mcp.ToolAnnotations{ReadOnlyHint: !writeOperation(operation), Title: operation.Definition.Name},
 	}
 }
 
@@ -296,4 +341,16 @@ func newTraceID() string {
 	}
 
 	return hex.EncodeToString(buf[:])
+}
+
+func bodyLimitFloor(name, version string) int64 {
+	encoded, _ := json.Marshal(mcp.Implementation{Name: name, Version: version})
+	baseline, _ := json.Marshal(mcp.Implementation{Name: defaultName, Version: defaultVersion})
+
+	extra := int64(len(encoded) - len(baseline))
+	if extra < 0 {
+		extra = 0
+	}
+
+	return minMaxBodyBytes + extra
 }

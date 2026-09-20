@@ -3,6 +3,8 @@ package mcpserver_test
 import (
 	"context"
 	"encoding/json"
+	"math"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -178,7 +180,7 @@ func TestRuntimeBoundsRequestsAndResults(t *testing.T) {
 				return mcpcontract.NewResult(identity, searchData{Account: identity.AccountID, Query: strings.Repeat("private", 1000)}), nil
 			})
 			cfg := fixtureConfig([]mcpcontract.Operation{operation})
-			cfg.MaxBodyBytes = 256
+			cfg.MaxBodyBytes = 512
 			session := limitSession(t, cfg)
 
 			query := "small"
@@ -200,6 +202,165 @@ func TestRuntimeBoundsRequestsAndResults(t *testing.T) {
 			encoded, _ := json.Marshal(result)
 			if strings.Contains(string(encoded), "private") {
 				t.Fatal("oversized result leaked into tool response")
+			}
+		})
+	}
+}
+
+func TestOversizedNonReplayableWriteIsOutcomeUnknown(t *testing.T) {
+	t.Parallel()
+
+	operation := limitOperation(func(_ context.Context, identity mcpcontract.Identity, _ searchInput) (mcpcontract.Result[searchData], error) {
+		return mcpcontract.NewResult(identity, searchData{Account: identity.AccountID, Query: strings.Repeat("created-secret ", 1000)}), nil
+	})
+	operation.Definition.Retry = mcpcontract.NonReplayableWrite
+	cfg := fixtureConfig([]mcpcontract.Operation{operation})
+	cfg.EnableWrites = true
+	cfg.MaxBodyBytes = 2048
+	session := limitSession(t, cfg)
+
+	result, err := session.CallTool(t.Context(), searchParams("create"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	requireCategory(t, result, mcpcontract.OutcomeUnknown)
+
+	encoded, _ := json.Marshal(result)
+	if strings.Contains(string(encoded), "created-secret") {
+		t.Fatal("oversized write leaked raw result")
+	}
+
+	if !strings.Contains(string(encoded), "account_id=work") || strings.Contains(string(encoded), `"retryable":true`) {
+		t.Fatalf("missing bounded identity or retry: %s", encoded)
+	}
+}
+
+func TestWriteEncodeFailureIsOutcomeUnknown(t *testing.T) {
+	t.Parallel()
+
+	operation := mcpcontract.NewOperation[searchInput, mcpcontract.Result[float64]]("gmail_search", nil, func(_ context.Context, _ mcpcontract.Identity, _ searchInput) (mcpcontract.Result[float64], error) {
+		return mcpcontract.Result[float64]{AccountID: "work", Data: math.NaN()}, nil
+	})
+	operation.Definition.Retry = mcpcontract.NonReplayableWrite
+	cfg := fixtureConfig([]mcpcontract.Operation{operation})
+	cfg.EnableWrites = true
+	session := limitSession(t, cfg)
+
+	result, err := session.CallTool(t.Context(), searchParams("create"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	requireCategory(t, result, mcpcontract.OutcomeUnknown)
+
+	encoded, _ := json.Marshal(result)
+	if strings.Contains(string(encoded), `"retryable":true`) || strings.Contains(string(encoded), "NaN") {
+		t.Fatalf("encode failure leaked or retryable: %s", encoded)
+	}
+}
+
+type minWriteData struct {
+	ID      string `json:"id"`
+	Padding string `json:"padding"`
+}
+
+func TestMinBodyWriteFallbackFits(t *testing.T) {
+	t.Parallel()
+
+	const id15 = "abcdefghijklmno"
+
+	operation := mcpcontract.NewOperation[searchInput, mcpcontract.Result[minWriteData]]("gmail_search", nil, func(_ context.Context, _ mcpcontract.Identity, _ searchInput) (mcpcontract.Result[minWriteData], error) {
+		return mcpcontract.NewResult(mcpcontract.Identity{AccountID: id15, Label: "Work"}, minWriteData{ID: id15, Padding: strings.Repeat("p", 400)}), nil
+	})
+	operation.Definition.Retry = mcpcontract.NonReplayableWrite
+	cfg := fixtureConfig([]mcpcontract.Operation{operation})
+	cfg.EnableWrites = true
+	cfg.MaxBodyBytes = 512
+	session := limitSession(t, cfg)
+
+	result, err := session.CallTool(t.Context(), searchParams("create"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	requireCategory(t, result, mcpcontract.OutcomeUnknown)
+
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if int64(len(encoded)) > 512 {
+		t.Fatalf("fallback %d bytes: %s", len(encoded), encoded)
+	}
+
+	if strings.Contains(string(encoded), `"retryable":true`) || strings.Contains(string(encoded), strings.Repeat("p", 40)) {
+		t.Fatalf("fallback leaked payload or retry: %s", encoded)
+	}
+}
+
+func TestClientVisibleResultIncludesSDKOverhead(t *testing.T) {
+	t.Parallel()
+
+	for _, padding := range []string{"x", strings.Repeat("x", 50), strings.Repeat("x", 200), strings.Repeat("x", 800)} {
+		t.Run(strconv.Itoa(len(padding)), func(t *testing.T) {
+			t.Parallel()
+
+			operation := limitOperation(func(_ context.Context, id mcpcontract.Identity, _ searchInput) (mcpcontract.Result[searchData], error) {
+				return mcpcontract.NewResult(id, searchData{Query: padding}), nil
+			})
+			cfg := fixtureConfig([]mcpcontract.Operation{operation})
+			cfg.MaxBodyBytes = 512
+			session := limitSession(t, cfg)
+
+			result, err := session.CallTool(t.Context(), searchParams("q"))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			encoded, err := json.Marshal(result)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if int64(len(encoded)) > 512 {
+				t.Fatalf("client-visible result has %d bytes: %s", len(encoded), encoded)
+			}
+		})
+	}
+}
+
+func TestOversizedMailResultRetainsKnownResource(t *testing.T) {
+	t.Parallel()
+
+	for _, key := range []string{"draft_id", "message_id"} {
+		t.Run(key, func(t *testing.T) {
+			t.Parallel()
+
+			operation := mcpcontract.NewOperation[searchInput, mcpcontract.Result[map[string]string]]("gmail_search", nil, func(_ context.Context, id mcpcontract.Identity, _ searchInput) (mcpcontract.Result[map[string]string], error) {
+				return mcpcontract.NewResult(id, map[string]string{key: "known-mail-id", "preview": strings.Repeat("p", 4000)}), nil
+			})
+			operation.Definition.Retry = mcpcontract.NonReplayableWrite
+			cfg := fixtureConfig([]mcpcontract.Operation{operation})
+			cfg.EnableWrites = true
+			cfg.MaxBodyBytes = 2048
+			session := limitSession(t, cfg)
+
+			result, err := session.CallTool(t.Context(), searchParams("create"))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			requireCategory(t, result, mcpcontract.OutcomeUnknown)
+
+			encoded, err := json.Marshal(result)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if !strings.Contains(string(encoded), "resource_id=known-mail-id") {
+				t.Fatalf("lost successful mail resource ID: %s", encoded)
 			}
 		})
 	}

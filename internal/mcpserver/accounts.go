@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -49,15 +51,13 @@ func (rt *Runtime) handleAccountsList(ctx context.Context, request *mcp.CallTool
 	traceID := newTraceID()
 
 	ctx, _ = googleapi.WithUpstreamCounter(ctx)
+	ctx = googleapi.WithUpstreamBudget(ctx, rt.maxUpstreamCalls)
 
 	ctx, cancel := rt.withTimeout(ctx)
 	defer cancel()
 
 	if err := rt.acquire(ctx); err != nil {
-		result := toolErrorResult(err)
-		rt.logCall(ctx, accountsListName, traceID, started, result)
-
-		return result, nil
+		return rt.finish(ctx, accountsListName, traceID, started, toolErrorResult(err)), nil
 	}
 	defer rt.release()
 
@@ -67,36 +67,32 @@ func (rt *Runtime) handleAccountsList(ctx context.Context, request *mcp.CallTool
 	}
 
 	if err := rt.checkSize(int64(len(raw)), "request"); err != nil {
-		result := toolErrorResult(err)
-		rt.logCall(ctx, accountsListName, traceID, started, result)
-
-		return result, nil
+		return rt.finish(ctx, accountsListName, traceID, started, toolErrorResult(err)), nil
 	}
 
 	if err := decodeStrict(raw, &accountsListInput{}); err != nil {
-		result := toolErrorResult(err)
-		rt.logCall(ctx, accountsListName, traceID, started, result)
-
-		return result, nil
+		return rt.finish(ctx, accountsListName, traceID, started, toolErrorResult(err)), nil
 	}
 
 	identities, err := rt.authorizer.ListAccounts(ctx, rt.principal)
 	if err != nil {
-		result := toolErrorResult(err)
-		rt.logCall(ctx, accountsListName, traceID, started, result)
-
-		return result, nil
+		return rt.finish(ctx, accountsListName, traceID, started, toolErrorResult(err)), nil
 	}
 
 	accounts := make([]accountInfo, 0, len(identities))
 	for _, identity := range identities {
+		caps, capErr := rt.accountCapabilities(ctx, identity)
+		if capErr != nil {
+			return rt.finish(ctx, accountsListName, traceID, started, toolErrorResult(capErr)), nil
+		}
+
 		accounts = append(accounts, accountInfo{
 			AccountID:    identity.AccountID,
 			Label:        identity.Label,
 			Email:        identity.Email,
 			ClientName:   identity.ClientName,
 			AuthMode:     identity.AuthMode,
-			Capabilities: rt.authorizer.Capabilities(identity),
+			Capabilities: caps,
 		})
 	}
 
@@ -105,9 +101,7 @@ func (rt *Runtime) handleAccountsList(ctx context.Context, request *mcp.CallTool
 		result = toolErrorResult(err)
 	}
 
-	rt.logCall(ctx, accountsListName, traceID, started, result)
-
-	return result, nil
+	return rt.finish(ctx, accountsListName, traceID, started, result), nil
 }
 
 func decodeStrict(raw json.RawMessage, dest any) error {
@@ -127,4 +121,99 @@ func decodeStrict(raw json.RawMessage, dest any) error {
 	}
 
 	return nil
+}
+
+func (rt *Runtime) accountCapabilities(ctx context.Context, identity mcpcontract.Identity) ([]string, error) {
+	groups := make(map[string][]mcpcontract.Operation)
+	order := make([]string, 0, 8)
+
+	for _, operation := range rt.operations {
+		name := capabilityGroup(operation)
+		if name == "" {
+			continue
+		}
+
+		if !rt.enableWrites && writeOperation(operation) {
+			continue
+		}
+
+		if _, ok := groups[name]; !ok {
+			order = append(order, name)
+		}
+		groups[name] = append(groups[name], operation)
+	}
+
+	caps := make([]string, 0, len(order))
+	for _, name := range order {
+		ok, err := rt.capabilityGroupUsable(ctx, identity, groups[name])
+		if err != nil {
+			return nil, err
+		}
+
+		if ok {
+			caps = append(caps, name)
+		}
+	}
+
+	slices.Sort(caps)
+
+	return caps, nil
+}
+
+func (rt *Runtime) capabilityGroupUsable(ctx context.Context, identity mcpcontract.Identity, operations []mcpcontract.Operation) (bool, error) {
+	for _, operation := range operations {
+		ok, err := rt.operationUsableBy(ctx, identity, operation)
+		if err != nil {
+			return false, err
+		}
+
+		if ok {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (rt *Runtime) operationUsableBy(ctx context.Context, identity mcpcontract.Identity, operation mcpcontract.Operation) (bool, error) {
+	actions := operation.Definition.Actions
+	if operation.Definition.AnyAction {
+		for _, action := range actions {
+			_, err := rt.authorizer.Authorize(ctx, rt.principal, identity.AccountID, operation.Definition.Name, []string{action})
+			if err == nil {
+				return true, nil
+			}
+
+			if !isAccessDenial(err) {
+				return false, fmt.Errorf("authorize %s: %w", operation.Definition.Name, err)
+			}
+		}
+
+		return false, nil
+	}
+
+	_, err := rt.authorizer.Authorize(ctx, rt.principal, identity.AccountID, operation.Definition.Name, actions)
+	if err == nil {
+		return true, nil
+	}
+
+	if isAccessDenial(err) {
+		return false, nil
+	}
+
+	return false, fmt.Errorf("authorize %s: %w", operation.Definition.Name, err)
+}
+
+func isAccessDenial(err error) bool {
+	var typed *mcpcontract.Error
+	if !errors.As(err, &typed) || typed == nil {
+		return false
+	}
+
+	switch typed.Category {
+	case mcpcontract.Forbidden, mcpcontract.AuthRequired, mcpcontract.InsufficientScope, mcpcontract.InvalidInput, mcpcontract.NotFound:
+		return true
+	default:
+		return false
+	}
 }

@@ -60,6 +60,10 @@ func (t *NativeRetryTransport) RoundTrip(req *http.Request) (*http.Response, err
 			return nil, err
 		}
 
+		if err := consumeUpstreamBudget(req.Context()); err != nil {
+			return nil, err
+		}
+
 		AddUpstreamCall(req.Context())
 
 		resp, err := base.RoundTrip(req)
@@ -87,6 +91,10 @@ func (t *NativeRetryTransport) RoundTrip(req *http.Request) (*http.Response, err
 }
 
 func (t *NativeRetryTransport) roundTripOnce(base http.RoundTripper, req *http.Request) (*http.Response, error) {
+	if err := consumeUpstreamBudget(req.Context()); err != nil {
+		return nil, err
+	}
+
 	AddUpstreamCall(req.Context())
 
 	resp, err := base.RoundTrip(req)
@@ -100,7 +108,26 @@ func (t *NativeRetryTransport) roundTripOnce(base http.RoundTripper, req *http.R
 		return nil, nativeWriteUnknown()
 	}
 
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 && resp.Body != nil {
+		resp.Body = &nativeWriteBody{ReadCloser: resp.Body}
+	}
+
 	return resp, nil
+}
+
+type nativeWriteBody struct{ io.ReadCloser }
+
+func (body *nativeWriteBody) Read(p []byte) (int, error) {
+	n, err := body.ReadCloser.Read(p)
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return n, io.EOF
+		}
+
+		return n, nativeWriteUnknown()
+	}
+
+	return n, nil
 }
 
 func nativeWriteUnknown() error {

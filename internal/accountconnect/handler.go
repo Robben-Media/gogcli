@@ -130,7 +130,7 @@ func (h *Handler) connect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := decodeConnectRequest(r)
+	req, err := decodeConnectRequest(r, h.controller.scopeForCapability)
 	if err != nil {
 		h.writeError(w, http.StatusBadRequest, err)
 		return
@@ -152,7 +152,7 @@ func (h *Handler) reconnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := decodeReconnectRequest(r)
+	req, err := decodeReconnectRequest(r, h.controller.scopeForCapability)
 	if err != nil {
 		h.writeError(w, http.StatusBadRequest, err)
 		return
@@ -311,7 +311,7 @@ func (h *Handler) status(w http.ResponseWriter, r *http.Request) {
 	if accountID := r.URL.Query().Get("account_id"); accountID != "" && status.OK && !status.Disconnected {
 		rec, getErr := h.controller.GetRecord(r.Context(), accountID)
 		if getErr == nil && rec.PrincipalID == h.principal.ID {
-			view := accountView(rec)
+			view := h.controller.accountView(rec)
 			status.Account = &view
 			status.Action = ActionConnected
 			status.Detail = "Connected " + view.Email + "."
@@ -336,7 +336,7 @@ func (h *Handler) page(token string, accounts []AccountView, status *StatusRespo
 		CSRFToken:             token,
 		ClientName:            h.controller.ClientName(),
 		RequestedCapabilities: capabilitiesForScopes(DefaultConnectScopes()),
-		ScopeChoices:          ScopeChoices(),
+		ScopeChoices:          h.controller.ScopeChoices(),
 		Accounts:              accounts,
 		Status:                status,
 	}
@@ -452,14 +452,14 @@ type capabilityPayload struct {
 	Capabilities json.RawMessage `json:"capabilities"`
 }
 
-func decodeConnectRequest(r *http.Request) (ConnectRequest, error) {
+func decodeConnectRequest(r *http.Request, lookup func(string) (string, bool)) (ConnectRequest, error) {
 	if isJSONRequest(r) {
 		var payload capabilityPayload
 		if err := decodeJSONBody(r, &payload); err != nil && !errors.Is(err, errEmptyBody) {
 			return ConnectRequest{}, err
 		}
 
-		scopes, err := scopesFromPayload(payload.Scopes, payload.Capabilities)
+		scopes, err := scopesFromPayload(payload.Scopes, payload.Capabilities, lookup)
 		if err != nil {
 			return ConnectRequest{}, err
 		}
@@ -473,18 +473,18 @@ func decodeConnectRequest(r *http.Request) (ConnectRequest, error) {
 
 	return ConnectRequest{
 		Label:  r.FormValue("label"),
-		Scopes: formScopes(r),
+		Scopes: formScopes(r, lookup),
 	}, nil
 }
 
-func decodeReconnectRequest(r *http.Request) (ReconnectRequest, error) {
+func decodeReconnectRequest(r *http.Request, lookup func(string) (string, bool)) (ReconnectRequest, error) {
 	if isJSONRequest(r) {
 		var payload capabilityPayload
 		if err := decodeJSONBody(r, &payload); err != nil {
 			return ReconnectRequest{}, err
 		}
 
-		scopes, err := scopesFromPayload(payload.Scopes, payload.Capabilities)
+		scopes, err := scopesFromPayload(payload.Scopes, payload.Capabilities, lookup)
 		if err != nil {
 			return ReconnectRequest{}, err
 		}
@@ -496,7 +496,7 @@ func decodeReconnectRequest(r *http.Request) (ReconnectRequest, error) {
 		return ReconnectRequest{}, fmt.Errorf("parse form: %w", err)
 	}
 
-	return ReconnectRequest{AccountID: r.FormValue("account_id"), Scopes: formScopes(r)}, nil
+	return ReconnectRequest{AccountID: r.FormValue("account_id"), Scopes: formScopes(r, lookup)}, nil
 }
 
 func jsonFieldPresent(raw json.RawMessage) bool {
@@ -505,7 +505,7 @@ func jsonFieldPresent(raw json.RawMessage) bool {
 	return trim != "" && trim != "null"
 }
 
-func scopesFromPayload(scopesRaw, capsRaw json.RawMessage) ([]string, error) {
+func scopesFromPayload(scopesRaw, capsRaw json.RawMessage, lookup func(string) (string, bool)) ([]string, error) {
 	hasScopes := jsonFieldPresent(scopesRaw)
 	hasCaps := jsonFieldPresent(capsRaw)
 
@@ -531,7 +531,7 @@ func scopesFromPayload(scopesRaw, capsRaw json.RawMessage) ([]string, error) {
 		}
 
 		for _, cap := range caps {
-			if scope, ok := scopeForCapability(cap); ok {
+			if scope, ok := lookup(cap); ok {
 				out = append(out, scope)
 			}
 		}
@@ -557,7 +557,7 @@ func decodeDisconnectRequest(r *http.Request) (DisconnectRequest, error) {
 	return DisconnectRequest{AccountID: r.FormValue("account_id")}, nil
 }
 
-func formScopes(r *http.Request) []string {
+func formScopes(r *http.Request, lookup func(string) (string, bool)) []string {
 	_, hasCapabilities := r.Form["capabilities"]
 
 	_, hasScopes := r.Form["scopes"]
@@ -569,7 +569,7 @@ func formScopes(r *http.Request) []string {
 
 	out = append(out, r.Form["scopes"]...)
 	for _, cap := range r.Form["capabilities"] {
-		if scope, ok := scopeForCapability(cap); ok {
+		if scope, ok := lookup(cap); ok {
 			out = append(out, scope)
 		}
 	}

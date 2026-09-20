@@ -94,3 +94,21 @@ func TestNativePublicErrorRetrieve400(t *testing.T) {
 		t.Fatalf("leaked retrieve body: %s", got.Error())
 	}
 }
+
+func TestNativeWriteErrorAfterDispatchDoesNotInviteReplay(t *testing.T) {
+	for _, err := range []error{context.DeadlineExceeded, context.Canceled, errConnectionResetAfterSend, errNativeResponseLimit} {
+		got := NativeWritePublicError(err)
+		if got.Category != mcpcontract.OutcomeUnknown || got.Retryable {
+			t.Fatalf("%v => %+v", err, got)
+		}
+	}
+
+	if got := NativeWritePublicError(&gapi.Error{Code: 400}); got.Category != mcpcontract.InvalidInput {
+		t.Fatalf("definite rejection: %+v", got)
+	}
+
+	budget := &mcpcontract.Error{Category: mcpcontract.BudgetExhausted}
+	if got := NativeWritePublicError(budget); got != budget {
+		t.Fatal("known pre-dispatch denial changed")
+	}
+}

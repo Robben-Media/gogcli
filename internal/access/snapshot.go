@@ -108,7 +108,11 @@ func validateSnapshot(snapshot Snapshot) error {
 }
 
 func matchesCatalogAction(pattern string) bool {
-	for _, definition := range mcpcontract.Catalog() {
+	return matchesDefinitions(pattern, mcpcontract.Catalog()) || matchesDefinitions(pattern, mcpcontract.WorkflowCatalog()) || matchesDefinitions(pattern, mcpcontract.APIDefinitions())
+}
+
+func matchesDefinitions(pattern string, definitions []mcpcontract.Definition) bool {
+	for _, definition := range definitions {
 		for _, action := range definition.Actions {
 			if MatchAction(pattern, action) {
 				return true

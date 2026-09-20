@@ -135,7 +135,7 @@ func TestVisibleAnyActionAnalytics(t *testing.T) {
 
 	principal := mcpcontract.Principal{ID: "local"}
 
-	visible, err := authorizer.Visible(principal, "analytics_metadata")
+	visible, err := authorizer.Visible(t.Context(), principal, "analytics_metadata")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +230,7 @@ func TestAuthorizeActionGrantCoversTool(t *testing.T) {
 
 	principal := mcpcontract.Principal{ID: "local"}
 
-	visible, err := authorizer.Visible(principal, "gmail_get_message")
+	visible, err := authorizer.Visible(t.Context(), principal, "gmail_get_message")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +287,7 @@ func TestVisibleRequiresMatchingScopes(t *testing.T) {
 
 	principal := mcpcontract.Principal{ID: "local"}
 
-	visible, err := authorizer.Visible(principal, "drive_search")
+	visible, err := authorizer.Visible(t.Context(), principal, "drive_search")
 	if err != nil {
 		t.Fatal(err)
 	}

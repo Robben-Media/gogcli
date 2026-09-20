@@ -12,6 +12,9 @@ import (
 var (
 	errPrincipalRequired = errors.New("mcpserver: trusted principal is required")
 	errAccountSource     = errors.New("mcpserver: account source is required")
+	errDiscoveryMode     = errors.New("mcpserver: discovery mode must be expanded or compact")
+	errMaxUpstreamCalls  = errors.New("mcpserver: max upstream calls must be 0 or between 1 and 256")
+	errMaxBodyBytes      = errors.New("mcpserver: max body bytes must be non-negative and fit a bounded error with server metadata (at least 512 bytes)")
 )
 
 func publicError(err error) *mcpcontract.Error {

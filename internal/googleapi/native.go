@@ -195,11 +195,9 @@ func (p *NativeProvider) HTTPClient(ctx context.Context, id mcpcontract.Identity
 		return nil, err
 	}
 
-	err = nativeRequireScopes(rec.Scopes, def.Scopes)
-	if err != nil {
+	if !mcpcontract.ScopesSatisfied(rec.Scopes, def) {
 		p.unlockLifecycle()
-
-		return nil, err
+		return nil, &mcpcontract.Error{Category: mcpcontract.InsufficientScope, Message: nativeScopeMessage}
 	}
 
 	cached, err := p.cachedClient(ctx, rec)
@@ -325,24 +323,6 @@ func nativeValidateIdentity(id mcpcontract.Identity) error {
 
 	if strings.TrimSpace(id.Email) == "" || strings.TrimSpace(id.Subject) == "" {
 		return &mcpcontract.Error{Category: mcpcontract.AuthRequired, Message: nativeAuthMessage}
-	}
-
-	return nil
-}
-
-func nativeRequireScopes(granted, required []string) error {
-	for _, scope := range required {
-		if strings.TrimSpace(scope) == "" {
-			continue
-		}
-
-		if !mcpcontract.ScopeGranted(granted, scope) {
-			return &mcpcontract.Error{
-				Category:  mcpcontract.InsufficientScope,
-				Message:   nativeScopeMessage,
-				Retryable: false,
-			}
-		}
 	}
 
 	return nil

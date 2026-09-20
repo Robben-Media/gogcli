@@ -436,12 +436,12 @@ func TestEncodedToolResultIsBounded(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	payload := strings.Repeat("n", 80)
+	payload := strings.Repeat("n", 400)
 	op := mcpcontract.NewOperation[searchInput, mcpcontract.Result[searchData]]("gmail_search", nil, func(context.Context, mcpcontract.Identity, searchInput) (mcpcontract.Result[searchData], error) {
 		return mcpcontract.NewResult(mcpcontract.Identity{AccountID: "work", Label: "Work"}, searchData{Account: "work", Query: payload}), nil
 	})
 	cfg := fixtureConfig([]mcpcontract.Operation{op})
-	cfg.MaxBodyBytes = 180
+	cfg.MaxBodyBytes = 512
 
 	runtime, err := mcpserver.New(cfg)
 	if err != nil {

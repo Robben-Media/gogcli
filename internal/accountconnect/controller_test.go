@@ -545,20 +545,21 @@ func TestEmailChangeReusesOldTokenKey(t *testing.T) {
 }
 
 func TestDefaultConnectScopesAreGmailOnly(t *testing.T) {
+	ctrl := testController(t, &fakeProvider{})
 	if len(DefaultConnectScopes()) != 3 {
 		t.Fatalf("default=%v", DefaultConnectScopes())
 	}
 
-	got := filterRequestedScopes(nil)
+	got := ctrl.filterRequestedScopes(nil)
 	if len(got) != 3 {
 		t.Fatalf("empty request expanded: %v", got)
 	}
 
-	extended := reconnectScopes([]string{"https://www.googleapis.com/auth/gmail.readonly"}, []string{"https://www.googleapis.com/auth/calendar.readonly"})
+	extended := ctrl.reconnectScopes([]string{"https://www.googleapis.com/auth/gmail.readonly"}, []string{"https://www.googleapis.com/auth/calendar.readonly"})
 	if len(extended) < 3 {
 		t.Fatalf("reconnect extension %v", extended)
 	}
-	got = filterRequestedScopes([]string{"https://www.googleapis.com/auth/calendar.readonly"})
+	got = ctrl.filterRequestedScopes([]string{"https://www.googleapis.com/auth/calendar.readonly"})
 	foundGmail := false
 	foundCal := false
 
@@ -576,7 +577,7 @@ func TestDefaultConnectScopesAreGmailOnly(t *testing.T) {
 		t.Fatalf("explicit calendar request forced gmail: %v", got)
 	}
 
-	empty := filterRequestedScopes([]string{})
+	empty := ctrl.filterRequestedScopes([]string{})
 	for _, scope := range empty {
 		if scope == "https://www.googleapis.com/auth/gmail.readonly" {
 			t.Fatalf("explicit empty request forced gmail: %v", empty)

@@ -270,3 +270,25 @@ func TestNativeRetryTransportNonReplayableAmbiguousHTTP(t *testing.T) {
 		}
 	}
 }
+
+func TestNativeWriteBodyLimitAfterSuccessIsUnknown(t *testing.T) {
+	script := &scriptedTransport{responses: []*http.Response{{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"id":"committed"}`))}}}
+	transport := &NativeRetryTransport{Class: mcpcontract.NonReplayableWrite, Base: &nativeBodyLimitTransport{base: script, max: 4}}
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "https://docs.googleapis.com/v1/documents", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	response, err := transport.RoundTrip(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	_, err = io.ReadAll(response.Body)
+
+	safe := NativePublicError(err)
+	if safe == nil || safe.Category != mcpcontract.OutcomeUnknown || safe.Retryable || script.calls != 1 {
+		t.Fatalf("error=%+v calls=%d", safe, script.calls)
+	}
+}

@@ -46,6 +46,33 @@ func NativePublicError(err error) *mcpcontract.Error {
 	return &mcpcontract.Error{Category: mcpcontract.UpstreamFailure, Message: nativeFailMessage}
 }
 
+// NativeWritePublicError maps an SDK mutation error after Do has been invoked.
+// A response-body read or JSON decode failure can happen after Google commits;
+// those failures must never encourage replay. Client acquisition errors should
+// instead use NativePublicError because no mutation has been dispatched yet.
+func NativeWritePublicError(err error) *mcpcontract.Error {
+	if err == nil {
+		return nil
+	}
+
+	var safe *mcpcontract.Error
+	if errors.As(err, &safe) {
+		return safe
+	}
+
+	var retrieve *oauth2.RetrieveError
+	if errors.As(err, &retrieve) {
+		return NativePublicError(err)
+	}
+
+	var apiErr *gapi.Error
+	if errors.As(err, &apiErr) && apiErr.Code >= 400 && apiErr.Code < 500 && !nativeWriteAmbiguousStatus(apiErr.Code) {
+		return NativePublicError(err)
+	}
+
+	return &mcpcontract.Error{Category: mcpcontract.OutcomeUnknown, Message: nativeWriteUnknownMessage, Retryable: false}
+}
+
 func nativeContextError(err error) *mcpcontract.Error {
 	if errors.Is(err, context.Canceled) {
 		return &mcpcontract.Error{Category: mcpcontract.DeadlineExceeded, Message: nativeCanceledMessage, Retryable: false}

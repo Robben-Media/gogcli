@@ -18,7 +18,7 @@ func TestBroaderScopeDiscoveryAndAuthorization(t *testing.T) {
 	}
 
 	principal := mcpcontract.Principal{ID: "local"}
-	if visible, err := authorizer.Visible(principal, "gmail_search"); err != nil || !visible {
+	if visible, err := authorizer.Visible(t.Context(), principal, "gmail_search"); err != nil || !visible {
 		t.Fatalf("broader grant hidden: visible=%v err=%v", visible, err)
 	}
 

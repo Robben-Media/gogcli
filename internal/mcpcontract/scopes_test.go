@@ -30,3 +30,22 @@ func TestScopeGranted(t *testing.T) {
 		})
 	}
 }
+
+func TestAlternativeScopesDoNotRequireAllOrGrantReverse(t *testing.T) {
+	alternatives := Definition{AnyScope: true, Scopes: []string{GmailReadScope, "https://www.googleapis.com/auth/gmail.modify"}}
+	if !ScopesSatisfied([]string{GmailReadScope}, alternatives) {
+		t.Fatal("one supported alternative must suffice")
+	}
+
+	if ScopesSatisfied([]string{GmailReadScope}, Definition{AnyScope: true, Scopes: []string{"https://www.googleapis.com/auth/gmail.modify"}}) {
+		t.Fatal("read scope authorized write")
+	}
+
+	if ScopesSatisfied([]string{GmailReadScope}, Definition{AnyScope: true}) {
+		t.Fatal("empty alternatives authorized")
+	}
+
+	if ScopesSatisfied([]string{GmailReadScope}, Definition{Scopes: []string{GmailReadScope, CalendarReadScope}}) {
+		t.Fatal("workflow skipped required calendar scope")
+	}
+}

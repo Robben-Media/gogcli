@@ -33,22 +33,25 @@ type Options struct {
 	RedirectURL string
 	ClientName  string
 	Lifecycle   *Lifecycle
+	// AdditionalScopes are explicitly offered by trusted startup configuration.
+	AdditionalScopes []ScopeChoice
 }
 
 // Controller owns connect, reconnect, callback, and disconnect. The web package
 // must not duplicate this logic.
 type Controller struct {
-	registry    Registry
-	tokens      RefreshTokenStore
-	oauth       Provider
-	credentials func(clientName string) (ClientCredentials, error)
-	invalidator Invalidator
-	now         func() time.Time
-	newID       func() (string, error)
-	sessionTTL  time.Duration
-	redirectURL string
-	clientName  string
-	lifecycle   *Lifecycle
+	registry     Registry
+	tokens       RefreshTokenStore
+	oauth        Provider
+	credentials  func(clientName string) (ClientCredentials, error)
+	invalidator  Invalidator
+	now          func() time.Time
+	newID        func() (string, error)
+	sessionTTL   time.Duration
+	redirectURL  string
+	clientName   string
+	lifecycle    *Lifecycle
+	scopeChoices []ScopeChoice
 
 	mu       sync.Mutex
 	sessions map[string]pendingSession
@@ -118,19 +121,25 @@ func NewController(opts Options) (*Controller, error) {
 		life = NewLifecycle()
 	}
 
+	choices, err := configuredScopeChoices(opts.AdditionalScopes)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Controller{
-		registry:    opts.Registry,
-		tokens:      opts.Tokens,
-		oauth:       opts.OAuth,
-		credentials: creds,
-		invalidator: inv,
-		now:         now,
-		newID:       newID,
-		sessionTTL:  ttl,
-		redirectURL: strings.TrimSpace(opts.RedirectURL),
-		clientName:  clientName,
-		lifecycle:   life,
-		sessions:    make(map[string]pendingSession),
+		scopeChoices: choices,
+		registry:     opts.Registry,
+		tokens:       opts.Tokens,
+		oauth:        opts.OAuth,
+		credentials:  creds,
+		invalidator:  inv,
+		now:          now,
+		newID:        newID,
+		sessionTTL:   ttl,
+		redirectURL:  strings.TrimSpace(opts.RedirectURL),
+		clientName:   clientName,
+		lifecycle:    life,
+		sessions:     make(map[string]pendingSession),
 	}, nil
 }
 
@@ -174,7 +183,7 @@ func (c *Controller) ListAccounts(ctx context.Context, principalID string) ([]Ac
 			rec, _ = c.settleTokenCleanup(ctx, rec)
 		}
 
-		views = append(views, accountView(rec))
+		views = append(views, c.accountView(rec))
 	}
 
 	c.lifecycle.Unlock()
@@ -216,7 +225,7 @@ func (c *Controller) StartConnect(ctx context.Context, req ConnectRequest) (Star
 		return StartResult{}, ErrInvalidPrincipal
 	}
 
-	scopes := filterRequestedScopes(req.Scopes)
+	scopes := c.filterRequestedScopes(req.Scopes)
 
 	return c.start(ctx, principalID, c.clientName, strings.TrimSpace(req.Label), scopes, "", true, false)
 }
@@ -238,7 +247,7 @@ func (c *Controller) StartReconnect(ctx context.Context, req ReconnectRequest) (
 		return StartResult{}, ErrRevokeInProgress
 	}
 
-	scopes := reconnectScopes(rec.Scopes, req.Scopes)
+	scopes := c.reconnectScopes(rec.Scopes, req.Scopes)
 
 	return c.start(ctx, principalID, rec.ClientName, rec.Label, scopes, rec.AccountID, false, true)
 }
@@ -460,7 +469,7 @@ func (c *Controller) CompleteCallback(ctx context.Context, req CallbackRequest) 
 		return CallbackResult{}, err
 	}
 
-	result := CallbackResult{Account: accountView(committed), Created: created, CleanupPending: cleanupPending}
+	result := CallbackResult{Account: c.accountView(committed), Created: created, CleanupPending: cleanupPending}
 	if cleanupPending {
 		result.Message = "Connected. Previous credential cleanup is pending."
 	}
@@ -825,50 +834,22 @@ func (c *Controller) Lifecycle() *Lifecycle {
 	return c.lifecycle
 }
 
-func filterRequestedScopes(requested []string) []string {
+func (c *Controller) filterRequestedScopes(requested []string) []string {
 	if requested == nil {
 		return append([]string(nil), DefaultConnectScopes()...)
 	}
 
-	return unionScopes(identityScopes(), requested)
+	return c.unionScopes(identityScopes(), requested)
 }
 
-func reconnectScopes(existing, requested []string) []string {
+func (c *Controller) reconnectScopes(existing, requested []string) []string {
 	if requested == nil {
-		return unionScopes(identityScopes(), existing)
+		return c.unionScopes(identityScopes(), existing)
 	}
 
-	return unionScopes(identityScopes(), existing, requested)
+	return c.unionScopes(identityScopes(), existing, requested)
 }
 
 func identityScopes() []string {
 	return []string{scopeOpenID, scopeEmail}
-}
-
-func unionScopes(sets ...[]string) []string {
-	allowed := make(map[string]bool, len(AllowedConnectScopes()))
-	for _, scope := range AllowedConnectScopes() {
-		allowed[scope] = true
-	}
-
-	out := make([]string, 0)
-	seen := map[string]bool{}
-
-	for _, set := range sets {
-		for _, scope := range set {
-			scope = strings.TrimSpace(scope)
-			if scope == "" || seen[scope] {
-				continue
-			}
-
-			if !allowed[scope] && scope != scopeOpenID && scope != scopeEmail {
-				continue
-			}
-
-			seen[scope] = true
-			out = append(out, scope)
-		}
-	}
-
-	return out
 }

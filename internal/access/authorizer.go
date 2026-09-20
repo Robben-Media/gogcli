@@ -59,7 +59,7 @@ func (a *Authorizer) load() Snapshot {
 // Visible reports whether tools/list may advertise operation for principal.
 // analytics_metadata (AnyAction) is listed when any catalog action is allowed;
 // invocation still authorizes every selected Call.Actions.
-func (a *Authorizer) Visible(principal mcpcontract.Principal, operation string) (bool, error) {
+func (a *Authorizer) Visible(ctx context.Context, principal mcpcontract.Principal, operation string) (bool, error) {
 	principalID := strings.TrimSpace(principal.ID)
 
 	operation = strings.TrimSpace(operation)
@@ -81,7 +81,7 @@ func (a *Authorizer) Visible(principal mcpcontract.Principal, operation string) 
 		return false, nil
 	}
 
-	identities, err := a.principalIdentities(context.Background(), principalID)
+	identities, err := a.principalIdentities(ctx, principalID)
 	if err != nil {
 		return false, err
 	}
@@ -174,7 +174,7 @@ func (a *Authorizer) Authorize(ctx context.Context, principal mcpcontract.Princi
 			return mcpcontract.Identity{}, forbidden("action is denied by policy")
 		}
 
-		if len(missingScopes(identity.Scopes, def.Scopes)) > 0 {
+		if !mcpcontract.ScopesSatisfied(identity.Scopes, def) {
 			return mcpcontract.Identity{}, insufficientScope("account is missing required Google scopes")
 		}
 
@@ -371,18 +371,6 @@ func narrowActions(catalog []string, requested []string) ([]string, error) {
 	}
 
 	return selected, nil
-}
-
-func missingScopes(have []string, required []string) []string {
-	var missing []string
-
-	for _, scope := range required {
-		if !mcpcontract.ScopeGranted(have, scope) {
-			missing = append(missing, scope)
-		}
-	}
-
-	return missing
 }
 
 func containsFold(values []string, want string) bool {
