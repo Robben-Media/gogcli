@@ -69,3 +69,21 @@ jobs:
         run: go test ./...
       - name: Build (Keychain / cgo)
         run: CGO_ENABLED=1 go build ./cmd/gog
+
+  mcp-container:
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    needs: lint
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build native MCP image
+        run: docker build -f deploy/google-mcp/Dockerfile -t google-mcp:ci .
+      - name: Validate deployment configuration
+        env:
+          GOG_MCP_IMAGE: google-mcp:ci
+          GOG_MCP_DEPLOY_DIR: /tmp/google-mcp-config-validation
+          GOG_MCP_HOST: google-mcp.test
+          GOG_MCP_OWNER: fixture
+        run: docker compose -f deploy/google-mcp/compose.yaml config --quiet
+      - name: Verify isolated HTTP container
+        run: python3 deploy/google-mcp/smoke.py google-mcp:ci

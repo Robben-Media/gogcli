@@ -1,0 +1,20 @@
+{
+  "host": "mcp-google.builtbyrobben.com",
+  "allowed_origins": ["https://mcp-google.builtbyrobben.com"],
+  "callers": [
+    {
+      "id": "hermes-work",
+      "token_sha256": "REPLACE_WITH_SHA256_OF_RANDOM_BEARER_TOKEN",
+      "principal_id": "jeremy",
+      "allow_operations": ["accounts_list", "gmail_search", "gmail_get_message", "gmail_get_thread"],
+      "grants": [
+        {
+          "principal_id": "jeremy",
+          "account_ids": ["REPLACE_WITH_OPAQUE_ACCOUNT_ID"],
+          "client_names": ["native-mcp"],
+          "operations": ["gmail:messages.search", "gmail:get", "gmail:thread.get"]
+        }
+      ]
+    }
+  ]
+}

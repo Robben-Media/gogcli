@@ -205,8 +205,8 @@ func TestRuntimePublishedBeforeConnectListener(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	syncer.runtime.Store(runtime)
-	if stored := syncer.runtime.Load(); stored != runtime {
+	syncer.storeAll([]*mcpserver.Runtime{runtime})
+	if stored := syncer.runtimes.Load(); stored == nil || len(*stored) != 1 || (*stored)[0] != runtime {
 		t.Fatal("runtime was not published before connect startup")
 	}
 
