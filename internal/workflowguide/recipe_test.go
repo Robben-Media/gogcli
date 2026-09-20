@@ -67,8 +67,8 @@ func TestRecipesCoverTwentyFamiliesAndStayLocal(t *testing.T) {
 	}
 
 	bp, _ := LookupRecipe("businessprofile.resolve_location")
-	if bp.Gap == "" || len(bp.Steps) != 0 {
-		t.Fatalf("business profile should be a scope gap: %+v", bp)
+	if bp.Gap == "" || len(bp.Steps) != 2 {
+		t.Fatalf("business profile should expose bounded reads and preserve remaining gaps: %+v", bp)
 	}
 
 	if _, ok := LookupRecipe("sheets.update_format_or_structure"); !ok {
@@ -424,6 +424,29 @@ func TestRecipeFactReferencesDeclared(t *testing.T) {
 					t.Errorf("%s input %s references undeclared fact %q", recipe.IntentID, input.Name, key)
 				}
 			}
+		}
+	}
+}
+
+func TestBusinessProfileRecipeReusesExactParent(t *testing.T) {
+	t.Parallel()
+	for _, parent := range []string{"", "accounts/123"} {
+		prepared, err := Prepare("businessprofile.resolve_location", "businessprofile_list_locations", map[string]string{"parent": parent})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := 2
+		if parent != "" {
+			want = 1
+		}
+		if prepared.Status != StatusReady || len(prepared.Steps) != want || prepared.CallEstimate.Max != want {
+			t.Fatalf("parent %q: %+v", parent, prepared)
+		}
+		if hasLookup(prepared, "businessprofile_list_accounts") != (parent == "") {
+			t.Fatalf("unexpected account discovery: %+v", prepared)
+		}
+		if !hasLookup(prepared, "businessprofile_list_locations") || prepared.Gap == "" {
+			t.Fatalf("missing read or availability caveat: %+v", prepared)
 		}
 	}
 }
