@@ -179,7 +179,7 @@ func serve(flags cli, logger *slog.Logger) error {
 
 	if httpMode {
 		return serveHTTP(flags, logger, httpCfg, httpServeDeps{
-			cfgFile:   cfgFile,
+			policies:  cfgFile.Policies,
 			registry:  registry,
 			tokens:    tokens,
 			lifecycle: lifecycle,
@@ -211,7 +211,7 @@ func serve(flags cli, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("start mcp runtime: %w", err)
 	}
-	syncer.runtime.Store(runtime)
+	syncer.storeAll([]*mcpserver.Runtime{runtime})
 
 	var connectSrv *http.Server
 	if strings.TrimSpace(flags.ConnectAddr) != "" {
@@ -420,7 +420,6 @@ type accountFencer interface {
 
 type toolSyncInvalidator struct {
 	inner    accountFencer
-	runtime  atomic.Pointer[mcpserver.Runtime]
 	runtimes atomic.Pointer[[]*mcpserver.Runtime]
 }
 
@@ -433,9 +432,6 @@ func (t *toolSyncInvalidator) InvalidateAccount(accountID string) {
 func (t *toolSyncInvalidator) storeAll(runtimes []*mcpserver.Runtime) {
 	cloned := append([]*mcpserver.Runtime(nil), runtimes...)
 	t.runtimes.Store(&cloned)
-	if len(cloned) == 1 {
-		t.runtime.Store(cloned[0])
-	}
 }
 
 func (t *toolSyncInvalidator) ConnectionsChanged() {
@@ -447,10 +443,6 @@ func (t *toolSyncInvalidator) ConnectionsChanged() {
 		}
 
 		return
-	}
-
-	if runtime := t.runtime.Load(); runtime != nil {
-		runtime.ResyncTools()
 	}
 }
 

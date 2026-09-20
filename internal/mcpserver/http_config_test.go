@@ -20,7 +20,7 @@ func TestParseHTTPConfigAcceptsDeploymentShape(t *testing.T) {
 	token, digest := testBearer(t)
 	_ = token
 
-	cfg, err := mcpserver.ParseHTTPConfig(httpConfigJSON(t, map[string]any{
+	cfg, err := mcpserver.ParseHTTPConfig(mustJSON(t, map[string]any{
 		"host":            "google-mcp.example.com",
 		"allowed_origins": []string{"https://google-mcp.example.com"},
 		"callers": []map[string]any{
@@ -168,7 +168,7 @@ func TestLoadHTTPConfigReadsFile(t *testing.T) {
 	_, digest := testBearer(t)
 
 	path := filepath.Join(t.TempDir(), "http-config.json")
-	if err := os.WriteFile(path, httpConfigJSON(t, map[string]any{
+	if err := os.WriteFile(path, mustJSON(t, map[string]any{
 		"host":    "google-mcp.example.com",
 		"callers": []map[string]any{minimalCaller("hermes-work", digest)},
 	}), 0o600); err != nil {
@@ -222,11 +222,6 @@ func minimalCaller(id, digest string) map[string]any {
 			"operations":   []string{"gmail:messages.search"},
 		}},
 	}
-}
-
-func httpConfigJSON(t *testing.T, value map[string]any) []byte {
-	t.Helper()
-	return mustJSON(t, value)
 }
 
 func mustJSON(t *testing.T, value any) []byte {

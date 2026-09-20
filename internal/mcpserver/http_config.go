@@ -90,12 +90,21 @@ func ParseHTTPConfig(data []byte) (HTTPConfig, error) {
 		return HTTPConfig{}, fmt.Errorf("%w: %w", ErrHTTPConfigInvalid, err)
 	}
 
-	if dec.More() {
+	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		return HTTPConfig{}, errHTTPConfigTrailing
 	}
 
-	if err := dec.Decode(&struct{}{}); err != nil && !errors.Is(err, io.EOF) {
-		return HTTPConfig{}, errHTTPConfigTrailing
+	return compileHTTPConfig(raw)
+}
+
+// validated applies the same invariants to typed construction as file input.
+func (c HTTPConfig) validated() (HTTPConfig, error) {
+	raw := httpConfigJSON{Host: c.Host, AllowedOrigins: c.AllowedOrigins}
+	for _, caller := range c.Callers {
+		raw.Callers = append(raw.Callers, httpCallerJSON{
+			ID: caller.ID, TokenSHA256: hex.EncodeToString(caller.TokenSHA256[:]),
+			PrincipalID: caller.PrincipalID, AllowOperations: caller.AllowOperations, Grants: caller.Grants,
+		})
 	}
 
 	return compileHTTPConfig(raw)
@@ -214,11 +223,7 @@ func validateHTTPOrigin(origin string) error {
 		return errHTTPOriginInvalid
 	}
 
-	if parsed.Path != "" && parsed.Path != "/" {
-		return errHTTPOriginInvalid
-	}
-
-	if parsed.Path == "/" {
+	if parsed.Path != "" {
 		return errHTTPOriginInvalid
 	}
 

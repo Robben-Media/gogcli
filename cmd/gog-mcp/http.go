@@ -31,7 +31,7 @@ var (
 )
 
 type httpServeDeps struct {
-	cfgFile   config.File
+	policies  []config.Policy
 	registry  accountconnect.Registry
 	tokens    accountconnect.RefreshTokenStore
 	lifecycle *accountconnect.Lifecycle
@@ -83,7 +83,7 @@ func serveHTTP(flags cli, logger *slog.Logger, httpCfg mcpserver.HTTPConfig, dep
 		MediaArtifacts:   deps.artifacts,
 		Name:             "gog-mcp",
 		Version:          defaultVersion,
-		Policies:         deps.cfgFile.Policies,
+		Policies:         deps.policies,
 		Operations:       configuredOperationsWithMedia(flags, deps.provider, deps.artifacts),
 		Accounts:         registryAccounts{registry: deps.registry},
 		Logger:           logger,

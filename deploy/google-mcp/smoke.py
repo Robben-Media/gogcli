@@ -14,7 +14,7 @@ import urllib.request
 
 
 def docker(*args):
-    return subprocess.check_output(["docker", *args], text=True).strip()
+    return subprocess.check_output(["docker", *args], text=True, stderr=subprocess.STDOUT).strip()
 
 
 def main():
@@ -54,14 +54,14 @@ def main():
             )
             endpoint = "http://" + docker("port", container, "8080/tcp") + "/mcp"
 
-            def request(method="tools/list", *, auth=True, origin=None, host="google-mcp.test"):
+            def request(method="tools/list", *, auth=True, origin=None, host="google-mcp.test", bearer=token):
                 headers = {
                     "Host": host, "Content-Type": "application/json",
                     "Accept": "application/json, text/event-stream",
                     "MCP-Protocol-Version": "2025-03-26",
                 }
                 if auth:
-                    headers["Authorization"] = "Bearer " + token
+                    headers["Authorization"] = "Bearer " + bearer
                 if origin:
                     headers["Origin"] = origin
                 params = {}
@@ -78,16 +78,19 @@ def main():
                 except urllib.error.HTTPError as response:
                     return response.code, response.read()
 
-            deadline = time.monotonic() + 30
-            while True:
-                try:
-                    status, _ = request(auth=False)
-                    assert status == 401, status
-                    break
-                except (urllib.error.URLError, ConnectionError, http.client.RemoteDisconnected):
-                    if time.monotonic() >= deadline:
-                        raise
-                    time.sleep(0.25)
+            def wait_ready():
+                deadline = time.monotonic() + 30
+                while True:
+                    try:
+                        status, _ = request(auth=False)
+                        assert status == 401, status
+                        break
+                    except (urllib.error.URLError, ConnectionError, http.client.RemoteDisconnected):
+                        if time.monotonic() >= deadline:
+                            raise
+                        time.sleep(0.25)
+
+            wait_ready()
             assert request(origin="https://attacker.test")[0] == 403
             assert request(host="attacker.test")[0] in (400, 403)
             status, body = request("initialize")
@@ -105,9 +108,27 @@ def main():
                 capture_output=True, check=False,
             )
             assert second_owner.returncode == 1, second_owner.returncode
+            rotated = secrets.token_urlsafe(32)
+            config["callers"][0]["token_sha256"] = hashlib.sha256(rotated.encode()).hexdigest()
+            config_path = root / "http-config.json"
+            config_path.chmod(0o644)
+            config_path.write_text(json.dumps(config))
+            config_path.chmod(0o444)
+            docker("kill", "--signal=HUP", container)
+            signal_deadline = time.monotonic() + 5
+            while "SIGHUP ignored in HTTP mode" not in docker("logs", container):
+                if time.monotonic() >= signal_deadline:
+                    raise AssertionError("HTTP process did not handle SIGHUP")
+                time.sleep(0.1)
+            assert request()[0] == 200
+            assert request(bearer=rotated)[0] == 401
+            docker("restart", "--time=10", container)
+            wait_ready()
+            assert request()[0] == 401
+            assert request(bearer=rotated)[0] == 200
             docker("stop", "--time=10", container)
             assert docker("inspect", "--format={{.State.ExitCode}}", container) == "0"
-            print("PASS: HTTP container auth, Host/Origin, discovery, resources, nonroot and shutdown; no Google accounts")
+            print("PASS: HTTP container auth, Host/Origin, discovery, resources, nonroot, SIGHUP/restart rotation and shutdown; no Google accounts")
             print("Tested image:", docker("image", "inspect", "--format={{.Id}}", sys.argv[1]))
         except BaseException:
             if container:

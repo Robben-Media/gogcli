@@ -64,7 +64,6 @@ type HTTPGateway struct {
 	mcp            *mcp.StreamableHTTPHandler
 	requestTimeout time.Duration
 	globalSlots    chan struct{}
-	runtimes       []*Runtime
 }
 
 type httpCallerState struct {
@@ -76,8 +75,14 @@ type httpCallerState struct {
 // NewHTTPGateway builds one Runtime per caller, sharing operations, the
 // account registry, and the Google provider supplied through Operations.
 func NewHTTPGateway(cfg HTTPHandlerConfig) (*HTTPGateway, error) {
-	if strings.TrimSpace(cfg.HTTP.Host) == "" || len(cfg.HTTP.Callers) == 0 {
-		return nil, fmt.Errorf("%w: incomplete", ErrHTTPConfigInvalid)
+	validated, err := cfg.HTTP.validated()
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.HTTP = validated
+	if cfg.MaxBodyBytes < 0 {
+		return nil, errMaxBodyBytes
 	}
 
 	if cfg.Accounts == nil {
@@ -120,10 +125,14 @@ func NewHTTPGateway(cfg HTTPHandlerConfig) (*HTTPGateway, error) {
 		callers:        make([]*httpCallerState, 0, len(cfg.HTTP.Callers)),
 		requestTimeout: timeout,
 		globalSlots:    make(chan struct{}, globalConcurrency),
-		runtimes:       make([]*Runtime, 0, len(cfg.HTTP.Callers)),
 	}
 
+	principalSlots := make(map[string]chan struct{})
 	for _, caller := range cfg.HTTP.Callers {
+		if principalSlots[caller.PrincipalID] == nil {
+			principalSlots[caller.PrincipalID] = make(chan struct{}, maxConcurrency)
+		}
+
 		runtime, err := New(Config{
 			MediaArtifacts:   cfg.MediaArtifacts,
 			Name:             cfg.Name,
@@ -134,7 +143,7 @@ func NewHTTPGateway(cfg HTTPHandlerConfig) (*HTTPGateway, error) {
 			AllowOperations:  caller.AllowOperations,
 			Operations:       cfg.Operations,
 			Accounts:         cfg.Accounts,
-			Logger:           logger,
+			Logger:           logger.With("caller_id", caller.ID),
 			RequestTimeout:   timeout,
 			MaxConcurrency:   maxConcurrency,
 			MaxBodyBytes:     maxBody,
@@ -149,10 +158,9 @@ func NewHTTPGateway(cfg HTTPHandlerConfig) (*HTTPGateway, error) {
 		state := &httpCallerState{
 			tokenSHA256: caller.TokenSHA256,
 			runtime:     runtime,
-			slots:       make(chan struct{}, maxConcurrency),
+			slots:       principalSlots[caller.PrincipalID],
 		}
 		gateway.callers = append(gateway.callers, state)
-		gateway.runtimes = append(gateway.runtimes, runtime)
 	}
 
 	gateway.mcp = mcp.NewStreamableHTTPHandler(func(req *http.Request) *mcp.Server {
@@ -180,8 +188,10 @@ func (g *HTTPGateway) Runtimes() []*Runtime {
 		return nil
 	}
 
-	out := make([]*Runtime, len(g.runtimes))
-	copy(out, g.runtimes)
+	out := make([]*Runtime, len(g.callers))
+	for i, caller := range g.callers {
+		out[i] = caller.runtime
+	}
 
 	return out
 }
@@ -310,7 +320,8 @@ func writeUnauthorized(w http.ResponseWriter) {
 }
 
 // ListenAndServeHTTP serves handler on addr until ctx is cancelled.
-// The process is not tied to stdin. Shutdown is graceful.
+// The process is not tied to stdin. Cancellation stops active requests, then
+// shutdown waits up to five seconds for handlers to exit.
 func ListenAndServeHTTP(ctx context.Context, addr string, handler http.Handler, requestTimeout time.Duration) error {
 	if strings.TrimSpace(addr) == "" {
 		return fmt.Errorf("%w: listen address is required", ErrHTTPConfigInvalid)
