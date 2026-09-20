@@ -37,7 +37,7 @@ type InteractiveRunner interface {
 type ExecRunner struct{}
 
 func (ExecRunner) Run(ctx context.Context, name string, args ...string) (string, string, int, error) {
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := exec.CommandContext(ctx, name, args...) //nolint:gosec // Runs the resolved gcloud binary with caller-built arguments.
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -60,7 +60,7 @@ func (ExecRunner) Run(ctx context.Context, name string, args ...string) (string,
 // RunInteractive attaches stdin and sends all gcloud login output to stderr so
 // setup's stdout remains structured and parseable.
 func (ExecRunner) RunInteractive(ctx context.Context, name string, args ...string) (int, error) {
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := exec.CommandContext(ctx, name, args...) //nolint:gosec // Runs the resolved gcloud binary with caller-built arguments.
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr

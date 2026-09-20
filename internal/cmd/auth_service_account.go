@@ -143,7 +143,7 @@ func writeServiceAccountFiles(paths []string, data []byte) error {
 
 		file.tmpPath, err = stageServiceAccountFile(path, "."+filepath.Base(path)+".tmp-*", data)
 		if err != nil {
-			_ = os.Remove(file.backupPath)
+			_ = os.Remove(file.backupPath) //nolint:gosec // Backup path is derived from the config-owned service account path.
 			return err
 		}
 		files = append(files, file)
@@ -180,7 +180,7 @@ func writeServiceAccountFiles(paths []string, data []byte) error {
 					if directErr := fallbackRenameServiceAccountFile(restorePath, file.path); directErr == nil {
 						continue
 					} else {
-						_ = os.Remove(restorePath)
+						_ = os.Remove(restorePath) //nolint:gosec // Restore path is derived from the config-owned service account path.
 						file.preserveBackup = true
 						rollbackErr = errors.Join(rollbackErr, fmt.Errorf("restore %s after atomic replacements failed; prior credential preserved at %s: %w", file.path, file.backupPath, errors.Join(err, restoreErr, directErr)))
 					}

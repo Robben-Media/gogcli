@@ -18,5 +18,5 @@ func modeForNewDownload(mode os.FileMode) os.FileMode {
 }
 
 func replaceFile(source, destination string) error {
-	return os.Rename(source, destination)
+	return os.Rename(source, destination) //nolint:gosec // Destination is the user-provided download path.
 }

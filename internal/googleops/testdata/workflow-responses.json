@@ -1,0 +1,285 @@
+{
+  "gmail_search_list": {
+    "messages": [
+      {
+        "id": "message-first",
+        "threadId": "thread-acme"
+      }
+    ],
+    "resultSizeEstimate": 1
+  },
+  "gmail_labels": {
+    "labels": [
+      {
+        "id": "INBOX",
+        "name": "Inbox",
+        "type": "user"
+      }
+    ]
+  },
+  "gmail_search_message": {
+    "id": "message-first",
+    "threadId": "thread-acme",
+    "internalDate": "1765900800000",
+    "labelIds": [
+      "INBOX"
+    ],
+    "payload": {
+      "headers": [
+        {
+          "name": "From",
+          "value": "Acme Team <acme@example.test>"
+        },
+        {
+          "name": "To",
+          "value": "Work <work@example.test>"
+        },
+        {
+          "name": "Subject",
+          "value": "Acme project update"
+        },
+        {
+          "name": "Date",
+          "value": "Thu, 17 Sep 2026 08:00:00 -0500"
+        }
+      ]
+    }
+  },
+  "gmail_thread": {
+    "id": "thread-acme",
+    "snippet": "Acme project update",
+    "messages": [
+      {
+        "id": "message-first",
+        "threadId": "thread-acme",
+        "internalDate": "1765900800000",
+        "labelIds": [
+          "INBOX"
+        ],
+        "payload": {
+          "headers": [
+            {
+              "name": "Subject",
+              "value": "Acme project update"
+            }
+          ],
+          "mimeType": "text/plain",
+          "body": {
+            "data": "UmV2aWV3IGlzIEZyaWRheS4="
+          }
+        }
+      },
+      {
+        "id": "message-second",
+        "threadId": "thread-acme",
+        "internalDate": "1765987200000",
+        "labelIds": [
+          "INBOX"
+        ],
+        "payload": {
+          "headers": [
+            {
+              "name": "Subject",
+              "value": "Re: Acme project update"
+            }
+          ],
+          "mimeType": "text/plain",
+          "body": {
+            "data": "QnVkZ2V0IGlzIDI1MDAgVVNELg=="
+          }
+        }
+      }
+    ]
+  },
+  "drive_search": {
+    "files": [
+      {
+        "id": "doc-acme",
+        "name": "Acme brief",
+        "mimeType": "application/vnd.google-apps.document",
+        "modifiedTime": "2026-09-17T10:00:00Z",
+        "webViewLink": "https://docs.google.com/document/d/doc-acme/edit"
+      }
+    ]
+  },
+  "docs_get_text": {
+    "documentId": "doc-acme",
+    "title": "Acme brief",
+    "revisionId": "revision-7",
+    "tabs": [
+      {
+        "tabProperties": {
+          "tabId": "tab-main",
+          "title": "Main"
+        },
+        "documentTab": {
+          "body": {
+            "content": [
+              {
+                "paragraph": {
+                  "elements": [
+                    {
+                      "textRun": {
+                        "content": "Launch date: 2026-10-01.\n"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "paragraph": {
+                  "elements": [
+                    {
+                      "textRun": {
+                        "content": "Additional context follows in this longer paragraph so extraction demonstrates bounded reads.\n"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "calendar_list_events": {
+    "summary": "Work",
+    "timeZone": "America/Chicago",
+    "accessRole": "owner",
+    "items": [
+      {
+        "id": "event-all-day",
+        "summary": "Unavailable day",
+        "transparency": "opaque",
+        "recurringEventId": "series-all-day",
+        "start": {
+          "date": "2026-11-01",
+          "timeZone": "America/Chicago"
+        },
+        "end": {
+          "date": "2026-11-02",
+          "timeZone": "America/Chicago"
+        },
+        "originalStartTime": {
+          "date": "2026-11-01",
+          "timeZone": "America/Chicago"
+        }
+      }
+    ]
+  },
+  "calendar_freebusy": {
+    "calendars": {
+      "primary": {
+        "busy": [
+          {
+            "start": "2026-11-01T00:00:00-05:00",
+            "end": "2026-11-02T00:00:00-06:00"
+          }
+        ]
+      },
+      "team": {
+        "busy": []
+      },
+      "unavailable": {
+        "errors": [
+          {
+            "domain": "calendar",
+            "reason": "notFound"
+          }
+        ]
+      }
+    }
+  },
+  "analytics_report": {
+    "dimensionHeaders": [
+      {
+        "name": "date"
+      }
+    ],
+    "metricHeaders": [
+      {
+        "name": "sessions",
+        "type": "TYPE_INTEGER"
+      }
+    ],
+    "metadata": {
+      "timeZone": "America/Chicago",
+      "currencyCode": "USD"
+    },
+    "rowCount": 1,
+    "rows": [
+      {
+        "dimensionValues": [
+          {
+            "value": "20260901"
+          }
+        ],
+        "metricValues": [
+          {
+            "value": "120"
+          }
+        ]
+      }
+    ],
+    "totals": [
+      {
+        "dimensionValues": [
+          {
+            "value": "RESERVED_TOTAL"
+          }
+        ],
+        "metricValues": [
+          {
+            "value": "120"
+          }
+        ]
+      }
+    ]
+  },
+  "searchconsole_query": {
+    "responseAggregationType": "BY_PROPERTY",
+    "rows": [
+      {
+        "keys": [
+          "brand"
+        ],
+        "clicks": 15,
+        "impressions": 100,
+        "ctr": 0.15,
+        "position": 4.5
+      },
+      {
+        "keys": [
+          "client name"
+        ],
+        "clicks": 25,
+        "impressions": 120,
+        "ctr": 0.2083333333,
+        "position": 3.8
+      }
+    ]
+  },
+  "sheets_read_range": {
+    "range": "'Client Budget'!A1:C4",
+    "majorDimension": "ROWS",
+    "values": [
+      [
+        "Item",
+        "Owner",
+        "Amount"
+      ],
+      [
+        "Design",
+        "",
+        100
+      ],
+      [],
+      [
+        "Build",
+        "Team",
+        250
+      ]
+    ]
+  }
+}

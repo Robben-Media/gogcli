@@ -1,0 +1,2805 @@
+{
+  "analytics_list_properties": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "description": "Opaque account ID returned by accounts_list; required for every Google operation"
+        },
+        "page_size": {
+          "type": "integer",
+          "description": "Number of GA4 account summaries per page; defaults to 50 and supports at most 100. Results flatten each summary into property rows while paging remains account-summary based."
+        },
+        "page_token": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "account_id"
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string"
+        },
+        "account_label": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "properties": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "object",
+                "properties": {
+                  "resource_name": {
+                    "type": "string"
+                  },
+                  "display_name": {
+                    "type": "string"
+                  },
+                  "property_type": {
+                    "type": "string"
+                  },
+                  "parent": {
+                    "type": "string"
+                  },
+                  "account_resource_name": {
+                    "type": "string"
+                  },
+                  "account_display_name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "resource_name",
+                  "display_name",
+                  "property_type",
+                  "parent",
+                  "account_resource_name",
+                  "account_display_name"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "properties"
+          ],
+          "additionalProperties": false
+        },
+        "next_page_token": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "fetched_at": {
+          "type": "string"
+        },
+        "partial_failures": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source_id",
+              "category",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "account_id",
+        "account_label",
+        "data",
+        "truncated",
+        "fetched_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "analytics_metadata": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "description": "Opaque account ID returned by accounts_list; required for every Google operation"
+        },
+        "property": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "account_id",
+        "property",
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string"
+        },
+        "account_label": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "property": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "dimensions": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "object",
+                "properties": {
+                  "api_name": {
+                    "type": "string"
+                  },
+                  "ui_name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "custom_definition": {
+                    "type": "boolean"
+                  },
+                  "deprecated_api_names": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "api_name",
+                  "ui_name",
+                  "description",
+                  "category",
+                  "custom_definition"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "metrics": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "object",
+                "properties": {
+                  "api_name": {
+                    "type": "string"
+                  },
+                  "ui_name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "expression": {
+                    "type": "string"
+                  },
+                  "custom_definition": {
+                    "type": "boolean"
+                  },
+                  "deprecated_api_names": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "blocked_reasons": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "api_name",
+                  "ui_name",
+                  "description",
+                  "category",
+                  "type",
+                  "expression",
+                  "custom_definition"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "property",
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        "next_page_token": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "fetched_at": {
+          "type": "string"
+        },
+        "partial_failures": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source_id",
+              "category",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "account_id",
+        "account_label",
+        "data",
+        "truncated",
+        "fetched_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "analytics_report": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "description": "Opaque account ID returned by accounts_list; required for every Google operation"
+        },
+        "property": {
+          "type": "string"
+        },
+        "metrics": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "dimensions": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "start_date": {
+          "type": "string",
+          "description": "Inclusive report start date in explicit YYYY-MM-DD format; relative date expressions are not supported"
+        },
+        "end_date": {
+          "type": "string",
+          "description": "Inclusive report end date in explicit YYYY-MM-DD format; relative date expressions are not supported"
+        },
+        "limit": {
+          "type": "integer"
+        },
+        "offset": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "account_id",
+        "property",
+        "metrics",
+        "start_date",
+        "end_date"
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string"
+        },
+        "account_label": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "property": {
+              "type": "string"
+            },
+            "timezone": {
+              "type": "string"
+            },
+            "currency_code": {
+              "type": "string"
+            },
+            "start_date": {
+              "type": "string"
+            },
+            "end_date": {
+              "type": "string"
+            },
+            "dimension_headers": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "metric_headers": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "type"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "rows": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "object",
+                "properties": {
+                  "dimensions": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "metrics": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "dimensions",
+                  "metrics"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "totals": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "object",
+                "properties": {
+                  "dimensions": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "metrics": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "dimensions",
+                  "metrics"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "row_count": {
+              "type": "integer"
+            },
+            "offset": {
+              "type": "integer"
+            },
+            "empty_reason": {
+              "type": "string"
+            },
+            "data_loss_other_row": {
+              "type": "boolean"
+            },
+            "subject_to_threshold": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "property",
+            "timezone",
+            "currency_code",
+            "start_date",
+            "end_date",
+            "dimension_headers",
+            "metric_headers",
+            "rows",
+            "totals",
+            "row_count",
+            "offset",
+            "data_loss_other_row",
+            "subject_to_threshold"
+          ],
+          "additionalProperties": false
+        },
+        "next_page_token": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "fetched_at": {
+          "type": "string"
+        },
+        "partial_failures": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source_id",
+              "category",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "account_id",
+        "account_label",
+        "data",
+        "truncated",
+        "fetched_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "calendar_freebusy": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "description": "Opaque account ID returned by accounts_list; required for every Google operation"
+        },
+        "calendar_ids": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "time_min": {
+          "type": "string"
+        },
+        "time_max": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "account_id",
+        "calendar_ids",
+        "time_min",
+        "time_max"
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string"
+        },
+        "account_label": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "time_min": {
+              "type": "string"
+            },
+            "time_max": {
+              "type": "string"
+            },
+            "calendars": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "object",
+                "properties": {
+                  "calendar_id": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "busy": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "start": {
+                          "type": "string"
+                        },
+                        "end": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "start",
+                        "end"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "calendar_id",
+                  "status",
+                  "busy"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "time_min",
+            "time_max",
+            "calendars"
+          ],
+          "additionalProperties": false
+        },
+        "next_page_token": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "fetched_at": {
+          "type": "string"
+        },
+        "partial_failures": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source_id",
+              "category",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "account_id",
+        "account_label",
+        "data",
+        "truncated",
+        "fetched_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "calendar_list": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "description": "Opaque account ID returned by accounts_list; required for every Google operation"
+        },
+        "max_results": {
+          "type": "integer"
+        },
+        "page_token": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "account_id"
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string"
+        },
+        "account_label": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "calendars": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "summary": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "timezone": {
+                    "type": "string"
+                  },
+                  "access_role": {
+                    "type": "string"
+                  },
+                  "primary": {
+                    "type": "boolean"
+                  },
+                  "selected": {
+                    "type": "boolean"
+                  },
+                  "deleted": {
+                    "type": "boolean"
+                  },
+                  "hidden": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "summary",
+                  "timezone",
+                  "access_role",
+                  "primary",
+                  "selected",
+                  "deleted",
+                  "hidden"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "calendars"
+          ],
+          "additionalProperties": false
+        },
+        "next_page_token": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "fetched_at": {
+          "type": "string"
+        },
+        "partial_failures": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source_id",
+              "category",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "account_id",
+        "account_label",
+        "data",
+        "truncated",
+        "fetched_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "calendar_list_events": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "description": "Opaque account ID returned by accounts_list; required for every Google operation"
+        },
+        "calendar_id": {
+          "type": "string"
+        },
+        "time_min": {
+          "type": "string"
+        },
+        "time_max": {
+          "type": "string"
+        },
+        "max_results": {
+          "type": "integer"
+        },
+        "page_token": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "account_id",
+        "calendar_id",
+        "time_min",
+        "time_max"
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string"
+        },
+        "account_label": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "calendar_id": {
+              "type": "string"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "timezone": {
+              "type": "string"
+            },
+            "access_role": {
+              "type": "string"
+            },
+            "events": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "summary": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "event_type": {
+                    "type": "string"
+                  },
+                  "transparency": {
+                    "type": "string"
+                  },
+                  "start": {
+                    "type": "object",
+                    "properties": {
+                      "date": {
+                        "type": "string"
+                      },
+                      "date_time": {
+                        "type": "string"
+                      },
+                      "time_zone": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "date",
+                      "date_time",
+                      "time_zone"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "end": {
+                    "type": "object",
+                    "properties": {
+                      "date": {
+                        "type": "string"
+                      },
+                      "date_time": {
+                        "type": "string"
+                      },
+                      "time_zone": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "date",
+                      "date_time",
+                      "time_zone"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "all_day": {
+                    "type": "boolean"
+                  },
+                  "recurrence": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Recurrence rules; absent from expanded instances returned with single_events"
+                  },
+                  "recurring_event_id": {
+                    "type": "string",
+                    "description": "Recurring-series ID for an expanded instance"
+                  },
+                  "original_start": {
+                    "type": [
+                      "null",
+                      "object"
+                    ],
+                    "properties": {
+                      "date": {
+                        "type": "string"
+                      },
+                      "date_time": {
+                        "type": "string"
+                      },
+                      "time_zone": {
+                        "type": "string"
+                      }
+                    },
+                    "description": "Original series start for an expanded instance",
+                    "required": [
+                      "date",
+                      "date_time",
+                      "time_zone"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "created": {
+                    "type": "string"
+                  },
+                  "updated": {
+                    "type": "string"
+                  },
+                  "html_link": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "summary",
+                  "status",
+                  "event_type",
+                  "transparency",
+                  "start",
+                  "end",
+                  "all_day"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "calendar_id",
+            "summary",
+            "timezone",
+            "access_role",
+            "events"
+          ],
+          "additionalProperties": false
+        },
+        "next_page_token": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "fetched_at": {
+          "type": "string"
+        },
+        "partial_failures": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source_id",
+              "category",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "account_id",
+        "account_label",
+        "data",
+        "truncated",
+        "fetched_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "docs_get_text": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "description": "Opaque account ID returned by accounts_list; required for every Google operation"
+        },
+        "document_id": {
+          "type": "string",
+          "description": "Google Docs document ID; required"
+        },
+        "tab_id": {
+          "type": "string",
+          "description": "Optional document tab ID"
+        },
+        "max_bytes": {
+          "type": "integer",
+          "description": "Maximum extracted UTF-8 bytes; default 262144, maximum 1048576"
+        }
+      },
+      "required": [
+        "account_id",
+        "document_id"
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string"
+        },
+        "account_label": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "document_id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "revision_id": {
+              "type": "string"
+            },
+            "tab_id": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "max_bytes": {
+              "type": "integer"
+            },
+            "paragraph_count": {
+              "type": "integer"
+            },
+            "table_count": {
+              "type": "integer"
+            },
+            "tabs": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "parent_id": {
+                    "type": "string"
+                  },
+                  "index": {
+                    "type": "integer"
+                  },
+                  "nesting_level": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "id",
+                  "index"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "document_id",
+            "text",
+            "max_bytes",
+            "paragraph_count",
+            "table_count"
+          ],
+          "additionalProperties": false
+        },
+        "next_page_token": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "fetched_at": {
+          "type": "string"
+        },
+        "partial_failures": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source_id",
+              "category",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "account_id",
+        "account_label",
+        "data",
+        "truncated",
+        "fetched_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "drive_get_file": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "description": "Opaque account ID returned by accounts_list; required for every Google operation"
+        },
+        "file_id": {
+          "type": "string",
+          "description": "Google Drive file or folder ID; required"
+        }
+      },
+      "required": [
+        "account_id",
+        "file_id"
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string"
+        },
+        "account_label": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "mime_type": {
+                  "type": "string"
+                },
+                "size": {
+                  "type": [
+                    "null",
+                    "integer"
+                  ]
+                },
+                "created_time": {
+                  "type": "string"
+                },
+                "modified_time": {
+                  "type": "string"
+                },
+                "parents": {
+                  "type": [
+                    "null",
+                    "array"
+                  ],
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "web_view_link": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "starred": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "file"
+          ],
+          "additionalProperties": false
+        },
+        "next_page_token": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "fetched_at": {
+          "type": "string"
+        },
+        "partial_failures": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source_id",
+              "category",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "account_id",
+        "account_label",
+        "data",
+        "truncated",
+        "fetched_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "drive_search": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "description": "Opaque account ID returned by accounts_list; required for every Google operation"
+        },
+        "text": {
+          "type": "string",
+          "description": "Full-text search query; required"
+        },
+        "max_results": {
+          "type": "integer",
+          "description": "Maximum results to return; default 25, maximum 100"
+        },
+        "page_token": {
+          "type": "string",
+          "description": "Opaque token returned by a previous drive_search result"
+        },
+        "drive_id": {
+          "type": "string",
+          "description": "Optional shared-drive ID"
+        },
+        "include_shared_drives": {
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "description": "Include shared-drive items; default true"
+        }
+      },
+      "required": [
+        "account_id",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string"
+        },
+        "account_label": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            },
+            "files": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "mime_type": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
+                  },
+                  "created_time": {
+                    "type": "string"
+                  },
+                  "modified_time": {
+                    "type": "string"
+                  },
+                  "parents": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "web_view_link": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "starred": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "drive_id": {
+              "type": "string"
+            },
+            "shared_drives": {
+              "type": "boolean"
+            },
+            "incomplete_search": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "query",
+            "files",
+            "shared_drives",
+            "incomplete_search"
+          ],
+          "additionalProperties": false
+        },
+        "next_page_token": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "fetched_at": {
+          "type": "string"
+        },
+        "partial_failures": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source_id",
+              "category",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "account_id",
+        "account_label",
+        "data",
+        "truncated",
+        "fetched_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "gmail_get_message": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "description": "Opaque account ID returned by accounts_list; required for every Google operation"
+        },
+        "message_id": {
+          "type": "string"
+        },
+        "include_body": {
+          "type": "boolean",
+          "description": "Return bounded MIME body text; default true",
+          "default": true
+        },
+        "max_body_bytes": {
+          "type": "integer",
+          "description": "Maximum body bytes; default 65536, maximum 262144",
+          "default": 65536,
+          "minimum": 1,
+          "maximum": 262144
+        }
+      },
+      "required": [
+        "account_id",
+        "message_id"
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string"
+        },
+        "account_label": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "thread_id": {
+              "type": "string"
+            },
+            "internal_date": {
+              "type": "string"
+            },
+            "from": {
+              "type": "string"
+            },
+            "to": {
+              "type": "string"
+            },
+            "cc": {
+              "type": "string"
+            },
+            "bcc": {
+              "type": "string"
+            },
+            "subject": {
+              "type": "string"
+            },
+            "date": {
+              "type": "string"
+            },
+            "list_unsubscribe": {
+              "type": "string"
+            },
+            "label_ids": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "string"
+              }
+            },
+            "label_names": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "string"
+              }
+            },
+            "snippet": {
+              "type": "string"
+            },
+            "size_estimate": {
+              "type": "integer"
+            },
+            "body": {
+              "type": "string"
+            },
+            "body_truncated": {
+              "type": "boolean"
+            },
+            "metadata_truncated": {
+              "type": "boolean"
+            },
+            "attachments": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "object",
+                "properties": {
+                  "part_id": {
+                    "type": "string"
+                  },
+                  "attachment_id": {
+                    "type": "string"
+                  },
+                  "filename": {
+                    "type": "string"
+                  },
+                  "mime_type": {
+                    "type": "string"
+                  },
+                  "size_bytes": {
+                    "type": "integer"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "attachments_truncated": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "label_ids"
+          ],
+          "additionalProperties": false
+        },
+        "next_page_token": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "fetched_at": {
+          "type": "string"
+        },
+        "partial_failures": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source_id",
+              "category",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "account_id",
+        "account_label",
+        "data",
+        "truncated",
+        "fetched_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "gmail_get_thread": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "description": "Opaque account ID returned by accounts_list; required for every Google operation"
+        },
+        "thread_id": {
+          "type": "string"
+        },
+        "max_messages": {
+          "type": "integer",
+          "description": "Maximum messages returned; default 100, maximum 100",
+          "default": 100,
+          "minimum": 1,
+          "maximum": 100
+        },
+        "max_body_bytes": {
+          "type": "integer",
+          "description": "Maximum body bytes per message; default 32768, maximum 262144",
+          "default": 32768,
+          "minimum": 1,
+          "maximum": 262144
+        }
+      },
+      "required": [
+        "account_id",
+        "thread_id"
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string"
+        },
+        "account_label": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "snippet": {
+              "type": "string"
+            },
+            "snippet_truncated": {
+              "type": "boolean"
+            },
+            "labels_fetched_at": {
+              "type": "string"
+            },
+            "messages": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "thread_id": {
+                    "type": "string"
+                  },
+                  "internal_date": {
+                    "type": "string"
+                  },
+                  "from": {
+                    "type": "string"
+                  },
+                  "to": {
+                    "type": "string"
+                  },
+                  "cc": {
+                    "type": "string"
+                  },
+                  "bcc": {
+                    "type": "string"
+                  },
+                  "subject": {
+                    "type": "string"
+                  },
+                  "date": {
+                    "type": "string"
+                  },
+                  "list_unsubscribe": {
+                    "type": "string"
+                  },
+                  "label_ids": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "label_names": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "snippet": {
+                    "type": "string"
+                  },
+                  "size_estimate": {
+                    "type": "integer"
+                  },
+                  "body": {
+                    "type": "string"
+                  },
+                  "body_truncated": {
+                    "type": "boolean"
+                  },
+                  "metadata_truncated": {
+                    "type": "boolean"
+                  },
+                  "attachments": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "part_id": {
+                          "type": "string"
+                        },
+                        "attachment_id": {
+                          "type": "string"
+                        },
+                        "filename": {
+                          "type": "string"
+                        },
+                        "mime_type": {
+                          "type": "string"
+                        },
+                        "size_bytes": {
+                          "type": "integer"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "attachments_truncated": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "label_ids"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "messages_truncated": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "labels_fetched_at",
+            "messages"
+          ],
+          "additionalProperties": false
+        },
+        "next_page_token": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "fetched_at": {
+          "type": "string"
+        },
+        "partial_failures": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source_id",
+              "category",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "account_id",
+        "account_label",
+        "data",
+        "truncated",
+        "fetched_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "gmail_search": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "description": "Opaque account ID returned by accounts_list; required for every Google operation"
+        },
+        "query": {
+          "type": "string",
+          "description": "Gmail search query syntax"
+        },
+        "max_results": {
+          "type": "integer",
+          "description": "Maximum messages returned; default 25, maximum 100",
+          "default": 25,
+          "minimum": 1,
+          "maximum": 100
+        },
+        "page_token": {
+          "type": "string",
+          "description": "Opaque page token returned by a previous response"
+        },
+        "include_body": {
+          "type": "boolean",
+          "description": "Decode and return bounded message body text; default false",
+          "default": false
+        },
+        "max_body_bytes": {
+          "type": "integer",
+          "description": "Maximum body bytes per message when include_body is true; default 32768, maximum 262144",
+          "default": 32768,
+          "minimum": 1,
+          "maximum": 262144
+        }
+      },
+      "required": [
+        "account_id",
+        "query"
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string"
+        },
+        "account_label": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "messages": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "thread_id": {
+                    "type": "string"
+                  },
+                  "internal_date": {
+                    "type": "string"
+                  },
+                  "from": {
+                    "type": "string"
+                  },
+                  "to": {
+                    "type": "string"
+                  },
+                  "cc": {
+                    "type": "string"
+                  },
+                  "bcc": {
+                    "type": "string"
+                  },
+                  "subject": {
+                    "type": "string"
+                  },
+                  "date": {
+                    "type": "string"
+                  },
+                  "list_unsubscribe": {
+                    "type": "string"
+                  },
+                  "label_ids": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "label_names": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "snippet": {
+                    "type": "string"
+                  },
+                  "size_estimate": {
+                    "type": "integer"
+                  },
+                  "body": {
+                    "type": "string"
+                  },
+                  "body_truncated": {
+                    "type": "boolean"
+                  },
+                  "metadata_truncated": {
+                    "type": "boolean"
+                  },
+                  "attachments": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "part_id": {
+                          "type": "string"
+                        },
+                        "attachment_id": {
+                          "type": "string"
+                        },
+                        "filename": {
+                          "type": "string"
+                        },
+                        "mime_type": {
+                          "type": "string"
+                        },
+                        "size_bytes": {
+                          "type": "integer"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "attachments_truncated": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "label_ids"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "result_size_estimate": {
+              "type": "integer"
+            },
+            "labels_fetched_at": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "messages",
+            "labels_fetched_at"
+          ],
+          "additionalProperties": false
+        },
+        "next_page_token": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "fetched_at": {
+          "type": "string"
+        },
+        "partial_failures": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source_id",
+              "category",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "account_id",
+        "account_label",
+        "data",
+        "truncated",
+        "fetched_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "searchconsole_list_sites": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "description": "Opaque account ID returned by accounts_list; required for every Google operation"
+        }
+      },
+      "required": [
+        "account_id"
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string"
+        },
+        "account_label": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "sites": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "object",
+                "properties": {
+                  "site_url": {
+                    "type": "string"
+                  },
+                  "site_type": {
+                    "type": "string"
+                  },
+                  "permission_level": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "site_url",
+                  "site_type",
+                  "permission_level"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "sites"
+          ],
+          "additionalProperties": false
+        },
+        "next_page_token": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "fetched_at": {
+          "type": "string"
+        },
+        "partial_failures": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source_id",
+              "category",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "account_id",
+        "account_label",
+        "data",
+        "truncated",
+        "fetched_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "searchconsole_query": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "description": "Opaque account ID returned by accounts_list; required for every Google operation"
+        },
+        "site_url": {
+          "type": "string",
+          "description": "Exact opaque property identifier returned by searchconsole_list_sites"
+        },
+        "start_date": {
+          "type": "string"
+        },
+        "end_date": {
+          "type": "string"
+        },
+        "dimensions": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Grouping dimensions: query, page, country, device, date, or search_appearance"
+        },
+        "filters": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "dimension": {
+                "type": "string",
+                "description": "query, page, country, device, or search_appearance"
+              },
+              "operator": {
+                "type": "string",
+                "description": "equals, contains, or not_contains"
+              },
+              "expression": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "dimension",
+              "operator",
+              "expression"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Filters ANDed together; dimensions support query, page, country, device, and search_appearance, and operators support equals, contains, and not_contains"
+        },
+        "row_limit": {
+          "type": "integer",
+          "description": "Maximum rows returned; one additional row is requested only to detect truncation"
+        },
+        "start_row": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "account_id",
+        "site_url",
+        "start_date",
+        "end_date"
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string"
+        },
+        "account_label": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "site_url": {
+              "type": "string"
+            },
+            "site_type": {
+              "type": "string"
+            },
+            "start_date": {
+              "type": "string"
+            },
+            "end_date": {
+              "type": "string"
+            },
+            "timezone": {
+              "type": "string"
+            },
+            "dimensions": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "string"
+              }
+            },
+            "rows": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "object",
+                "properties": {
+                  "keys": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "clicks": {
+                    "type": "number"
+                  },
+                  "impressions": {
+                    "type": "number"
+                  },
+                  "ctr": {
+                    "type": "number"
+                  },
+                  "position": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "keys",
+                  "clicks",
+                  "impressions",
+                  "ctr",
+                  "position"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "first_incomplete_date": {
+              "type": "string"
+            },
+            "response_aggregation_type": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "site_url",
+            "site_type",
+            "start_date",
+            "end_date",
+            "timezone",
+            "dimensions",
+            "rows"
+          ],
+          "additionalProperties": false
+        },
+        "next_page_token": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "fetched_at": {
+          "type": "string"
+        },
+        "partial_failures": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source_id",
+              "category",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "account_id",
+        "account_label",
+        "data",
+        "truncated",
+        "fetched_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "sheets_get_metadata": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "description": "Opaque account ID returned by accounts_list; required for every Google operation"
+        },
+        "spreadsheet_id": {
+          "type": "string",
+          "description": "Google Sheets spreadsheet ID; required"
+        }
+      },
+      "required": [
+        "account_id",
+        "spreadsheet_id"
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string"
+        },
+        "account_label": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "spreadsheet_id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            },
+            "locale": {
+              "type": "string"
+            },
+            "time_zone": {
+              "type": "string"
+            },
+            "sheets": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "index": {
+                    "type": "integer"
+                  },
+                  "rows": {
+                    "type": "integer"
+                  },
+                  "columns": {
+                    "type": "integer"
+                  },
+                  "hidden": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "title",
+                  "index",
+                  "rows",
+                  "columns"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "spreadsheet_id",
+            "sheets"
+          ],
+          "additionalProperties": false
+        },
+        "next_page_token": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "fetched_at": {
+          "type": "string"
+        },
+        "partial_failures": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source_id",
+              "category",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "account_id",
+        "account_label",
+        "data",
+        "truncated",
+        "fetched_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "sheets_read_range": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "description": "Opaque account ID returned by accounts_list; required for every Google operation"
+        },
+        "spreadsheet_id": {
+          "type": "string",
+          "description": "Google Sheets spreadsheet ID; required"
+        },
+        "range": {
+          "type": "string",
+          "description": "Explicit bounded A1 range, such as Sheet1!A1:C20; required"
+        },
+        "major_dimension": {
+          "type": "string",
+          "description": "ROWS or COLUMNS; required"
+        },
+        "value_render_option": {
+          "type": "string",
+          "description": "FORMATTED_VALUE, UNFORMATTED_VALUE, or FORMULA; required"
+        },
+        "max_cells": {
+          "type": "integer",
+          "description": "Maximum cells to return; default and hard maximum 10000"
+        }
+      },
+      "required": [
+        "account_id",
+        "spreadsheet_id",
+        "range",
+        "major_dimension",
+        "value_render_option"
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string"
+        },
+        "account_label": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "spreadsheet_id": {
+              "type": "string"
+            },
+            "requested_range": {
+              "type": "string"
+            },
+            "upstream_range": {
+              "type": "string"
+            },
+            "major_dimension": {
+              "type": "string"
+            },
+            "value_render_option": {
+              "type": "string"
+            },
+            "rows": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": [
+                  "null",
+                  "array"
+                ],
+                "items": true
+              }
+            },
+            "cell_count": {
+              "type": "integer"
+            },
+            "max_cells": {
+              "type": "integer"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "spreadsheet_id",
+            "requested_range",
+            "major_dimension",
+            "value_render_option",
+            "rows",
+            "cell_count",
+            "max_cells"
+          ],
+          "additionalProperties": false
+        },
+        "next_page_token": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "fetched_at": {
+          "type": "string"
+        },
+        "partial_failures": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source_id",
+              "category",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "account_id",
+        "account_label",
+        "data",
+        "truncated",
+        "fetched_at"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

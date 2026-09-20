@@ -6,7 +6,7 @@ import (
 )
 
 var startCommand = func(name string, args ...string) error {
-	return exec.Command(name, args...).Start()
+	return exec.Command(name, args...).Start() //nolint:gosec // The program is fixed and arguments are passed without a shell.
 }
 
 func openBrowser(u string) error {

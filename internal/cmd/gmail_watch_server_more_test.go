@@ -114,7 +114,7 @@ func TestGmailWatchServer_ServeHTTP_AllowNoHook(t *testing.T) {
 	push.Message.Data = base64.StdEncoding.EncodeToString([]byte(`{"emailAddress":"a@b.com","historyId":"200"}`))
 	body, _ := json.Marshal(push)
 
-	req := httptest.NewRequest(http.MethodPost, "/gmail-pubsub?token=tok", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/gmail-pubsub?token=tok", bytes.NewReader(body))
 	req = req.WithContext(ctx)
 
 	rr := httptest.NewRecorder()
@@ -145,7 +145,7 @@ func TestGmailWatchHelpers(t *testing.T) {
 	if got := bearerToken(&http.Request{Header: http.Header{"Authorization": []string{"Bearer tok"}}}); got != "tok" {
 		t.Fatalf("bearer: %q", got)
 	}
-	r := httptest.NewRequest(http.MethodPost, "/x?token=q", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/x?token=q", nil)
 	r.Header.Set("x-gog-token", "h")
 	if !sharedTokenMatches(r, "h") {
 		t.Fatalf("expected shared token match")
@@ -168,7 +168,7 @@ func TestGmailWatchServer_OIDCAudience(t *testing.T) {
 	s := &gmailWatchServer{
 		cfg: gmailWatchServeConfig{OIDCAudience: ""},
 	}
-	r := httptest.NewRequest(http.MethodPost, "https://example.com/x", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "https://example.com/x", nil)
 	r.Host = "example.com"
 	r.Header.Set("X-Forwarded-Proto", "https")
 	r.Header.Set("X-Forwarded-Host", "proxy.example.com")
@@ -517,7 +517,7 @@ func TestGmailWatchServer_ServeHTTP_HookError(t *testing.T) {
 	body, _ := json.Marshal(push)
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/hook", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/hook", bytes.NewReader(body))
 	server.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status: %d", rr.Code)

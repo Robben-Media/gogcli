@@ -106,7 +106,7 @@ func TestManageServer_HandleAccountsPage(t *testing.T) {
 		csrfToken: "csrf",
 	}
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	ms.handleAccountsPage(rr, req)
 
 	if rr.Code != http.StatusOK {
@@ -155,7 +155,7 @@ func TestManageServer_HandleListAccounts_DefaultFirst(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/accounts", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/accounts", nil)
 	ms.handleListAccounts(rr, req)
 
 	if rr.Code != http.StatusOK {
@@ -188,7 +188,7 @@ func TestManageServer_HandleListAccounts_DefaultExplicit(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/accounts", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/accounts", nil)
 	ms.handleListAccounts(rr, req)
 
 	var parsed struct {
@@ -220,7 +220,7 @@ func TestManageServer_HandleOAuthCallback_ErrorAndValidation(t *testing.T) {
 
 	t.Run("cancelled", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/oauth2/callback?error=access_denied", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/oauth2/callback?error=access_denied", nil)
 		ms.handleOAuthCallback(rr, req)
 
 		if rr.Code != http.StatusOK {
@@ -230,7 +230,7 @@ func TestManageServer_HandleOAuthCallback_ErrorAndValidation(t *testing.T) {
 
 	t.Run("state mismatch", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/oauth2/callback?state=nope&code=abc", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/oauth2/callback?state=nope&code=abc", nil)
 		ms.handleOAuthCallback(rr, req)
 
 		if rr.Code != http.StatusBadRequest {
@@ -240,7 +240,7 @@ func TestManageServer_HandleOAuthCallback_ErrorAndValidation(t *testing.T) {
 
 	t.Run("missing code", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/oauth2/callback?state=state1", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/oauth2/callback?state=state1", nil)
 		ms.handleOAuthCallback(rr, req)
 
 		if rr.Code != http.StatusBadRequest {
@@ -260,7 +260,7 @@ func TestManageServer_HandleSetDefault_AndRemove(t *testing.T) {
 
 	t.Run("set-default csrf", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/set-default", bytes.NewReader([]byte(`{"email":"a@b.com"}`)))
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/set-default", bytes.NewReader([]byte(`{"email":"a@b.com"}`)))
 		req.Header.Set("X-CSRF-Token", "nope")
 		ms.handleSetDefault(rr, req)
 
@@ -271,7 +271,7 @@ func TestManageServer_HandleSetDefault_AndRemove(t *testing.T) {
 
 	t.Run("set-default ok", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/set-default", bytes.NewReader([]byte(`{"email":"a@b.com"}`)))
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/set-default", bytes.NewReader([]byte(`{"email":"a@b.com"}`)))
 		req.Header.Set("X-CSRF-Token", "csrf")
 		ms.handleSetDefault(rr, req)
 
@@ -286,7 +286,7 @@ func TestManageServer_HandleSetDefault_AndRemove(t *testing.T) {
 
 	t.Run("set-default bad method", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/set-default", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/set-default", nil)
 		ms.handleSetDefault(rr, req)
 
 		if rr.Code != http.StatusMethodNotAllowed {
@@ -296,7 +296,7 @@ func TestManageServer_HandleSetDefault_AndRemove(t *testing.T) {
 
 	t.Run("set-default bad json", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/set-default", bytes.NewReader([]byte(`{`)))
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/set-default", bytes.NewReader([]byte(`{`)))
 		req.Header.Set("X-CSRF-Token", "csrf")
 		ms.handleSetDefault(rr, req)
 
@@ -310,7 +310,7 @@ func TestManageServer_HandleSetDefault_AndRemove(t *testing.T) {
 
 		t.Cleanup(func() { store.setDefaultErr = nil })
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/set-default", bytes.NewReader([]byte(`{"email":"a@b.com"}`)))
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/set-default", bytes.NewReader([]byte(`{"email":"a@b.com"}`)))
 		req.Header.Set("X-CSRF-Token", "csrf")
 		ms.handleSetDefault(rr, req)
 
@@ -321,7 +321,7 @@ func TestManageServer_HandleSetDefault_AndRemove(t *testing.T) {
 
 	t.Run("remove ok", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/remove-account", bytes.NewReader([]byte(`{"email":"a@b.com"}`)))
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/remove-account", bytes.NewReader([]byte(`{"email":"a@b.com"}`)))
 		req.Header.Set("X-CSRF-Token", "csrf")
 		ms.handleRemoveAccount(rr, req)
 
@@ -336,7 +336,7 @@ func TestManageServer_HandleSetDefault_AndRemove(t *testing.T) {
 
 	t.Run("remove bad method", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/remove-account", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/remove-account", nil)
 		ms.handleRemoveAccount(rr, req)
 
 		if rr.Code != http.StatusMethodNotAllowed {
@@ -346,7 +346,7 @@ func TestManageServer_HandleSetDefault_AndRemove(t *testing.T) {
 
 	t.Run("remove bad json", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/remove-account", bytes.NewReader([]byte(`{`)))
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/remove-account", bytes.NewReader([]byte(`{`)))
 		req.Header.Set("X-CSRF-Token", "csrf")
 		ms.handleRemoveAccount(rr, req)
 
@@ -360,7 +360,7 @@ func TestManageServer_HandleSetDefault_AndRemove(t *testing.T) {
 
 		t.Cleanup(func() { store.deleteErr = nil })
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/remove-account", bytes.NewReader([]byte(`{"email":"a@b.com"}`)))
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/remove-account", bytes.NewReader([]byte(`{"email":"a@b.com"}`)))
 		req.Header.Set("X-CSRF-Token", "csrf")
 		ms.handleRemoveAccount(rr, req)
 
@@ -374,7 +374,7 @@ func TestManageServer_HandleListAccounts_Error(t *testing.T) {
 	store := &fakeStore{listErr: errBoom}
 	ms := &ManageServer{csrfToken: "csrf", store: store}
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/accounts", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/accounts", nil)
 	ms.handleListAccounts(rr, req)
 
 	if rr.Code != http.StatusInternalServerError {
@@ -443,7 +443,7 @@ func TestManageServer_HandleAuthStart(t *testing.T) {
 		opts:     ManageServerOptions{ForceConsent: true},
 	}
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/auth/start", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/start", nil)
 	ms.handleAuthStart(rr, req)
 
 	if rr.Code != http.StatusFound {
@@ -529,7 +529,7 @@ func TestManageServer_HandleAuthStart_ReadonlyDisablesGrantedScopes(t *testing.T
 
 	ms := &ManageServer{listener: ln, opts: ManageServerOptions{Readonly: true, Services: []Service{ServiceGmail, ServiceDrive}}}
 	rr := httptest.NewRecorder()
-	ms.handleAuthStart(rr, httptest.NewRequest(http.MethodGet, "/auth/start", nil))
+	ms.handleAuthStart(rr, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/auth/start", nil))
 
 	if rr.Code != http.StatusFound {
 		t.Fatalf("status: %d", rr.Code)
@@ -565,7 +565,7 @@ func TestManageServer_HandleAuthStart_CredentialsError(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/auth/start", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/start", nil)
 	ms := &ManageServer{}
 	ms.handleAuthStart(rr, req)
 
@@ -657,7 +657,7 @@ func TestManageServer_HandleOAuthCallback_Success(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/oauth2/callback?state=state1&code=abc", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/oauth2/callback?state=state1&code=abc", nil)
 	ms.handleOAuthCallback(rr, req)
 
 	if rr.Code != http.StatusOK {
@@ -743,7 +743,7 @@ func TestManageServer_HandleOAuthCallback_FileBackendSkipsKeychain(t *testing.T)
 	}
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/oauth2/callback?state=state1&code=abc", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/oauth2/callback?state=state1&code=abc", nil)
 	ms.handleOAuthCallback(rr, req)
 
 	if rr.Code != http.StatusOK {
@@ -804,7 +804,7 @@ func TestManageServer_HandleOAuthCallback_Success_IDTokenEmail(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/oauth2/callback?state=state1&code=abc", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/oauth2/callback?state=state1&code=abc", nil)
 	ms.handleOAuthCallback(rr, req)
 
 	if rr.Code != http.StatusOK {
@@ -997,7 +997,7 @@ func TestManageServer_HandleAuthUpgrade(t *testing.T) {
 		store:    store,
 	}
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/auth/upgrade?email=test@example.com", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/upgrade?email=test@example.com", nil)
 	ms.handleAuthUpgrade(rr, req)
 
 	if rr.Code != http.StatusFound {
@@ -1102,7 +1102,7 @@ func TestManageServer_HandleAuthUpgrade_ReadonlyDropsExistingWriteScopes(t *test
 		store: store,
 	}
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/auth/upgrade?email=test@example.com", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/auth/upgrade?email=test@example.com", nil)
 	ms.handleAuthUpgrade(rr, req)
 
 	if rr.Code != http.StatusFound {
@@ -1127,7 +1127,7 @@ func TestManageServer_HandleAuthUpgrade_ReadonlyDropsExistingWriteScopes(t *test
 func TestManageServer_HandleAuthUpgrade_MissingEmail(t *testing.T) {
 	ms := &ManageServer{}
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/auth/upgrade", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/upgrade", nil)
 	ms.handleAuthUpgrade(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
@@ -1145,7 +1145,7 @@ func TestManageServer_HandleAuthUpgrade_CredentialsError(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/auth/upgrade?email=test@example.com", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/upgrade?email=test@example.com", nil)
 	ms := &ManageServer{}
 	ms.handleAuthUpgrade(rr, req)
 

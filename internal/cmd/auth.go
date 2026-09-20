@@ -337,7 +337,7 @@ func (c *AuthTokensExportCmd) Run(ctx context.Context) error {
 	enc := json.NewEncoder(f)
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "  ")
-	if encErr := enc.Encode(export{
+	if encErr := enc.Encode(export{ //nolint:gosec // This command exists to export a refresh token after an explicit user request.
 		Email:        tok.Email,
 		Client:       client,
 		Services:     tok.Services,

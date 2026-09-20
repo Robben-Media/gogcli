@@ -1,0 +1,59 @@
+{
+  "input": {
+    "type": "object",
+    "additionalProperties": false
+  },
+  "output": {
+    "type": "object",
+    "properties": {
+      "accounts": {
+        "type": [
+          "null",
+          "array"
+        ],
+        "items": {
+          "type": "object",
+          "properties": {
+            "account_id": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "client_name": {
+              "type": "string"
+            },
+            "auth_mode": {
+              "type": "string"
+            },
+            "capabilities": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "account_id",
+            "label",
+            "email",
+            "client_name",
+            "auth_mode",
+            "capabilities"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "accounts"
+    ],
+    "additionalProperties": false
+  }
+}

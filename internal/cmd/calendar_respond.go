@@ -11,6 +11,8 @@ import (
 	"github.com/steipete/gogcli/internal/ui"
 )
 
+const attendeeResponseDeclined = "declined"
+
 type CalendarRespondCmd struct {
 	CalendarID string `arg:"" name:"calendarId" help:"Calendar ID"`
 	EventID    string `arg:"" name:"eventId" help:"Event ID"`
@@ -37,7 +39,7 @@ func (c *CalendarRespondCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if status == "" {
 		return usage("required: --status")
 	}
-	validStatuses := []string{"accepted", "declined", "tentative", "needsAction"}
+	validStatuses := []string{"accepted", attendeeResponseDeclined, "tentative", "needsAction"}
 	isValid := false
 	for _, v := range validStatuses {
 		if status == v {

@@ -1,5 +1,7 @@
 # gogcli spec
 
+This document describes the original CLI design. The [native Google MCP implementation plan](plans/native-google-mcp.html) owns the new agent-interface architecture and supersedes the original exclusion of an MCP server. The native Go MCP defaults to the locally verified curated read-only tools. The plan also owns the opt-in compact API catalog, guided authoring workflows, explicit write gates, bounded media resources and their verification evidence. API inventory does not establish complete CLI workflow parity. Existing CLI consumers remain supported during this migration.
+
 ## Goal
 
 Build a single, clean, modern Go CLI that talks to:
@@ -19,7 +21,7 @@ This replaces the existing separate CLIs (`gmcli`, `gccli`, `gdcli`) and the Pyt
 
 - Preserving legacy command names/flags/output formats
 - Importing existing `~/.gmcli`, `~/.gccli`, `~/.gdcli` state
-- Running an MCP server (this is a CLI)
+- MCP implementation details, which are covered by the linked native Google MCP plan
 
 ## Language/runtime
 

@@ -4,6 +4,7 @@
 
 ### Added
 
+- MCP: add a native Go MCP server (`gog-mcp`) with browser OAuth account connect/reconnect/disconnect, curated read tools, an opt-in compact Google API catalog with guided workflow recipes, formatted mail preparation, and bounded Gmail/Drive media operations; CLI access is preserved. (#266, #159) Thanks @itsjeremyjohnson.
 - Auth: add guided `gog auth setup` for project selection/creation, selected-project API enablement, Console-only OAuth client guidance, credential install, and first-account authorization (re-runnable; agent-friendly). (#158)
 - Auth: add `gog auth doctor` for unified read-only diagnostics of config, keyring, OAuth client credentials, stored identities, and refresh-token usability. (#157)
 - CLI: add `--results-only` and `--select` for concise, projected JSON output. (#156)

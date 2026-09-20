@@ -41,7 +41,7 @@ func main() {
 		return
 	}
 
-	if err := os.WriteFile(readmePath, []byte(updated), 0o600); err != nil {
+	if err := os.WriteFile(readmePath, []byte(updated), 0o600); err != nil { //nolint:gosec // The destination is the constant README.md path.
 		fatalf("write README: %v", err)
 	}
 }

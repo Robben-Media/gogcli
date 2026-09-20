@@ -87,7 +87,7 @@ func (c *CalendarProposeTimeCmd) Run(ctx context.Context, flags *RootFlags) erro
 			return fmt.Errorf("cannot decline your own event (you are the organizer)")
 		}
 
-		event.Attendees[*selfIdx].ResponseStatus = "declined"
+		event.Attendees[*selfIdx].ResponseStatus = attendeeResponseDeclined
 		if strings.TrimSpace(c.Comment) != "" {
 			event.Attendees[*selfIdx].Comment = strings.TrimSpace(c.Comment)
 		}
@@ -230,11 +230,11 @@ var openProposeTimeBrowser = func(url string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		cmd = exec.Command("open", url)
+		cmd = exec.Command("open", url) //nolint:gosec // Arguments are passed directly; no shell interpolation.
 	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url) //nolint:gosec // Arguments are passed directly; no shell interpolation.
 	default:
-		cmd = exec.Command("xdg-open", url)
+		cmd = exec.Command("xdg-open", url) //nolint:gosec // Arguments are passed directly; no shell interpolation.
 	}
 	return cmd.Start()
 }

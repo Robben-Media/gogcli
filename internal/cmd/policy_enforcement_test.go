@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/steipete/gogcli/internal/access"
 	"github.com/steipete/gogcli/internal/config"
 )
 
@@ -232,7 +233,7 @@ func TestPolicyEnforcement_NormalizesHyphenatedServicesAndAliases(t *testing.T) 
 				if !hasPolicyForService(explicitDeny, service) {
 					t.Fatalf("explicit deny policy not discovered for %q", command)
 				}
-				if decision := evaluatePolicies(explicitDeny, action, "", ""); !decision.Denied || decision.ImplicitAllowlist {
+				if decision := access.Evaluate(explicitDeny, action, "", ""); !decision.Denied || decision.ImplicitAllowlist {
 					t.Fatalf("explicit deny decision for %q = %#v", command, decision)
 				}
 
@@ -240,7 +241,7 @@ func TestPolicyEnforcement_NormalizesHyphenatedServicesAndAliases(t *testing.T) 
 				if !hasPolicyForService(allowlist, service) {
 					t.Fatalf("allowlist policy not discovered for %q", command)
 				}
-				if decision := evaluatePolicies(allowlist, action, "", ""); !decision.Denied || !decision.ImplicitAllowlist {
+				if decision := access.Evaluate(allowlist, action, "", ""); !decision.Denied || !decision.ImplicitAllowlist {
 					t.Fatalf("implicit allowlist decision for %q = %#v", command, decision)
 				}
 			}
@@ -275,6 +276,20 @@ func TestPolicyCommandsBypassPolicyEnforcement(t *testing.T) {
 	}
 }
 
+func TestCommandActionID_SearchConsoleCanonical(t *testing.T) {
+	parser, _, err := newParser("test")
+	if err != nil {
+		t.Fatalf("newParser: %v", err)
+	}
+	kctx, err := parser.Parse([]string{"search-console", "sites", "list"})
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if got := commandActionID(kctx); got != "searchconsole:sites.list" {
+		t.Fatalf("unexpected action id: %q", got)
+	}
+}
+
 func TestPolicyActionMatches(t *testing.T) {
 	tests := []struct {
 		pattern string
@@ -287,9 +302,11 @@ func TestPolicyActionMatches(t *testing.T) {
 		{pattern: "gmail:read", action: "gmail:url", match: true},
 		{pattern: "gmail:read", action: "gmail:send", match: false},
 		{pattern: "gmail:settings.*", action: "gmail:settings.watch.stop", match: true},
+		{pattern: "search-console:query", action: "searchconsole:query", match: true},
+		{pattern: "gsc:sites.list", action: "search-console:sites.list", match: true},
 	}
 	for _, tt := range tests {
-		got := policyActionMatches(normalizePolicyAction(tt.pattern), normalizePolicyAction(tt.action))
+		got := access.MatchAction(tt.pattern, tt.action)
 		if got != tt.match {
 			t.Fatalf("pattern=%q action=%q got=%v want=%v", tt.pattern, tt.action, got, tt.match)
 		}

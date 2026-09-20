@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"html"
 	"html/template"
 	"io"
 	"net"
@@ -324,7 +325,7 @@ func renderSuccessPage(w http.ResponseWriter) {
 func renderErrorPage(w http.ResponseWriter, errorMsg string) {
 	tmpl, err := template.New("error").Parse(errorTemplate)
 	if err != nil {
-		_, _ = w.Write([]byte("Error: " + errorMsg))
+		_, _ = w.Write([]byte("Error: " + html.EscapeString(errorMsg)))
 		return
 	}
 	_ = tmpl.Execute(w, struct{ Error string }{Error: errorMsg})

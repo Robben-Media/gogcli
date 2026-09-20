@@ -210,7 +210,7 @@ func (c *CalendarTeamCmd) runEvents(ctx context.Context, svc *calendar.Service, 
 				// Skip declined events
 				declined := false
 				for _, att := range ev.Attendees {
-					if att.Self && att.ResponseStatus == "declined" {
+					if att.Self && att.ResponseStatus == attendeeResponseDeclined {
 						declined = true
 						break
 					}

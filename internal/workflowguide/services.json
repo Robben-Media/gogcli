@@ -1,0 +1,1404 @@
+[
+  {
+    "service": "admin",
+    "reviewed_at": "2026-09-19",
+    "prerequisites": [
+      "Google Workspace customer; consumer Gmail is ineligible.",
+      "Exact Directory or Reports OAuth scope.",
+      "Delegated administrator has the Google admin role required by the target resource or report."
+    ],
+    "read_strategy": [
+      "Use users.get or groups.get for an exact ID or exact email; do not list first.",
+      "For search, issue one bounded users.list, groups.list, or members.list page with server-side query/customer/domain/orgUnitPath/projection/customFieldMask as applicable.",
+      "For activities.list, require one application name and a bounded time window; use actor/event/parameter filters only when named by the task."
+    ],
+    "write_strategy": [
+      "Materialized bounded ID set; never an unresolved all-matching query.",
+      "Resolve and retain immutable user/group IDs before mutation.",
+      "Re-read exact target before suspend, rename, delete, role change, or member removal."
+    ],
+    "quota_caveats": [
+      "Each inner request consumes quota and can fail independently.",
+      "Current project quota and remaining allowance require deployment evidence."
+    ],
+    "intents": [
+      {
+        "intent_id": "admin.resolve_principal",
+        "intent": "Find one user or group",
+        "minimum_calls": "1 exact get or 1 bounded list page",
+        "approval": "permission_only_read",
+        "stop_condition": "Multiple candidates",
+        "next_action": "Return immutable IDs and ask the caller to choose one."
+      },
+      {
+        "intent_id": "admin.audit_recent_activity",
+        "intent": "Review recent login, admin, or application activity",
+        "minimum_calls": "1 activities.list page",
+        "approval": "permission_only_read",
+        "stop_condition": "Page or task budget exhausted",
+        "next_action": "Continue with nextPageToken or narrow time/event/actor filter."
+      },
+      {
+        "intent_id": "admin.change_user_lifecycle",
+        "intent": "Suspend, rename, restore, or delete one user",
+        "minimum_calls": "1 exact get plus explicit data-transfer eligibility check when deletion is proposed",
+        "approval": "always_human_approval",
+        "stop_condition": "Missing data-retention/transfer decision, ambiguous ID, or stale target",
+        "next_action": "Produce exact before/after preview; after unknown outcome, get by immutable ID."
+      },
+      {
+        "intent_id": "admin.change_group_membership",
+        "intent": "Add, remove, or change roles for bounded members",
+        "minimum_calls": "1 current-membership page covering materialized member IDs, then bounded writes",
+        "approval": "required_for_removal_role_elevation_external_member_or_bulk_threshold",
+        "stop_condition": "Unmaterialized all-matching set or per-item failure",
+        "next_action": "Return individual results and wait for documented propagation before recheck."
+      }
+    ],
+    "sources": [
+      "https://developers.google.com/workspace/admin/directory/v1/limits",
+      "https://developers.google.com/workspace/admin/directory/v1/guides/authorizing",
+      "https://developers.google.com/workspace/admin/directory/reference/rest/v1/users/list",
+      "https://developers.google.com/workspace/admin/reports/v1/limits",
+      "https://developers.google.com/workspace/admin/reports/reference/rest/v1/activities/list",
+      "https://developers.google.com/workspace/admin/reports/v1/guides/manage-audit-admin",
+      "https://developers.google.com/workspace/admin/directory/v1/guides/batch",
+      "https://support.google.com/a/answer/162106"
+    ]
+  },
+  {
+    "service": "docs",
+    "reviewed_at": "2026-09-19",
+    "prerequisites": [
+      "Docs write scope or an accepted Drive scope for document operations.",
+      "Resource permission on source/template and destination folder.",
+      "Exact document or template ID; do not discover templates by broad crawl."
+    ],
+    "read_strategy": [
+      "Create blank document directly when no template is required; do not pre-list Drive.",
+      "For template workflow, use exact Drive files.copy then one Docs batchUpdate.",
+      "Before editing an existing document, retrieve current structure and revision once, bounded to the needed tab/content."
+    ],
+    "write_strategy": [
+      "One ordered requests[] array for one logical mutation; unique placeholders preferred for template replacement.",
+      "Existing-document preview binds to requiredRevisionId.",
+      "Stale revision stops and requires a new read/preview."
+    ],
+    "quota_caveats": [
+      "Batching is not a claim of lower quota cost; check this service\u2019s quota rules.",
+      "Current project quota and remaining allowance require deployment evidence."
+    ],
+    "intents": [
+      {
+        "intent_id": "docs.create_blank_with_content",
+        "intent": "Create a blank document and populate it",
+        "minimum_calls": "2 calls; add 1 Drive parent update for a non-default folder",
+        "approval": "explicit_concrete_user_request_suffices_until_sharing_or_destructive_edit",
+        "stop_condition": "Missing destination ID or unresolved content structure",
+        "next_action": "Return document ID and any unapplied placement step."
+      },
+      {
+        "intent_id": "docs.create_from_template",
+        "intent": "Copy an exact template and replace bounded placeholders",
+        "minimum_calls": "2 calls: Drive copy plus Docs batchUpdate; optional 1 inspect",
+        "approval": "explicit_concrete_user_request_suffices",
+        "stop_condition": "Placeholder matches zero or an unexpected count",
+        "next_action": "Return unmatched keys and copied file ID; do not search other templates."
+      },
+      {
+        "intent_id": "docs.edit_existing",
+        "intent": "Apply one bounded edit to an existing document",
+        "minimum_calls": "1 read plus 1 batchUpdate",
+        "approval": "required_for_broad_replacement_deletion_or_multi_section_rewrite",
+        "stop_condition": "Stale revision or unresolved structural range",
+        "next_action": "Re-read and regenerate preview."
+      }
+    ],
+    "sources": [
+      "https://developers.google.com/workspace/docs/api/limits",
+      "https://developers.google.com/workspace/docs/api/how-tos/documents",
+      "https://developers.google.com/workspace/docs/api/reference/rest/v1/documents/batchUpdate",
+      "https://developers.google.com/workspace/docs/api/how-tos/merge",
+      "https://developers.google.com/workspace/docs/api/concepts/structure"
+    ]
+  },
+  {
+    "service": "slides",
+    "reviewed_at": "2026-09-19",
+    "prerequisites": [
+      "Slides write scope or accepted Drive scope.",
+      "Resource permission on template, presentation, destination folder, and image sources.",
+      "Exact presentation/template IDs and explicit image sources."
+    ],
+    "read_strategy": [
+      "Create a blank presentation directly when no template is required.",
+      "For template workflow, exact Drive files.copy then one Slides batchUpdate.",
+      "Read presentation once only when revision, layout, placeholder, or object IDs are required."
+    ],
+    "write_strategy": [
+      "One ordered requests[] array; caller-supplied stable object IDs may connect create and edit subrequests in the same batch.",
+      "Bind preview to requiredRevisionId and exact slide/object IDs.",
+      "Stale revision stops; re-read instead of remapping by visible text alone."
+    ],
+    "quota_caveats": [
+      "Batching is not a claim of lower quota cost; check this service\u2019s quota rules.",
+      "Current project quota and remaining allowance require deployment evidence."
+    ],
+    "intents": [
+      {
+        "intent_id": "slides.create_from_template",
+        "intent": "Copy an exact deck template and populate it",
+        "minimum_calls": "2 calls; optional 1 presentation get",
+        "approval": "explicit_concrete_user_request_suffices_until_sharing_or_destructive_replace",
+        "stop_condition": "Placeholder match count differs from expectation",
+        "next_action": "Return affected slide/object IDs and ask for a specific resolution."
+      },
+      {
+        "intent_id": "slides.create_from_outline",
+        "intent": "Create a small presentation from an explicit outline",
+        "minimum_calls": "2 calls; add 1 Drive move for a non-default folder",
+        "approval": "explicit_concrete_user_request_suffices",
+        "stop_condition": "Missing layout or image source, or object-count ceiling",
+        "next_action": "Return created presentation ID and incomplete slide IDs."
+      },
+      {
+        "intent_id": "slides.edit_existing",
+        "intent": "Apply one bounded update to exact slides or objects",
+        "minimum_calls": "1 get plus 1 batchUpdate",
+        "approval": "required_for_delete_broad_replace_or_threshold_sized_change",
+        "stop_condition": "Stale revision or missing object ID",
+        "next_action": "Re-read exact presentation and regenerate preview."
+      }
+    ],
+    "sources": [
+      "https://developers.google.com/workspace/slides/api/limits",
+      "https://developers.google.com/workspace/slides/api/guides/presentations",
+      "https://developers.google.com/workspace/slides/api/reference/rest/v1/presentations/batchUpdate",
+      "https://developers.google.com/workspace/slides/api/guides/merge",
+      "https://developers.google.com/workspace/slides/api/guides/batch",
+      "https://developers.google.com/workspace/slides/api/reference/rest/v1/presentations.pages/getThumbnail"
+    ]
+  },
+  {
+    "service": "sheets",
+    "reviewed_at": "2026-09-19",
+    "prerequisites": [
+      "Sheets read/write scope or accepted Drive scope.",
+      "Spreadsheet resource permission.",
+      "Exact spreadsheet ID and sheet/range identity."
+    ],
+    "read_strategy": [
+      "Use spreadsheets.get with explicit fields and includeGridData=false for metadata.",
+      "Use values.batchGet for multiple exact ranges in one call.",
+      "Request grid data only for named ranges and fields."
+    ],
+    "write_strategy": [
+      "One logical mutation per batch with explicit ranges/sheet IDs and ordered subrequests.",
+      "Retain numeric sheet ID and exact ranges from preview; do not recompute destructive ranges from a changed title.",
+      "Before overwriting formulas, clearing, or deleting rows/columns/sheets, read exact affected ranges and metadata."
+    ],
+    "quota_caveats": [
+      "Batching is not a claim of lower quota cost; check this service\u2019s quota rules.",
+      "Current project quota and remaining allowance require deployment evidence."
+    ],
+    "intents": [
+      {
+        "intent_id": "sheets.read_ranges",
+        "intent": "Read several exact ranges",
+        "minimum_calls": "1 values.batchGet; optional 1 metadata get",
+        "approval": "permission_only_read",
+        "stop_condition": "Byte/row/item ceiling",
+        "next_action": "Return remaining named ranges or a narrower row interval."
+      },
+      {
+        "intent_id": "sheets.append_rows",
+        "intent": "Append bounded rows to an exact table/range",
+        "minimum_calls": "Optional 1 duplicate-key read plus 1 append",
+        "approval": "explicit_request_suffices_unless_large_external_formula_or_duplicate_policy_unclear",
+        "stop_condition": "Missing stable key/schema or row threshold",
+        "next_action": "Preview rows; after unknown outcome, query stable keys before retry."
+      },
+      {
+        "intent_id": "sheets.update_cells_or_format",
+        "intent": "Apply a bounded typed values batch",
+        "minimum_calls": "1 values.batchGet plus 1 values.batchUpdate; optional 1 exact readback",
+        "approval": "required_for_formula_overwrite_clear_delete_or_bulk_threshold",
+        "stop_condition": "Ambiguous range, protected content, or invalid subrequest",
+        "next_action": "Compare exact A1 ranges. Use sheets.update_format_or_structure for format or sheet structure."
+      },
+      {
+        "intent_id": "sheets.update_format_or_structure",
+        "intent": "Apply a bounded format or structure batch",
+        "minimum_calls": "1 spreadsheets.get plus 1 spreadsheets.batchUpdate",
+        "approval": "required_for_delete_merge_or_protected_range_changes",
+        "stop_condition": "Ambiguous sheetId, protected range, or invalid subrequest",
+        "next_action": "Rebuild requests from a fresh metadata get. Do not use values.batchUpdate for format or structure."
+      }
+    ],
+    "sources": [
+      "https://developers.google.com/workspace/sheets/api/limits",
+      "https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/batchUpdate",
+      "https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets.values/batchGet",
+      "https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets.values/batchUpdate",
+      "https://developers.google.com/workspace/sheets/api/guides/performance"
+    ]
+  },
+  {
+    "service": "calendar",
+    "reviewed_at": "2026-09-19",
+    "prerequisites": [
+      "Calendar scope matching read or write intent.",
+      "Calendar ACL permits target operation.",
+      "Exact calendar ID; display summary is not authority."
+    ],
+    "read_strategy": [
+      "Use freebusy.query for availability across known calendar IDs; do not list events from every calendar.",
+      "Use one bounded events.list with exact calendar and time window for event discovery.",
+      "Use nextSyncToken for incremental sync and replace it only after 410 Gone with a new bounded full sync."
+    ],
+    "write_strategy": [
+      "Calendar multipart HTTP batch only for bounded independent calls",
+      "Preserve event ID, recurringEventId, originalStartTime, sequence/etag when available, and timezone.",
+      "Require exact instance-versus-series scope before recurring mutation."
+    ],
+    "quota_caveats": [
+      "Each inner request counts against quota; individual requests can succeed or fail independently.",
+      "Current project quota and remaining allowance require deployment evidence."
+    ],
+    "intents": [
+      {
+        "intent_id": "calendar.find_availability",
+        "intent": "Find availability across known calendars",
+        "minimum_calls": "1 freebusy.query",
+        "approval": "permission_only_read",
+        "stop_condition": "Any per-calendar error remains unresolved",
+        "next_action": "Remove or authorize failed calendars; never treat failure as free time."
+      },
+      {
+        "intent_id": "calendar.create_meeting",
+        "intent": "Create one event with optional attendees and conference",
+        "minimum_calls": "Optional 1 freebusy read plus 1 event insert",
+        "approval": "required_before_attendee_notifications_or_external_communication",
+        "stop_condition": "Missing time zone, attendee set, notification policy, or event ID",
+        "next_action": "After unknown outcome, get by caller-generated event ID."
+      },
+      {
+        "intent_id": "calendar.change_recurring_event",
+        "intent": "Change or cancel one instance or a series",
+        "minimum_calls": "1 event get plus 1 update/delete",
+        "approval": "always_when_attendees_notified_or_multiple_occurrences_change",
+        "stop_condition": "Instance/series scope ambiguous",
+        "next_action": "Return exact series/instance IDs and require one scope."
+      }
+    ],
+    "sources": [
+      "https://developers.google.com/workspace/calendar/api/guides/quota",
+      "https://developers.google.com/workspace/calendar/api/guides/sync",
+      "https://developers.google.com/workspace/calendar/api/guides/batch",
+      "https://developers.google.com/workspace/calendar/api/guides/create-events",
+      "https://developers.google.com/workspace/calendar/api/guides/recurringevents",
+      "https://developers.google.com/workspace/calendar/api/v3/reference/events/insert"
+    ]
+  },
+  {
+    "service": "drive",
+    "reviewed_at": "2026-09-19",
+    "prerequisites": [
+      "Drive scope matching read, file-limited, or full-drive intent.",
+      "Resource permission and shared-drive role for the exact file/folder/drive.",
+      "Exact drive/corpus context when operating outside My Drive."
+    ],
+    "read_strategy": [
+      "Use files.get by exact ID when available; published cost is 5 quota units versus 100 for files.list.",
+      "For search, use one narrow files.list q plus spaces/corpora/driveId and a minimal fields mask.",
+      "Preserve incompleteSearch and never call a cross-corpus result exhaustive when set."
+    ],
+    "write_strategy": [
+      "Bounded independent Drive requests; HTTP batch does not make them atomic.",
+      "Preserve file ID, drive ID, parents, MIME type, version/modified time, and permission ID where returned.",
+      "Before permission, ownership, trash, or delete, get exact current metadata and drive context."
+    ],
+    "quota_caveats": [
+      "Batching is not a claim of lower quota cost; check this service\u2019s quota rules.",
+      "Current project quota and remaining allowance require deployment evidence."
+    ],
+    "intents": [
+      {
+        "intent_id": "drive.locate_file",
+        "intent": "Locate and inspect one file",
+        "minimum_calls": "1 exact get, or 1 narrow list page plus 1 selected get",
+        "approval": "permission_only_read",
+        "stop_condition": "Multiple candidates or incompleteSearch",
+        "next_action": "Choose one file ID or narrow corpus/query."
+      },
+      {
+        "intent_id": "drive.copy_template",
+        "intent": "Copy an exact template for Docs or Slides",
+        "minimum_calls": "1 Drive copy plus 1 service batch update",
+        "approval": "explicit_concrete_user_request_suffices_until_sharing",
+        "stop_condition": "Copy succeeds but content update fails",
+        "next_action": "Return copied file ID and explicit cleanup or retry choice."
+      },
+      {
+        "intent_id": "drive.share_file",
+        "intent": "Create or change one bounded permission",
+        "minimum_calls": "1 current permission read/list plus 1 write",
+        "approval": "required_for_public_domain_writer_organizer_ownership_notification_or_bulk",
+        "stop_condition": "Principal/role/notification ambiguity",
+        "next_action": "After unknown outcome, reconcile exact principal/permission."
+      },
+      {
+        "intent_id": "drive.delete_file",
+        "intent": "Trash or permanently delete exact files",
+        "minimum_calls": "1 exact metadata get plus 1 write",
+        "approval": "always_for_permanent_delete_and_bulk_trash",
+        "stop_condition": "Trash versus permanent-delete choice missing or shared-drive authority unclear",
+        "next_action": "Reconcile exact file trashed/existence state; never escalate trash to delete."
+      }
+    ],
+    "sources": [
+      "https://developers.google.com/workspace/drive/api/guides/limits",
+      "https://developers.google.com/workspace/drive/api/guides/search-files",
+      "https://developers.google.com/workspace/drive/api/guides/enable-shareddrives",
+      "https://developers.google.com/workspace/drive/api/guides/manage-changes",
+      "https://developers.google.com/workspace/drive/api/guides/manage-sharing",
+      "https://developers.google.com/workspace/drive/api/guides/delete",
+      "https://developers.google.com/workspace/drive/api/guides/fields-parameter"
+    ]
+  },
+  {
+    "service": "businessprofile",
+    "reviewed_at": "2026-09-19",
+    "prerequisites": [
+      "Cloud project has approved Google Business Profile API access; quota zero means access is not granted.",
+      "OAuth identity has access to the Business Profile account/location.",
+      "Account or location role permits the exact read/write/verification action."
+    ],
+    "read_strategy": [
+      "List one Business Profile account page only when the exact account resource is unknown.",
+      "List one location page for the selected account with a minimal readMask; do not enumerate every account and location.",
+      "Get one exact location with task-specific readMask before patch."
+    ],
+    "write_strategy": [
+      "Paced per-location/profile writes; no assumption of atomic multi-location batch.",
+      "Preview exact current fields in updateMask immediately before patch.",
+      "After unknown outcome, get exactly those fields and compare before retry."
+    ],
+    "quota_caveats": [
+      "Batching is not a claim of lower quota cost; check this service\u2019s quota rules.",
+      "Current project quota and remaining allowance require deployment evidence."
+    ],
+    "intents": [
+      {
+        "intent_id": "businessprofile.resolve_location",
+        "intent": "Find and inspect one Business Profile location",
+        "minimum_calls": "Optional 1 account list plus 1 location list and 1 exact get",
+        "approval": "permission_only_read",
+        "stop_condition": "Multiple accounts or locations",
+        "next_action": "Choose exact accounts/{id} or locations/{id}; do not query all accounts."
+      },
+      {
+        "intent_id": "businessprofile.update_location",
+        "intent": "Patch bounded public location fields",
+        "minimum_calls": "1 exact get plus 1 patch",
+        "approval": "always_human_approval",
+        "stop_condition": "Missing explicit updateMask, role, or category/attribute metadata",
+        "next_action": "After unknown outcome, get exact updateMask fields and compare."
+      },
+      {
+        "intent_id": "businessprofile.review_performance",
+        "intent": "Retrieve bounded metrics for exact locations",
+        "minimum_calls": "Fewest grouped requests supported for exact location/metric/date set",
+        "approval": "permission_only_read",
+        "stop_condition": "Location count or task budget",
+        "next_action": "Split a named location subset or shorten the date range."
+      },
+      {
+        "intent_id": "businessprofile.verify_location",
+        "intent": "Start or complete one supported verification flow",
+        "minimum_calls": "1 available-options read, then one selected request/completion call",
+        "approval": "always_human_approval",
+        "stop_condition": "No eligible method or missing human/physical evidence",
+        "next_action": "Return exact outstanding human step and expiry; never cycle methods automatically."
+      }
+    ],
+    "sources": [
+      "https://developers.google.com/my-business/content/basic-setup",
+      "https://developers.google.com/my-business/content/limits",
+      "https://developers.google.com/my-business/reference/accountmanagement/rest/v1/accounts/list",
+      "https://developers.google.com/my-business/reference/businessinformation/rest/v1/accounts.locations/list",
+      "https://developers.google.com/my-business/reference/businessinformation/rest/v1/locations/patch",
+      "https://developers.google.com/my-business/reference/verifications/rest",
+      "https://developers.google.com/my-business/reference/performance/rest"
+    ]
+  },
+  {
+    "service": "analytics",
+    "reviewed_at": "2026-09-19",
+    "prerequisites": [
+      "User OAuth with analytics.readonly for reports and metadata; analytics.edit or analytics.manage.users is separately required for configuration or access-binding changes.",
+      "The authenticated principal must have access to the exact GA4 account or property and a role sufficient for the requested Admin API mutation.",
+      "Use GA4 properties/{property}; Universal Analytics views and profile IDs are not interchangeable with GA4 property resources."
+    ],
+    "read_strategy": [
+      "Use accountSummaries.list or properties.list only when the exact property is unknown; preserve accounts/{id} and properties/{id} names.",
+      "Read property metadata once to validate compatible metric and dimension names instead of probing report requests repeatedly.",
+      "Use one runReport with explicit dimensions, metrics, filters, date ranges, order, limit, and offset; the API defaults to 10,000 rows and caps one response at 250,000 rows.",
+      "Use batchRunReports only for up to five reports on the same property; return each embedded report separately rather than flattening incompatible schemas."
+    ],
+    "write_strategy": [
+      "One batchRunReports HTTP request may contain at most five RunReportRequest objects for the same property.",
+      "One batchRunReports HTTP call is one external request, while the Data API applies complexity-based property quota tokens to the Core method; report the HTTP call and returned provider token state separately.",
+      "Use one exact create, patch with updateMask, archive/delete, or access-binding method per resource; do not imply cross-resource atomicity.",
+      "Expose an Admin API mutation only when the connected account includes the exact method scope from the catalog and the user has the required GA4 resource role.",
+      "Return the property's timeZone and use it to interpret date dimensions; do not substitute the caller's local timezone.",
+      "Return ResponseMetaData fields that qualify data quality or freshness and include propertyQuota when requested.",
+      "Admin resources do not provide a universal revision precondition; re-read the exact resource and fields before access, stream, secret, archive, or delete mutations.",
+      "Audience export creation is asynchronous stateful work: retain its resource name, poll that resource within the task budget, and never create another export merely because the first is not complete."
+    ],
+    "quota_caveats": [
+      "Data API quota is token based per property and category, not one quota unit per HTTP request; request complexity determines tokens consumed.",
+      "Published standard-property Core quotas include 200,000 tokens/day/property, 40,000/hour/property, 14,000/hour/project/property, 10 concurrent requests/property, and 10 server errors/hour/project/property; Analytics 360 values differ.",
+      "Admin API publishes 1,200 requests/minute/project, 600 requests/minute/user, 600 writes/minute/project, and 180 writes/minute/user; a mutation consumes both request and write quota.",
+      "Actual property edition, current token state, and project limits are live state; return provider quota when available and do not infer it from the HTTP call count."
+    ],
+    "intents": [
+      {
+        "intent_id": "analytics.resolve_property",
+        "intent": "Find one accessible GA4 property and inspect its metadata",
+        "minimum_calls": "1 account summary or filtered property page plus 1 metadata get for the selected property",
+        "approval": "permission_only_read",
+        "stop_condition": "Multiple properties remain or requested metrics/dimensions are incompatible",
+        "next_action": "Return exact property resource names and compatible fields for caller selection."
+      },
+      {
+        "intent_id": "analytics.run_bounded_report",
+        "intent": "Run a GA4 historical or realtime report",
+        "minimum_calls": "1 report request after metadata is known; one additional offset page only when explicitly continued",
+        "approval": "permission_only_read",
+        "stop_condition": "Requested limit, page, task budget, or provider quota is reached",
+        "next_action": "Return rowCount, offset continuation, timezone, totals, metadata qualifiers, and provider quota state."
+      },
+      {
+        "intent_id": "analytics.compare_reports",
+        "intent": "Run up to five compatible reports for one property",
+        "minimum_calls": "1 batchRunReports HTTP call",
+        "approval": "permission_only_read",
+        "stop_condition": "More than five reports, mixed properties, or incompatible fields",
+        "next_action": "Split by exact property or reduce the report set; report provider quota state separately from the single HTTP call."
+      },
+      {
+        "intent_id": "analytics.change_configuration",
+        "intent": "Change a stream, secret, property setting, or access binding",
+        "minimum_calls": "1 exact current-resource read plus 1 typed write",
+        "approval": "always_for_access_changes_deletes_secrets_and_archive; otherwise concrete preview required",
+        "stop_condition": "Missing role, exact resource name, updateMask, or changed current state",
+        "next_action": "Re-read the exact resource after unknown outcome; never retry create or delete blindly."
+      }
+    ],
+    "sources": [
+      "https://developers.google.com/analytics/devguides/reporting/data/v1/quotas",
+      "https://developers.google.com/analytics/devguides/reporting/data/v1/rest/v1beta/properties/runReport",
+      "https://developers.google.com/analytics/devguides/reporting/data/v1/rest/v1beta/properties/batchRunReports",
+      "https://developers.google.com/analytics/devguides/reporting/data/v1/rest/v1beta/properties/getMetadata",
+      "https://developers.google.com/analytics/devguides/config/admin/v1/quotas",
+      "https://developers.google.com/analytics/devguides/config/admin/v1/rest/v1beta/properties/list"
+    ]
+  },
+  {
+    "service": "searchconsole",
+    "reviewed_at": "2026-09-19",
+    "prerequisites": [
+      "User OAuth with webmasters.readonly for reads or webmasters for site and sitemap mutations.",
+      "The authenticated user must have the required permissionLevel on the exact Search Console property.",
+      "Domain properties and URL-prefix properties are distinct authorities; an apparent URL match does not authorize another property."
+    ],
+    "read_strategy": [
+      "List sites once only when siteUrl is unknown, then preserve the exact sc-domain:example.com or URL-prefix URL and permissionLevel.",
+      "Use one searchAnalytics.query with an explicit date window and only the dimensions and filters needed; page with startRow and rowLimit up to 25,000.",
+      "For recurring export, query one day at a time after data becomes available; this lowers load and aligns with the documented 50,000 rows/day/search-type exposure limit.",
+      "Use one URL Inspection request for one exact URL and property; do not crawl site URLs or infer index coverage from a sample."
+    ],
+    "write_strategy": [
+      "No provider-atomic multi-site write; use one exact site or sitemap request per target.",
+      "Repeated searchAnalytics.query calls are independent reads; each page is a real HTTP request and consumes load plus QPM/QPD quota.",
+      "Return status per exact siteUrl or sitemap URL and reconcile after an unknown response.",
+      "Search Analytics dates and incomplete-data metadata use America/Los_Angeles semantics; return first_incomplete_date or first_incomplete_hour when present.",
+      "dataState=all or hourly_all can include data that still changes; final and incomplete rows must not be mixed without labeling.",
+      "Results are top rows rather than a guaranteed complete dataset, sorted by clicks except date grouping; page/query dimensions can cause omitted data.",
+      "Site and sitemap APIs expose no universal ETag write precondition; re-read the exact resource after an unknown add, submit, or delete outcome."
+    ],
+    "quota_caveats": [
+      "Search Analytics has short-term 10-minute and long-term one-day load quota; page/query grouping, filters, and long date ranges increase load independently of request count.",
+      "Published Search Analytics limits include 1,200 QPM per site, 1,200 QPM per user, and 40,000 QPM plus 30,000,000 QPD per project.",
+      "URL Inspection separately publishes 600 QPM and 2,000 QPD per site, plus 15,000 QPM and 10,000,000 QPD per project.",
+      "All other resources publish 20 QPS and 200 QPM per user plus 100,000,000 QPD per project; current usage remains deployment state."
+    ],
+    "intents": [
+      {
+        "intent_id": "searchconsole.resolve_property",
+        "intent": "Find one Search Console property",
+        "minimum_calls": "1 sites.list call",
+        "approval": "permission_only_read",
+        "stop_condition": "Multiple URL-prefix or domain properties match",
+        "next_action": "Return exact siteUrl values and permission levels for caller selection."
+      },
+      {
+        "intent_id": "searchconsole.performance_report",
+        "intent": "Query bounded search performance rows",
+        "minimum_calls": "1 searchAnalytics.query page",
+        "approval": "permission_only_read",
+        "stop_condition": "Requested row/page budget, 50,000-row daily exposure, empty page, or provider quota",
+        "next_action": "Continue with startRow, split by day/search type, or remove page/query dimensions for more complete aggregates."
+      },
+      {
+        "intent_id": "searchconsole.inspect_url",
+        "intent": "Inspect one URL's indexed state",
+        "minimum_calls": "1 URL Inspection request",
+        "approval": "permission_only_read",
+        "stop_condition": "URL is outside the chosen property or site permission is insufficient",
+        "next_action": "Return inspection verdict and inspection time; do not generalize it to other URLs."
+      },
+      {
+        "intent_id": "searchconsole.manage_sitemap",
+        "intent": "Submit or delete one exact sitemap",
+        "minimum_calls": "Optional 1 exact sitemap get/list plus 1 write",
+        "approval": "required_for_delete_or_multi_property_change; concrete submit may use explicit task authorization",
+        "stop_condition": "Property or sitemap URL is ambiguous",
+        "next_action": "Re-read the exact sitemap after outcome_unknown before retry."
+      }
+    ],
+    "sources": [
+      "https://developers.google.com/webmaster-tools/limits",
+      "https://developers.google.com/webmaster-tools/v1/sites",
+      "https://developers.google.com/webmaster-tools/v1/searchanalytics/query",
+      "https://developers.google.com/webmaster-tools/v1/how-tos/all-your-data",
+      "https://developers.google.com/webmaster-tools/v1/urlInspection.index/inspect",
+      "https://developers.google.com/webmaster-tools/v1/sitemaps"
+    ]
+  },
+  {
+    "service": "chat",
+    "reviewed_at": "2026-09-19",
+    "prerequisites": [
+      "User OAuth with the exact chat.spaces, chat.messages, chat.memberships, or read-state scope for the operation.",
+      "The authenticated user must be a member of or otherwise authorized for the exact space; administrator search and app-auth methods have separate prerequisites.",
+      "This connector uses user authentication. App authentication, app-only scopes, administrator approval for app scopes, and force/silent notification modes are not implied."
+    ],
+    "read_strategy": [
+      "Use spaces.get or findDirectMessage when the exact context is known; do not list every space before each action.",
+      "List messages in one exact space with a createTime interval or one thread.name filter, explicit order, and one bounded page; default is 25 and maximum is 1,000.",
+      "Use exact messages.get or memberships.get once the resource name is known.",
+      "User-auth message creation supports text only; do not generate cards, widgets, or app-auth notification controls."
+    ],
+    "write_strategy": [
+      "Bounded independent Chat calls; do not claim provider atomicity across messages, spaces, memberships, or reactions.",
+      "Set a stable UUID requestId for messages.create; identical retries with the same requestId return the existing message.",
+      "Patch one exact resource with an allowlisted updateMask and return the provider resource name and update time.",
+      "Return per-resource results and preserve a successful message name before any later workflow step.",
+      "Preserve spaces/{space}, messages/{message}, threads/{thread}, and memberships/{membership} names; display names are not identifiers.",
+      "Before editing or deleting a message or changing membership, get the exact current resource and verify sender/role constraints.",
+      "Use createTime filters for incremental history reads; page tokens are continuations for the same query, not durable sync cursors.",
+      "After an unknown message-create outcome, retry only with the same requestId; for other writes, reconcile the exact resource before replay."
+    ],
+    "quota_caveats": [
+      "Chat applies separate per-project, per-space, and per-user per-minute quota classes; one request can be constrained by more than one class.",
+      "The published per-project message-write quota is 3,000/minute, but reads, searches, memberships, spaces, attachments, reactions, and other families have separate classes.",
+      "Each call and each page is an external request; there is no quota discount merely because several independent actions form one task.",
+      "Actual configured quotas can differ and are visible in Cloud Quotas; pace per space and honor 429 with bounded backoff."
+    ],
+    "intents": [
+      {
+        "intent_id": "chat.read_conversation",
+        "intent": "Read recent messages from one space or thread",
+        "minimum_calls": "1 spaces.messages.list page",
+        "approval": "permission_only_read",
+        "stop_condition": "Time window, page, item, or byte budget reached",
+        "next_action": "Continue with nextPageToken using the identical filter, or narrow createTime/thread."
+      },
+      {
+        "intent_id": "chat.send_message",
+        "intent": "Send one text message or thread reply as the user",
+        "minimum_calls": "Optional 1 exact space/thread read plus 1 messages.create",
+        "approval": "always_human_approval_for_outbound_communication",
+        "stop_condition": "Missing exact space, final text, reply policy, or requestId",
+        "next_action": "On unknown outcome, retry the identical body only with the same requestId."
+      },
+      {
+        "intent_id": "chat.edit_or_delete_message",
+        "intent": "Edit or delete one message",
+        "minimum_calls": "1 exact get plus 1 patch or delete",
+        "approval": "required_for_delete_or_material_edit",
+        "stop_condition": "Message sender/authority mismatch or changed current content",
+        "next_action": "Reconcile exact message name after unknown outcome."
+      },
+      {
+        "intent_id": "chat.change_membership",
+        "intent": "Add, remove, or change one or more bounded members",
+        "minimum_calls": "1 current membership page or exact get plus one call per materialized change",
+        "approval": "always_for_removal_role_change_external_member_or_bulk",
+        "stop_condition": "Unresolved principal, role, space, or partial failure",
+        "next_action": "Return per-member status; do not roll forward remaining changes after a policy-significant failure."
+      }
+    ],
+    "sources": [
+      "https://developers.google.com/workspace/chat/authenticate-authorize",
+      "https://developers.google.com/workspace/chat/limits",
+      "https://developers.google.com/workspace/chat/api/reference/rest/v1/spaces/list",
+      "https://developers.google.com/workspace/chat/api/reference/rest/v1/spaces.messages/list",
+      "https://developers.google.com/workspace/chat/api/reference/rest/v1/spaces.messages/create",
+      "https://developers.google.com/workspace/chat/api/reference/rest/v1/spaces.messages/patch",
+      "https://developers.google.com/workspace/chat/api/reference/rest/v1/spaces.members"
+    ]
+  },
+  {
+    "service": "people",
+    "reviewed_at": "2026-09-19",
+    "prerequisites": [
+      "User OAuth with contacts.readonly or contacts for personal contacts, contacts.other.readonly for Other contacts, directory.readonly for Workspace directory, and profile for people/me.",
+      "Workspace directory endpoints require an eligible Workspace domain account; consumer accounts have no domain directory.",
+      "Only CONTACT-source person data is mutable through contact methods; profile, directory, and Other-contact data use distinct read or copy semantics."
+    ],
+    "read_strategy": [
+      "Use people.get or people.getBatchGet for known resource names; batchGet accepts up to 200 resource names and requires personFields.",
+      "Use people.connections.list with a minimal personFields mask and bounded page; request a sync token on a full sync only when ongoing synchronization is the task.",
+      "For searchContacts, send the documented empty-query warmup request and then one prefix search with required readMask; search pageSize is capped at 30.",
+      "Keep personal contacts, Other contacts, profile, and directory results typed by source; do not merge same-looking people into write authority."
+    ],
+    "write_strategy": [
+      "Use batchCreateContacts, batchUpdateContacts, or batchDeleteContacts for materialized sets; create and update batches accept up to 200 contacts.",
+      "Mutate requests for the same user must run sequentially to avoid documented latency and failures.",
+      "A batch is one HTTP request but consumes provider quota classes differently; a full 200-contact create/update batch consumes documented critical-read, critical-write, and 200 daily-contact-write units.",
+      "Include person.metadata.sources and the current contact-source etag in updateContact; an etag mismatch is failedPrecondition and requires re-read plus merge.",
+      "Sync tokens expire after seven days; expired tokens require a new bounded full sync, and all parameters must match the original sync request.",
+      "Writes can take several minutes to appear in sync results; incremental sync is explicitly unsuitable for read-after-write verification.",
+      "Use the Person returned by a mutation, including its new etag, for any sequential follow-up."
+    ],
+    "quota_caveats": [
+      "People API quota accounting has separate read, critical-read, critical-write, ordinary-write, and daily-contact-write classes; HTTP request count alone is insufficient.",
+      "The first page of a full contacts sync has an additional fixed quota that cannot be increased.",
+      "Official contact guidance documents individual create/update as one critical read, one critical write, and one daily contact write; a maximum-size batch create/update as 6 critical reads, 6 critical writes, and 200 daily contact writes.",
+      "Current numeric ceilings are project state in Cloud Console; return the provider error class and do not invent a remaining allowance."
+    ],
+    "intents": [
+      {
+        "intent_id": "contacts.find_person",
+        "intent": "Find one personal contact or directory person",
+        "minimum_calls": "1 exact get/batchGet, or 2 calls for a fresh personal-contact search including warmup",
+        "approval": "permission_only_read",
+        "stop_condition": "Multiple source-distinct people match",
+        "next_action": "Return resource names, source kinds, and selected fields for caller choice."
+      },
+      {
+        "intent_id": "contacts.sync_changes",
+        "intent": "Read bounded personal-contact or directory changes",
+        "minimum_calls": "1 list page with existing syncToken, or bounded full-sync pages to obtain a new token",
+        "approval": "permission_only_read",
+        "stop_condition": "Page/task budget reached or token expired",
+        "next_action": "Return nextPageToken or nextSyncToken; on expiry start a new bounded full sync with the same field/source plan."
+      },
+      {
+        "intent_id": "contacts.upsert_contacts",
+        "intent": "Create or update a bounded set of contacts",
+        "minimum_calls": "1 exact current read per existing contact or one batchGet, then one provider batch per bounded set",
+        "approval": "required_for_bulk_or_membership_changes; concrete small create/update may follow explicit task authorization",
+        "stop_condition": "Missing source etag, duplicate ambiguity, more than 200 entries, or per-entry failure",
+        "next_action": "Use returned people and etags; never verify through immediate sync."
+      },
+      {
+        "intent_id": "contacts.delete_contacts",
+        "intent": "Delete exact contacts or remove group memberships",
+        "minimum_calls": "1 batchGet/current-membership read plus 1 delete batch or bounded writes",
+        "approval": "always_human_approval",
+        "stop_condition": "Unmaterialized query, non-CONTACT source, or ambiguous membership",
+        "next_action": "Return per-resource status and reconcile exact resource names after unknown outcome."
+      }
+    ],
+    "sources": [
+      "https://developers.google.com/people/v1/contacts",
+      "https://developers.google.com/people/api/rest/v1/people.connections/list",
+      "https://developers.google.com/people/api/rest/v1/people/getBatchGet",
+      "https://developers.google.com/people/api/rest/v1/people/searchContacts",
+      "https://developers.google.com/people/api/rest/v1/people/updateContact",
+      "https://developers.google.com/people/api/rest/v1/people/batchCreateContacts",
+      "https://developers.google.com/people/api/rest/v1/people/listDirectoryPeople"
+    ]
+  },
+  {
+    "service": "tasks",
+    "reviewed_at": "2026-09-19",
+    "prerequisites": [
+      "User OAuth with tasks.readonly for reads or tasks for task and task-list mutations.",
+      "The authenticated user owns or can access the selected task list and any assigned task according to its source restrictions.",
+      "Tasks assigned from Docs or Chat have restricted creation, parenting, notes, and deletion semantics; source authority must be preserved."
+    ],
+    "read_strategy": [
+      "List task lists once only when tasklist_id is unknown; thereafter use exact task-list and task IDs.",
+      "Use tasks.list with updatedMin, showCompleted, showDeleted, showHidden, and due bounds chosen for the task; default page size is 20 and maximum is 100.",
+      "Use tasks.get for one known task rather than scanning a list.",
+      "Treat due as a date: Google discards the time portion and does not expose a scheduled time through the Tasks API."
+    ],
+    "write_strategy": [
+      "Use bounded independent calls or Google HTTP batch only when the client transport supports it; HTTP batch is not atomic.",
+      "Each inner request consumes quota even when transported in one multipart HTTP call.",
+      "Prefer tasks.patch or tasklists.patch for explicit changed fields; move uses exact parent/previous IDs and is a separate mutation.",
+      "The provider Task resource has no recurrence rule; any CLI repeat expansion creates multiple real tasks and must materialize/count each task before approval.",
+      "Preserve task ID, task-list ID, etag, updated time, parent, position, status, deleted, hidden, and assignmentInfo.",
+      "Re-read exact current state before delete, move, completion reversal, task-list delete, or clearing completed tasks.",
+      "List page tokens continue one query but are not durable sync tokens; use updatedMin for bounded change reads and include deleted items when reconciling removals.",
+      "After unknown insert outcome, reconcile a stable application marker in title/notes and the bounded time window before creating a duplicate."
+    ],
+    "quota_caveats": [
+      "The Tasks API publishes a 50,000 queries/day courtesy limit; actual project quotas can differ and are visible in Cloud Quotas.",
+      "Every list page, retry, task write, and inner HTTP batch request is a real query against that limit.",
+      "Task storage limits are separate from API quota: up to 20,000 non-hidden tasks per list and 100,000 tasks total per user are documented.",
+      "Do not translate the courtesy limit into a workflow budget or assume unused daily capacity."
+    ],
+    "intents": [
+      {
+        "intent_id": "tasks.review_open",
+        "intent": "Review open tasks in one task list",
+        "minimum_calls": "Optional 1 tasklists.list page plus 1 tasks.list page",
+        "approval": "permission_only_read",
+        "stop_condition": "Page/item budget reached or multiple task lists match",
+        "next_action": "Continue with nextPageToken or choose one task-list ID."
+      },
+      {
+        "intent_id": "tasks.create_or_update",
+        "intent": "Create or edit one task",
+        "minimum_calls": "Optional 1 exact get for update plus 1 insert or patch",
+        "approval": "concrete_user_request_suffices_for_one_low_impact_task",
+        "stop_condition": "Due-time intent cannot be represented, assigned-task restriction, or changed current state",
+        "next_action": "Return exact task ID and stored date-only due value; reconcile marker after unknown insert."
+      },
+      {
+        "intent_id": "tasks.complete_or_move",
+        "intent": "Complete, reopen, or reposition bounded tasks",
+        "minimum_calls": "1 current-state list/get plus one write per exact task",
+        "approval": "required_for_bulk_or_cross_parent_move",
+        "stop_condition": "Parent/previous IDs unresolved or task is source-restricted",
+        "next_action": "Return individual results and stop on a structural failure."
+      },
+      {
+        "intent_id": "tasks.clear_or_delete",
+        "intent": "Clear completed tasks or delete tasks/task lists",
+        "minimum_calls": "1 bounded current-state preview plus 1 clear/delete call",
+        "approval": "always_human_approval",
+        "stop_condition": "Affected set is not materialized or assigned-task side effect is unresolved",
+        "next_action": "Re-read with showDeleted/showHidden after unknown outcome; do not replay automatically."
+      }
+    ],
+    "sources": [
+      "https://developers.google.com/workspace/tasks/limits",
+      "https://developers.google.com/workspace/tasks/reference/rest/v1/tasks",
+      "https://developers.google.com/workspace/tasks/reference/rest/v1/tasks/list",
+      "https://developers.google.com/workspace/tasks/reference/rest/v1/tasks/insert",
+      "https://developers.google.com/workspace/tasks/reference/rest/v1/tasks/patch",
+      "https://developers.google.com/workspace/tasks/reference/rest/v1/tasks/clear"
+    ]
+  },
+  {
+    "service": "groups",
+    "reviewed_at": "2026-09-19",
+    "prerequisites": [
+      "Google Workspace or Cloud Identity organization with Groups for Business and applicable sharing settings enabled.",
+      "Cloud Identity Groups explicitly supports end-user OAuth. Require cloud-identity.groups.readonly for reads or cloud-identity.groups for writes, as declared by the selected catalog method.",
+      "Use the selected account_id's user identity and its Workspace or Cloud Identity permissions. Do not substitute a service account or delegated administrator behind that account_id.",
+      "The principal must have group-level owner/admin authority or the Workspace role required for the exact operation."
+    ],
+    "read_strategy": [
+      "Use groups.lookup with exact groupKey.id to resolve a group resource name; do not search when the email/key is known.",
+      "Use one groups.search page with a customer-parent query only for discovery, then preserve groups/{group}.",
+      "Use memberships.lookup/get for an exact member or one memberships.list page for a selected group; transitive searches are explicit, separate reads.",
+      "If the connected user lacks the selected method scope, return the exact reconnect scope; this is a missing-scope result, not a service-account requirement."
+    ],
+    "write_strategy": [
+      "Group and membership mutations return long-running Operation resources; retain and poll the operation name rather than replaying the mutation.",
+      "Each operations.get is another external request and consumes the task budget; stop with the operation name when the poll budget expires.",
+      "Materialize exact group/member IDs and return per-operation completion or error.",
+      "Preserve immutable group and membership resource names after lookup; email group keys can change.",
+      "Treat an unfinished Operation as pending rather than failure; only its terminal response or error establishes completion.",
+      "Before role removal, membership deletion, or group deletion, re-read the exact resource and current roles.",
+      "Transitive membership results can reflect graph changes after direct writes; reconcile the direct membership/operation first and do not retry based on an immediate transitive read."
+    ],
+    "quota_caveats": [
+      "Each search/list/get, mutation, and operations.get poll is an external HTTP request; a long-running mutation therefore uses more than the initiating call.",
+      "No fixed Groups API numeric quota was established from the reviewed official reference pages; actual project quotas and availability must come from the provider project rather than an invented workflow limit.",
+      "Search and transitive graph operations can be more expensive operationally than exact lookup/get even when request counts match.",
+      "Runtime task budgets remain product safeguards and must be reported separately from Google quota."
+    ],
+    "intents": [
+      {
+        "intent_id": "groups.resolve_group",
+        "intent": "Resolve and inspect one group",
+        "minimum_calls": "1 groups.lookup plus optional 1 groups.get",
+        "approval": "permission_only_read",
+        "stop_condition": "Missing catalog method scope or ambiguous group key",
+        "next_action": "Return the exact reconnect scope or the immutable groups/{id} resource name."
+      },
+      {
+        "intent_id": "groups.list_members",
+        "intent": "List direct or transitive members of one group",
+        "minimum_calls": "1 exact group resolution plus 1 bounded membership page",
+        "approval": "permission_only_read",
+        "stop_condition": "Page/task budget or direct-versus-transitive intent unresolved",
+        "next_action": "Return nextPageToken and membership resource names; continue only on explicit request."
+      },
+      {
+        "intent_id": "groups.change_membership",
+        "intent": "Add, remove, or change roles for bounded members",
+        "minimum_calls": "1 current membership read plus 1 mutation and bounded operation polls per member",
+        "approval": "always_for_removal_role_change_external_member_or_bulk",
+        "stop_condition": "Missing scope, unresolved member, pending/failed operation, or partial failure",
+        "next_action": "Return operation names and per-member state; poll pending operations before any replay."
+      },
+      {
+        "intent_id": "groups.delete_group",
+        "intent": "Delete one exact group",
+        "minimum_calls": "1 exact group get plus 1 delete and bounded operation polls",
+        "approval": "always_human_approval",
+        "stop_condition": "Missing scope, ownership/retention ambiguity, or changed target",
+        "next_action": "Poll the retained operation name; never issue a second delete while status is unknown."
+      }
+    ],
+    "sources": [
+      "https://cloud.google.com/identity/docs/how-to/setup",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/v1/groups/lookup",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/v1/groups/search",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/v1/groups.memberships/list",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/v1/groups.memberships/create",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/Shared.Types/Operation"
+    ]
+  },
+  {
+    "service": "keep",
+    "reviewed_at": "2026-09-19",
+    "prerequisites": [
+      "Google Keep is a Workspace enterprise API whose official authorization model requires administrator-approved domain-wide delegation using a service account or OAuth client ID.",
+      "An ordinary native MCP user-OAuth account connection does not establish that delegation, so Keep operations must return unsupported_identity rather than treating account_id as an impersonated Workspace user.",
+      "Do not promise or silently provision a service account or delegated flow. If a separately authorized enterprise credential mode is implemented later, keep.readonly covers reads and keep covers writes.",
+      "Note deletion requires OWNER; permission writes require authority on the exact note."
+    ],
+    "read_strategy": [
+      "Return unsupported before making a Google call for an ordinary native user-OAuth account.",
+      "With an approved delegated read provider, use notes.get for an exact notes/{note}; use one notes.list page with createTime, updateTime, trashTime, or trashed filters for discovery.",
+      "Keep list pagination is documented as consistent across concurrent changes or fails with ABORTED; preserve the opaque page token and identical filter.",
+      "Text search is client-side in this repository, so it must declare the maximum notes/pages fetched and cannot claim exhaustive search after truncation."
+    ],
+    "write_strategy": [
+      "No Keep call through an ordinary native user-OAuth account; return unsupported_identity before provider acquisition.",
+      "Under a future explicitly authorized enterprise credential mode, notes.permissions.batchCreate and batchDelete apply to one parent note and are provider-atomic for the request; any failed permission causes the whole request to fail.",
+      "Under that credential mode, notes.create and notes.delete are one note per call; Keep exposes no general note-update method.",
+      "Return unsupported_identity or exact created note/permission resource names; never imply account_id alone establishes delegation.",
+      "Preserve notes/{note}, attachment, and permission resource names; title text is not identity.",
+      "Use list continuation only with the same filter; on ABORTED, restart the bounded read rather than merging inconsistent pages.",
+      "Deletion removes the note immediately and cannot be undone; collaborators lose access. Re-read exact note and permission state before approval.",
+      "After an unknown permission batch outcome, get/list the exact note permissions before replay; after unknown note creation, reconcile within a bounded create-time/title/body marker window."
+    ],
+    "quota_caveats": [
+      "Each note page, exact get, attachment download, create/delete, or permission batch is an external request; attachment bytes require a separate response-size budget.",
+      "No fixed Keep numeric quota was established from the reviewed official API overview/reference pages; use provider project state and errors rather than inventing a limit.",
+      "A permission batch saves HTTP round trips but does not relax the product's item-count or approval threshold.",
+      "Client-side text search can consume many list calls; cap pages/items and report truncation."
+    ],
+    "intents": [
+      {
+        "intent_id": "keep.list_or_get_notes",
+        "intent": "List filtered notes or get one note",
+        "minimum_calls": "0 provider calls for an ordinary user-OAuth account; otherwise 1 exact get or 1 bounded list page under an explicitly supported enterprise credential mode",
+        "approval": "permission_only_read_when_supported",
+        "stop_condition": "unsupported_identity, page/item budget, or ABORTED consistency result",
+        "next_action": "Return the unsupported identity requirement without promising setup, or exact note names/restart guidance under a supported enterprise mode."
+      },
+      {
+        "intent_id": "keep.search_notes",
+        "intent": "Search note text within a bounded fetched set",
+        "minimum_calls": "0 provider calls for an ordinary user-OAuth account; otherwise bounded notes.list pages followed by local filtering under an explicitly supported enterprise credential mode",
+        "approval": "permission_only_read_when_supported",
+        "stop_condition": "unsupported_identity or configured page/item/byte ceiling",
+        "next_action": "Return unsupported_identity, or matches with truncated=true and an opaque continuation under a supported enterprise mode; never call a partial result exhaustive."
+      },
+      {
+        "intent_id": "keep.create_or_delete_note",
+        "intent": "Create or permanently delete one note",
+        "minimum_calls": "Create: 1 call; delete: 1 exact get plus 1 delete, only under a future write-capable delegated provider",
+        "approval": "always_for_delete; concrete create requires write-capable credential and preview",
+        "stop_condition": "Unsupported user-OAuth identity, missing keep write scope, missing OWNER for delete, or ambiguous content",
+        "next_action": "Report unsupported_identity or missing_scope precisely; after unknown delete under a supported mode, get the exact note before retry."
+      },
+      {
+        "intent_id": "keep.change_permissions",
+        "intent": "Share or unshare one note with bounded principals",
+        "minimum_calls": "1 current permission read plus 1 provider permission batch under a future write-capable provider",
+        "approval": "always_human_approval",
+        "stop_condition": "Unsupported user-OAuth identity, missing keep write scope, unresolved email/group, or parent mismatch",
+        "next_action": "Return unsupported_identity or missing_scope precisely; reconcile exact permissions after unknown outcome under a supported mode."
+      }
+    ],
+    "sources": [
+      "https://developers.google.com/workspace/keep/api/guides",
+      "https://developers.google.com/workspace/keep/api/reference/rest/v1/notes/list",
+      "https://developers.google.com/workspace/keep/api/reference/rest/v1/notes/get",
+      "https://developers.google.com/workspace/keep/api/reference/rest/v1/notes/create",
+      "https://developers.google.com/workspace/keep/api/reference/rest/v1/notes/delete",
+      "https://developers.google.com/workspace/keep/api/reference/rest/v1/notes.permissions/batchCreate",
+      "https://developers.google.com/workspace/keep/api/reference/rest/v1/notes.permissions/batchDelete"
+    ]
+  },
+  {
+    "service": "classroom",
+    "reviewed_at": "2026-09-19",
+    "prerequisites": [
+      "User OAuth with the narrow course, roster, coursework, submission, announcement, topic, guardian, and profile scopes needed by the operation.",
+      "The authenticated user must be an eligible teacher, student, guardian, or domain administrator and have the course/resource role required by the method.",
+      "Coursework and student-submission mutations must use the same OAuth client project that created the coursework, unless the documented Grade Sync add-on exception applies.",
+      "Creating a course for another owner requires domain administrator authority; consumer accounts cannot create ACTIVE courses."
+    ],
+    "read_strategy": [
+      "Use courses.get when the ID or alias is known; otherwise use one courses.list page filtered by teacherId or studentId and courseStates.",
+      "Preserve the Classroom-assigned course ID returned by get/list even when an alias was used.",
+      "List one selected course's students, teachers, coursework, submissions, announcements, or topics only when required; do not fan out across every course.",
+      "For grade work, get the exact submission and coursework creator context before patching; list pages are not authority to mutate unrelated submissions."
+    ],
+    "write_strategy": [
+      "Bounded independent Classroom calls; no provider-atomic course-wide batch is assumed.",
+      "Patch exact resources with explicit updateMask; publishing, grading, returning, reclaiming, and turn-in are distinct policy actions.",
+      "Validate each Drive attachment is visible to the intended course users before creating coursework.",
+      "Return per-resource IDs/status and stop on project-ownership, role, or attachment failures.",
+      "Preserve course, coursework, submission, and invitation IDs plus courseState and submission state; names/titles are not identity.",
+      "Before delete, archive, roster removal, grade patch, return, reclaim, or turn-in, re-read the exact current resource/state.",
+      "Classroom resources do not expose one universal revision token; an explicit updateMask narrows writes but does not replace a current-state check.",
+      "After an unknown create, use exact course/project context and a bounded marker lookup before creating a duplicate; after a state transition, reconcile exact resource state."
+    ],
+    "quota_caveats": [
+      "Published default quota uses a 60-second moving average: 4,000,000 queries/day/client, 3,000 queries/minute/client, and 1,200 queries/minute/user.",
+      "Each list page, exact get, retry, and independent roster/coursework write is a real query; no task-level grouping reduces provider request count.",
+      "Permitted QPS can vary with operational factors and actual project quotas; return provider limits/errors rather than assuming defaults remain available.",
+      "Push notifications should replace polling where Classroom offers them for ongoing change detection."
+    ],
+    "intents": [
+      {
+        "intent_id": "classroom.resolve_course",
+        "intent": "Find and inspect one course",
+        "minimum_calls": "1 exact get or 1 filtered courses.list page",
+        "approval": "permission_only_read",
+        "stop_condition": "Multiple courses match or course role/state is insufficient",
+        "next_action": "Return assigned course IDs, states, and caller role for selection."
+      },
+      {
+        "intent_id": "classroom.review_course",
+        "intent": "Review a bounded course roster and work state",
+        "minimum_calls": "1 course get plus only the named roster/coursework/submission pages",
+        "approval": "permission_only_read",
+        "stop_condition": "Page/item budget reached or course context changes",
+        "next_action": "Continue one named collection with its page token; do not enumerate other courses."
+      },
+      {
+        "intent_id": "classroom.publish_work",
+        "intent": "Create or publish coursework, an announcement, or material",
+        "minimum_calls": "1 course/role check plus optional attachment checks and 1 create/patch",
+        "approval": "always_human_approval_for_student_visible_publication_or_notifications",
+        "stop_condition": "Course not ACTIVE, creator project mismatch, attachment not visible, or assignee ambiguity",
+        "next_action": "Return draft/published resource ID; reconcile exact course collection after unknown create."
+      },
+      {
+        "intent_id": "classroom_grade_or_roster",
+        "intent": "Grade/return a submission or change bounded roster members",
+        "minimum_calls": "1 exact current submission/membership read plus one typed write per target",
+        "approval": "always_human_approval",
+        "stop_condition": "Project ownership, role, current state, or principal ambiguity; stop on partial failure",
+        "next_action": "Return individual results and exact unresolved IDs; do not infer success from a later list page."
+      }
+    ],
+    "sources": [
+      "https://developers.google.com/workspace/classroom/guides/auth",
+      "https://developers.google.com/workspace/classroom/reference/limits",
+      "https://developers.google.com/workspace/classroom/guides/manage-courses",
+      "https://developers.google.com/workspace/classroom/reference/rest/v1/courses/list",
+      "https://developers.google.com/workspace/classroom/reference/rest/v1/courses.courseWork/create",
+      "https://developers.google.com/workspace/classroom/reference/rest/v1/courses.courseWork.studentSubmissions/patch",
+      "https://developers.google.com/workspace/classroom/reference/rest/v1/courses.students"
+    ]
+  },
+  {
+    "service": "bigquery",
+    "reviewed_at": "2026-09-19",
+    "prerequisites": [
+      "User OAuth with bigquery.readonly for metadata/data reads or bigquery for job and mutation operations.",
+      "IAM permissions must cover the billing/job project and every referenced dataset, table, routine, connection, or destination; OAuth scope alone is insufficient.",
+      "An exact processing location must match referenced datasets and destination data.",
+      "The native surface is BigQuery data work only; broader Google Cloud infrastructure administration is out of scope."
+    ],
+    "read_strategy": [
+      "Use datasets.get/tables.get for exact IDs; list only one project or dataset page when discovery is required.",
+      "Use an explicit fields projection for metadata and one bounded tabledata.list page for table rows; do not infer schema from sampled values.",
+      "For ad hoc queries, perform a dry run when cost is material, then execute GoogleSQL with typed parameters, maximumBytesBilled, maxResults, and exact location.",
+      "If jobs.query returns jobComplete=false, retain the job reference and poll jobs.getQueryResults; a non-empty pageToken means more result pages."
+    ],
+    "write_strategy": [
+      "Use one jobs.insert/query job with caller-stable jobId or requestId, explicit location, configuration, and destination/write disposition; poll the same job.",
+      "jobs.query requestId provides duplicate protection for matching mutating queries for 15 minutes; dry runs are never deduplicated. A caller-supplied jobs.insert jobId supports reconciliation.",
+      "Return job project, jobId, location, state, bytes processed/billed, errors, destination, page token, and whether results are complete.",
+      "Preserve full project.dataset.table identity, location, schema, etag/modified time when returned, and job reference.",
+      "A jobs.query HTTP response can arrive before query completion; jobComplete=false is pending, not failure.",
+      "Use the same jobId/requestId and query-affecting parameters for reconciliation; never resubmit mutating SQL under a new identity after an unknown outcome.",
+      "Before dataset/table metadata, IAM, overwrite, truncate, delete, or mutating DML, read exact current state and bind approval to destination and maximumBytesBilled."
+    ],
+    "quota_caveats": [
+      "BigQuery separates API request quotas, concurrent request/job limits, bytes processed, slot/capacity use, storage/streaming limits, and billable cost; HTTP calls are not the billing unit.",
+      "Published on-demand query usage defaults to 200 TiB/day/project and is adjustable; there is no default per-user TiB limit, though custom quotas can be set.",
+      "Published API limits include 300 concurrent requests/user; job polling and each result page are additional HTTP requests even after query compute is complete.",
+      "Dry-run totalBytesProcessed, actual totalBytesProcessed/bytes billed, cache use, and project quota state must be returned separately from request count."
+    ],
+    "intents": [
+      {
+        "intent_id": "bigquery.inspect_schema",
+        "intent": "Inspect one dataset/table schema and bounded rows",
+        "minimum_calls": "1 exact table get plus optional 1 tabledata.list page",
+        "approval": "permission_only_read",
+        "stop_condition": "Row/byte/page budget or ambiguous location/table",
+        "next_action": "Return exact table identity, schema, totalRows, and pageToken."
+      },
+      {
+        "intent_id": "bigquery.run_read_query",
+        "intent": "Run a bounded read-only GoogleSQL query",
+        "minimum_calls": "Optional 1 dry run plus 1 query start and bounded getQueryResults polls/pages",
+        "approval": "permission_only_read_after_cost_guard",
+        "stop_condition": "Dry-run bytes exceed maximum, query pending beyond task budget, or result byte/page limit",
+        "next_action": "Return estimate or pending job reference/page token for explicit continuation."
+      },
+      {
+        "intent_id": "bigquery.run_mutation",
+        "intent": "Run DML/DDL or write query results to a table",
+        "minimum_calls": "1 dry run/current destination read plus 1 stable-ID job and bounded polls",
+        "approval": "always_human_approval",
+        "stop_condition": "Missing maximumBytesBilled, destination/write disposition, location, or stable job/request ID",
+        "next_action": "Poll/reconcile the same job after unknown outcome; never create a replacement job automatically."
+      },
+      {
+        "intent_id": "bigquery.review_jobs",
+        "intent": "Review bounded recent jobs or one exact job",
+        "minimum_calls": "1 jobs.get by exact ID or 1 filtered jobs.list page",
+        "approval": "permission_only_read",
+        "stop_condition": "Project/location ambiguity or page/task budget",
+        "next_action": "Inspect one selected job reference; cancellation requires separate approval."
+      }
+    ],
+    "sources": [
+      "https://cloud.google.com/bigquery/docs/running-queries",
+      "https://cloud.google.com/bigquery/docs/parameterized-queries",
+      "https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query",
+      "https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/getQueryResults",
+      "https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/insert",
+      "https://cloud.google.com/bigquery/docs/reference/rest/v2/tabledata/list",
+      "https://docs.cloud.google.com/bigquery/quotas"
+    ]
+  },
+  {
+    "service": "youtube",
+    "reviewed_at": "2026-09-19",
+    "prerequisites": [
+      "User OAuth with the exact catalog method scope: youtube.readonly for ordinary reads and a method-accepted manage or upload scope for mutations.",
+      "The authenticated user must control the channel or resource required by mine/private filters and writes; OAuth scope alone does not grant channel authority.",
+      "Content-owner delegation parameters are for eligible YouTube partners and are not implied by an ordinary user OAuth account."
+    ],
+    "read_strategy": [
+      "Use channels.list mine=true once to resolve the authenticated channel and its uploads playlist, then preserve those IDs.",
+      "Use videos.list, channels.list, or playlists.list with comma-separated exact IDs and minimal part/fields rather than search when IDs are known.",
+      "For a channel's uploads, use playlistItems.list on the uploads playlist; reserve search.list for genuine discovery.",
+      "List/search pages accept at most 50 results in the relevant endpoints; follow nextPageToken rather than approximate totalResults."
+    ],
+    "write_strategy": [
+      "Expose each write only when the connected account includes one of that catalog method's accepted OAuth scopes; otherwise return the exact reconnect scope.",
+      "Use one typed resource insert/update/delete with explicit part, body, resumable upload where applicable, and ETag precondition for update/delete.",
+      "Each endpoint call and each result page consumes its documented method or bucket quota; transport batching does not erase inner quota.",
+      "Preserve resource IDs and ETags; use If-None-Match for cache validation and If-Match for future updates/deletes to prevent overwrites.",
+      "Search ordering and page contents can shift; page tokens are continuations, not durable sync cursors, and totalResults is approximate.",
+      "A non-relevance search order combined with date filters can return a smaller or incomplete set; surface that caveat.",
+      "After future unknown writes, reconcile exact resource ID and ETag before replay; resumable upload session state must be retained."
+    ],
+    "quota_caveats": [
+      "Current official quota guidance separates default daily buckets: 100 search.list calls, 100 videos.insert calls, and 10,000 units/day combined for other endpoints; it no longer describes search.list as 100 general units.",
+      "Every request, including invalid requests, costs at least one quota point or bucket call; each additional result page incurs the method's quota again.",
+      "Method costs differ, and actual project quotas and audit eligibility are provider state; report both external requests and provider method/bucket cost.",
+      "Daily quota resets at midnight Pacific Time according to the current official quota page."
+    ],
+    "intents": [
+      {
+        "intent_id": "youtube.resolve_channel",
+        "intent": "Resolve the authenticated or named channel",
+        "minimum_calls": "1 channels.list call",
+        "approval": "permission_only_read",
+        "stop_condition": "Multiple channel candidates or content-owner authority requested",
+        "next_action": "Return exact channel ID and uploads playlist ID."
+      },
+      {
+        "intent_id": "youtube.list_channel_videos",
+        "intent": "List recent uploads for one channel",
+        "minimum_calls": "1 channel resolution if needed plus 1 playlistItems.list page; optional 1 videos.list for exact IDs",
+        "approval": "permission_only_read",
+        "stop_condition": "Page/item or quota-bucket budget reached",
+        "next_action": "Continue with nextPageToken or hydrate the returned bounded video ID set."
+      },
+      {
+        "intent_id": "youtube.search_content",
+        "intent": "Discover videos, channels, or playlists",
+        "minimum_calls": "1 search.list page plus optional exact-ID list hydration",
+        "approval": "permission_only_read",
+        "stop_condition": "Search-call budget, page limit, or incomplete ordering caveat",
+        "next_action": "Narrow query/channel/time/type before another search page."
+      },
+      {
+        "intent_id": "youtube.mutate_content",
+        "intent": "Upload, edit, comment, moderate, or delete YouTube content",
+        "minimum_calls": "1 exact resource/ETag read when updating or deleting, then 1 typed mutation; uploads use a retained resumable session",
+        "approval": "human approval for outbound publication, moderation, upload, or delete",
+        "stop_condition": "Missing accepted method scope, channel authority, exact resource ID/ETag, or upload plan",
+        "next_action": "Return the exact reconnect scope or reconcile the exact resource/session after an unknown outcome; do not promise service-account or partner delegation."
+      }
+    ],
+    "sources": [
+      "https://developers.google.com/youtube/v3/guides/authentication",
+      "https://developers.google.com/youtube/v3/determine_quota_cost",
+      "https://developers.google.com/youtube/v3/docs/channels/list",
+      "https://developers.google.com/youtube/v3/docs/videos/list",
+      "https://developers.google.com/youtube/v3/docs/search/list",
+      "https://developers.google.com/youtube/v3/docs/playlistItems/list",
+      "https://developers.google.com/youtube/v3/getting-started#etags"
+    ]
+  },
+  {
+    "service": "tagmanager",
+    "reviewed_at": "2026-09-19",
+    "prerequisites": [
+      "User OAuth with the exact catalog method scope: tagmanager.readonly for inventory, tagmanager.manage.users for user permissions, and the applicable edit, version, account, delete, or publish scope for other mutations.",
+      "The authenticated user must have access to the exact GTM account/container/workspace and sufficient account/container permissions.",
+      "Container edits and publication require their accepted catalog scopes, including tagmanager.edit.containers or tagmanager.publish where documented; reconnect for the exact missing scope before execution.",
+      "Publishing and permission changes are separate high-impact capabilities, not implied by read access."
+    ],
+    "read_strategy": [
+      "List accounts once only when account path is unknown, then list containers for that exact account and preserve API relative paths.",
+      "Read tags, triggers, and variables from one exact workspace; use exact get once an entity path is known.",
+      "Read versions only for the selected container and request status only for the selected workspace; do not crawl every container/workspace.",
+      "Before any future container mutation, call workspaces.getStatus to materialize workspace changes and merge conflicts."
+    ],
+    "write_strategy": [
+      "Use one exact accounts.user_permissions create/update/delete under tagmanager.manage.users and return the full UserPermission.",
+      "Expose each container, workspace, entity, version, account, or publish write only when the connected account includes an accepted scope from that method's catalog entry.",
+      "Use one isolated workspace, sync it, resolve every conflict, apply fingerprint-guarded entity changes, create a version, then publish that exact version as a separately approved call.",
+      "Preserve full GTM API relative paths and storage fingerprints; IDs or visible names alone are insufficient across accounts/containers/workspaces.",
+      "Supply the current fingerprint on supported entity update/delete/publish calls; a mismatch must stop and trigger a new read/preview.",
+      "workspaces.sync can succeed while returning merge conflicts; a version cannot be created until all conflicts are resolved.",
+      "After unknown user-permission outcome, get/list the exact user permission before replay; after future publish, get the exact version/container state."
+    ],
+    "quota_caveats": [
+      "Published limits are 10,000 requests/project/day and 0.25 QPS/project, enforced as 25 requests per rolling 100 seconds.",
+      "The 0.25 QPS provider policy applies independently of a higher per-user limit configured in Cloud Console.",
+      "Every list page, status check, sync, conflict resolution, permission call, version call, and publish call is a separate request; there is no quota-unit discount for a workflow.",
+      "Actual approved increases and remaining quota are provider state; pace calls serially and report exact request count."
+    ],
+    "intents": [
+      {
+        "intent_id": "tagmanager.inspect_container",
+        "intent": "Inspect one container, workspace, and selected entities",
+        "minimum_calls": "Optional 1 accounts page plus 1 containers page, then one selected workspace entity page",
+        "approval": "permission_only_read",
+        "stop_condition": "Multiple paths match or request/page budget reached",
+        "next_action": "Return full account/container/workspace/entity paths and fingerprints."
+      },
+      {
+        "intent_id": "tagmanager.review_workspace",
+        "intent": "Review changes and conflicts in one workspace",
+        "minimum_calls": "1 workspaces.getStatus",
+        "approval": "permission_only_read",
+        "stop_condition": "Merge conflicts exist or workspace path is stale",
+        "next_action": "Return changed entity paths and conflict details; sync/resolve requires edit scope and separate approval."
+      },
+      {
+        "intent_id": "tagmanager.change_user_permission",
+        "intent": "Create, update, or delete one GTM user permission",
+        "minimum_calls": "1 exact permission get/list plus 1 write",
+        "approval": "always_human_approval",
+        "stop_condition": "Email/path, accountAccess, containerAccess, or last-admin effect unresolved",
+        "next_action": "Reconcile exact user-permission path after unknown outcome."
+      },
+      {
+        "intent_id": "tagmanager.edit_and_publish",
+        "intent": "Edit workspace entities and publish a container version",
+        "minimum_calls": "1 status check, optional sync/conflict resolution, bounded entity writes, 1 version creation, and 1 publish",
+        "approval": "human approval for publication and other high-impact changes",
+        "stop_condition": "Missing edit/publish scope, any merge conflict, stale fingerprint, or compiler error",
+        "next_action": "Return the exact reconnect scope or conflict details; publish only after a fresh conflict-free preview and fingerprint check."
+      }
+    ],
+    "sources": [
+      "https://developers.google.com/tag-platform/tag-manager/api/v2/authorization",
+      "https://developers.google.com/tag-platform/tag-manager/api/v2/limits-quotas",
+      "https://developers.google.com/tag-platform/tag-manager/api/reference/rest/v2/accounts.containers.workspaces/getStatus",
+      "https://developers.google.com/tag-platform/tag-manager/api/reference/rest/v2/accounts.containers.workspaces/sync",
+      "https://developers.google.com/tag-platform/tag-manager/api/reference/rest/v2/accounts.containers.workspaces.tags/update",
+      "https://developers.google.com/tag-platform/tag-manager/api/reference/rest/v2/accounts.containers.versions/publish",
+      "https://developers.google.com/tag-platform/tag-manager/api/reference/rest/v2/accounts.user_permissions/update"
+    ]
+  },
+  {
+    "service": "gmail",
+    "reviewed_at": "2026-09-19",
+    "prerequisites": [
+      "Select the exact mailbox account_id and operation grant. A Workspace domain or alias is not an account selection.",
+      "Composition workflows require gmail.modify or full mail scope because they also verify sending settings and optional reply context; gmail.send alone does not authorize that composite.",
+      "Choose a verified sendAs identity. Include a signature explicitly; the workflow retrieves its HTML from Gmail settings."
+    ],
+    "read_strategy": [
+      "Use the exact message or thread ID when supplied; otherwise search one bounded metadata page with a task-specific Gmail query.",
+      "Fetch message bodies, thread history or attachments only when required to answer the task.",
+      "Preparation makes one sending-identity read and an optional source-message metadata read for replies; do not retrieve the entire mailbox."
+    ],
+    "write_strategy": [
+      "Prefer mail_compose_prepare followed by the explicitly authorized draft or send workflow. Supply HTML/plain formatting deliberately; Markdown is not automatically HTML.",
+      "Review normalized recipients, sending identity, rendered content and signature. An expected_content_digest is only a stale-preview guard, never proof of human approval.",
+      "Threaded replies require Gmail threadId, valid References and In-Reply-To, and matching subject; derive headers from the selected source message.",
+      "After an unknown send or draft outcome, reconcile that mailbox. A Message-ID is not a provider idempotency key and must not justify blind replay.",
+      "HTML supports a bounded inline CSS subset and matching CID image attachments. HTTPS image references are preserved without fetching; recipients may load them. Include a verified sender signature explicitly. Unsupported safe formatting may be removed with warnings; preview truncation and style-summary truncation do not mean the full message was reviewed."
+    ],
+    "quota_caveats": [
+      "Gmail uses method-specific quota units; messages.send costs 100 units, not one. Check current project/user limits at rollout.",
+      "The per-request API attempt budget includes retries; discovery and composition formatting use no Google calls.",
+      "Draft/send revalidate the sending identity and optional reply source before the write, so normally use two or three API calls before retries."
+    ],
+    "intents": [
+      {
+        "intent_id": "gmail.compose",
+        "intent": "Prepare correctly formatted mail",
+        "minimum_calls": "1 sending-identity read, plus 1 source-message read only for replies",
+        "approval": "read permission for preparation; separate authorization for draft/send",
+        "stop_condition": "Unverified identity, missing requested signature, mismatched thread or subject, or stale preview digest",
+        "next_action": "Review the concrete preview, then invoke only the requested draft or send operation."
+      },
+      {
+        "intent_id": "gmail.find_message",
+        "intent": "Find the message needed for a task",
+        "minimum_calls": "1 exact get or bounded search, with only necessary hydration",
+        "approval": "permission_only_read",
+        "stop_condition": "Ambiguous mailbox/recipient, page limit, or sufficient evidence found",
+        "next_action": "Return source IDs and truncation; continue only if the task still requires more evidence."
+      },
+      {
+        "intent_id": "gmail.change_labels",
+        "intent": "Modify labels on an explicit bounded set of message or thread IDs.",
+        "minimum_calls": "One modify or batchModify request for known IDs; search only if IDs are missing.",
+        "approval": "Requires explicit mutation grant; permanent deletion and sending are separate actions.",
+        "stop_condition": "Stop on incomplete search results, ambiguous target scope, or an unknown write outcome.",
+        "next_action": "Use exact label IDs and explicit addLabelIds/removeLabelIds; reconcile a failed write by reading only the selected message/thread metadata."
+      },
+      {
+        "intent_id": "gmail.manage_filters_or_settings",
+        "intent": "Inspect or change one named Gmail filter or setting.",
+        "minimum_calls": "One exact read or mutation when the resource ID and desired value are known; list only to resolve missing IDs.",
+        "approval": "Use the method-specific Gmail settings scope and explicit write grant; forwarding or delegate changes may require separate Google verification.",
+        "stop_condition": "Stop when the scope or verification prerequisite is absent; never treat creation as verification.",
+        "next_action": "Describe the exact settings method, supply only its writable fields, and reconcile uncertain creation before retrying."
+      }
+    ],
+    "sources": [
+      "https://developers.google.com/gmail/api/reference/rest/v1/users.messages/send",
+      "https://developers.google.com/gmail/api/reference/rest/v1/users.messages",
+      "https://developers.google.com/gmail/api/reference/rest/v1/users.settings.sendAs",
+      "https://developers.google.com/gmail/api/reference/quota"
+    ]
+  },
+  {
+    "service": "devices",
+    "reviewed_at": "2026-09-19",
+    "prerequisites": [
+      "Google Workspace or Cloud Identity organization with the Cloud Identity API enabled in the OAuth client project.",
+      "Use the selected account_id's end-user OAuth identity. Do not substitute a service account or a domain-wide delegated identity behind that account_id.",
+      "Use https://www.googleapis.com/auth/cloud-identity.devices.readonly for get/list reads when accepted by the selected method, https://www.googleapis.com/auth/cloud-identity.devices for writes, and https://www.googleapis.com/auth/cloud-identity.devices.lookup only for deviceUsers.lookup.",
+      "The selected user must have administrator permission for the requested device action. The reviewed Devices API setup and method references require or demonstrate an administrator but do not identify one exact delegated Admin console role for every API method.",
+      "devices.create creates only company-owned devices, and devices.create plus clientStates.patch are limited to Enterprise Standard, Enterprise Plus, Enterprise for Education, and Cloud Identity Premium according to their method references."
+    ],
+    "read_strategy": [
+      "When an exact devices/{device}, devices/{device}/deviceUsers/{deviceUser}, or client-state resource name is known, call the corresponding get method instead of listing first.",
+      "For device discovery, request one devices.list page with the narrowest server-side filter, customer, view, and order needed. The default is 20 devices and the maximum is 100. Preserve every parameter when continuing with nextPageToken.",
+      "For device-user discovery, request one deviceUsers.list page under the exact device when possible. Use devices/- only for a deliberate cross-device search. The default is 5 device users and the maximum is 20; preserve all parameters when paging.",
+      "Use deviceUsers.lookup only for DeviceUsers associated with the calling end user. It requires end-user credentials, the lookup scope, userId=me, and platform-specific identifiers. It is not an administrator search for another user.",
+      "List client states under one exact DeviceUser when possible. clientStates.list exposes nextPageToken but no pageSize parameter, so stop after one provider page unless the task explicitly requires continuation.",
+      "Keep COMPANY_INVENTORY and USER_ASSIGNED_DEVICES distinct. The inventory view includes imported devices and admin-supplied asset tags, while the user-assigned view contains devices with a registered user and omits asset tags."
+    ],
+    "write_strategy": [
+      "Resolve and re-read the exact Device, DeviceUser, or ClientState before changing access, wiping, canceling a wipe, deleting, or replacing client-state fields. Use immutable resource names and one mutation for one reviewed target.",
+      "Every mutation in this subfamily returns a long-running Operation. Retain its name, done, error, and response fields. An unfinished Operation is pending, not failed, and must not cause the mutation to be replayed.",
+      "The selected 17-method Devices catalog does not expose operations.get. If a returned Operation is unfinished, stop with its operation name and reconcile through the exact resource get/list method within the task budget. Do not claim terminal success from the initiating response alone.",
+      "Reconcile approve and block through DeviceUser.managementState; reconcile a device-user wipe through WIPING or WIPED; reconcile a whole-device wipe through Device.managementState; reconcile clientStates.patch with an exact clientStates.get. Treat unchanged state as pending or unknown, not as permission to repeat the write.",
+      "devices.wipe removes all data on the device. deviceUsers.wipe removes the selected user's work account data and does not affect unrelated personal data. Require the caller to choose the intended scope explicitly.",
+      "For devices.wipe, set removeResetLock=true only when the caller explicitly requests removal of iOS Activation Lock or Android Factory Reset Protection. The false value leaves that protection untouched.",
+      "cancelWipe can succeed only before the wipe command reaches the device. Attempt it once for a resource still in a pending wipe state, then report the returned Operation or provider error.",
+      "devices.delete deletes the Device resource, but its reference does not say that it erases device data. Never present delete as a substitute for devices.wipe. deviceUsers.delete deletes the DeviceUser and explicitly revokes that user's access to device data.",
+      "For clientStates.patch, send an explicit updateMask for the reviewed fields. Omitting updateMask updates all updatable ClientState fields. Preserve the exact partner/client ID because it is used by Context-Aware Access and is shown in the Admin console.",
+      "The devices.wipe HTTP template targets devices/{device}, although the same reference page's path-parameter prose incorrectly shows a DeviceUser-shaped name. Use the method's HTTP template and selected catalog schema, and report the documentation inconsistency if request construction cannot be resolved safely."
+    ],
+    "quota_caveats": [
+      "Provider fact: devices.list returns at most 20 devices by default and caps pageSize at 100. deviceUsers.list returns at most 5 by default and caps pageSize at 20. deviceUsers.lookup defaults to and caps pageSize at 20.",
+      "Provider fact: clientStates.list publishes pagination tokens but no caller-controlled pageSize. Each continued page is another request.",
+      "Provider fact: all ten create, patch, state-change, wipe, cancel, and delete methods in this subfamily return an Operation. The initiating request does not establish terminal completion when done is false.",
+      "Proof gap: the reviewed official Devices API setup and REST reference pages publish no fixed QPS, per-minute, or daily numeric quota for this subfamily. Current project quotas and remaining allowance require provider project evidence.",
+      "Proof gap: request and page counts do not establish Google's internal quota cost. Report external requests, returned Operation state, and runtime task budget separately from provider quota."
+    ],
+    "intents": [
+      {
+        "intent_id": "devices.resolve_resource",
+        "intent": "Resolve and inspect one device or device user",
+        "minimum_calls": "1 exact get when a resource name is known; otherwise 1 bounded list page, with a second deviceUsers.list page only after one device is selected",
+        "approval": "permission_only_read",
+        "stop_condition": "Multiple candidates remain, the requested inventory view is unresolved, or the first page/task budget is exhausted",
+        "next_action": "Return immutable resource names, distinguishing Device from DeviceUser, plus nextPageToken when present; ask the caller to select instead of broadening the search."
+      },
+      {
+        "intent_id": "devices.audit_state",
+        "intent": "Audit one device, its selected user association, and relevant client state",
+        "minimum_calls": "1 Device get plus 1 DeviceUser get; add 1 exact ClientState get or one clientStates.list page only when Context-Aware Access state is part of the task",
+        "approval": "permission_only_read",
+        "stop_condition": "The DeviceUser or partner/client ID is ambiguous, a client-state page ends, or the task budget is exhausted",
+        "next_action": "Return resource names, management and compromise states, sync times, and client-state qualifiers without generalizing one user's state to the whole device."
+      },
+      {
+        "intent_id": "devices.change_user_access",
+        "intent": "Approve or block one exact device user",
+        "minimum_calls": "1 current DeviceUser get, 1 approve or block mutation, then at most 1 bounded reconciliation get when the returned Operation is unfinished",
+        "approval": "always_human_approval",
+        "stop_condition": "Ambiguous DeviceUser, changed current state, missing admin permission, failed Operation, or pending state after the reconciliation budget",
+        "next_action": "Return the Operation name and observed DeviceUser.managementState. Do not replay approve or block while the outcome is pending or unknown."
+      },
+      {
+        "intent_id": "devices.manage_lifecycle",
+        "intent": "Create an inventory device, patch one client state, wipe or cancel a wipe, or delete one exact Device or DeviceUser",
+        "minimum_calls": "1 exact preflight read when the resource exists, 1 mutation, and at most 1 exact reconciliation read when the returned Operation is unfinished",
+        "approval": "always_for_wipe_delete_cancelWipe_or_removeResetLock; exact payload preview required for create and clientStates.patch",
+        "stop_condition": "Target or wipe scope is ambiguous, SKU or admin permission is missing, updateMask is unresolved, state changed, Operation failed, or completion remains pending",
+        "next_action": "Return the exact mutation, Operation name/state, and reconciliation result. Never turn delete into wipe, broaden a DeviceUser wipe to a device wipe, or replay a mutation with an unknown outcome."
+      }
+    ],
+    "sources": [
+      "https://docs.cloud.google.com/identity/docs/how-to/setup-devices",
+      "https://docs.cloud.google.com/identity/docs/concepts/overview-devices",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/v1/devices/create",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/v1/devices/delete",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/v1/devices/get",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/v1/devices/list",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/v1/devices/wipe",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/v1/devices/cancelWipe",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/v1/devices.deviceUsers",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/v1/devices.deviceUsers/approve",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/v1/devices.deviceUsers/block",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/v1/devices.deviceUsers/delete",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/v1/devices.deviceUsers/list",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/v1/devices.deviceUsers/lookup",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/v1/devices.deviceUsers/wipe",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/v1/devices.deviceUsers/cancelWipe",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/v1/devices.deviceUsers.clientStates/get",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/v1/devices.deviceUsers.clientStates/list",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/v1/devices.deviceUsers.clientStates/patch",
+      "https://docs.cloud.google.com/identity/docs/reference/rest/Shared.Types/Operation"
+    ]
+  }
+]

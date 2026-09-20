@@ -145,13 +145,7 @@ func fileKeyringPasswordFunc() keyring.PromptFunc {
 		return keyring.FixedStringPrompt(password)
 	}
 
-	if term.IsTerminal(int(os.Stdin.Fd())) {
-		return keyring.TerminalPrompt
-	}
-
-	return func(_ string) (string, error) {
-		return "", fmt.Errorf("%w; set %s", errNoTTY, keyringPasswordEnv)
-	}
+	return fileKeyringPasswordFuncFrom("", term.IsTerminal(int(os.Stdin.Fd())))
 }
 
 func normalizeKeyringBackend(value string) string {
@@ -172,12 +166,21 @@ func shouldUseKeyringTimeout(goos string, backendInfo KeyringBackendInfo, dbusAd
 }
 
 func openKeyring() (keyring.Keyring, error) {
+	return openKeyringMode(false)
+}
+
+// openKeyringMode opens the read-write keyring. nonInteractive disables every
+// terminal password prompt and always bounds the backend open with a timeout.
+func openKeyringMode(nonInteractive bool) (keyring.Keyring, error) {
+	// On Linux/WSL/containers, OS keychains (secret-service/kwallet) may be unavailable.
+	// In that case github.com/99designs/keyring falls back to the "file" backend,
+	// which *requires* both a directory and a password prompt function.
 	keyringDir, err := config.EnsureKeyringDir()
 	if err != nil {
 		return nil, fmt.Errorf("ensure keyring dir: %w", err)
 	}
 
-	return openKeyringAt(keyringDir, false)
+	return openKeyringAt(keyringDir, false, nonInteractive)
 }
 
 func openKeyringReadOnly() (keyring.Keyring, error) {
@@ -186,10 +189,10 @@ func openKeyringReadOnly() (keyring.Keyring, error) {
 		return nil, fmt.Errorf("resolve keyring dir: %w", err)
 	}
 
-	return openKeyringAt(keyringDir, true)
+	return openKeyringAt(keyringDir, true, false)
 }
 
-func openKeyringAt(keyringDir string, readOnly bool) (keyring.Keyring, error) {
+func openKeyringAt(keyringDir string, readOnly bool, nonInteractive bool) (keyring.Keyring, error) {
 	backendInfo, err := ResolveKeyringBackendInfo()
 	if err != nil {
 		return nil, err
@@ -234,11 +237,15 @@ func openKeyringAt(keyringDir string, readOnly bool) (keyring.Keyring, error) {
 		FileDir:                  keyringDir,
 		FilePasswordFunc:         fileKeyringPasswordFunc(),
 	}
+	if nonInteractive {
+		cfg.FilePasswordFunc = fileKeyringPasswordFuncFrom(os.Getenv(keyringPasswordEnv), false)
+		cfg.KeychainPasswordFunc = fileKeyringPasswordFuncFrom("", false)
+	}
 
 	// On Linux with D-Bus present, keyring.Open() can still hang if SecretService
 	// is unresponsive (e.g., gnome-keyring installed but not running).
 	// Use a timeout as a safety net.
-	if shouldUseKeyringTimeout(runtime.GOOS, backendInfo, dbusAddr) {
+	if nonInteractive || shouldUseKeyringTimeout(runtime.GOOS, backendInfo, dbusAddr) {
 		return openKeyringWithTimeout(cfg, keyringOpenTimeout)
 	}
 
@@ -279,9 +286,10 @@ type keyringResult struct {
 // error, but would need refactoring for long-running use.
 func openKeyringWithTimeout(cfg keyring.Config, timeout time.Duration) (keyring.Keyring, error) {
 	ch := make(chan keyringResult, 1)
+	open := keyringOpenFunc
 
 	go func() {
-		ring, err := keyringOpenFunc(cfg)
+		ring, err := open(cfg)
 		ch <- keyringResult{ring, err}
 	}()
 
@@ -318,6 +326,18 @@ func OpenDefaultNoInput() (Store, error) {
 
 func OpenDefault() (Store, error) {
 	ring, err := openKeyringFunc()
+	if err != nil {
+		return nil, err
+	}
+
+	return &KeyringStore{ring: ring}, nil
+}
+
+// OpenDefaultNonInteractive opens the server's store once at startup. Password
+// callbacks never read a terminal. A backend-open timeout is fatal to startup;
+// callers must exit rather than retry a potentially blocked backend opener.
+func OpenDefaultNonInteractive() (Store, error) {
+	ring, err := openKeyringMode(true)
 	if err != nil {
 		return nil, err
 	}
@@ -414,7 +434,7 @@ func (s *KeyringStore) SetToken(client string, email string, tok Token) error {
 		tok.CreatedAt = time.Now().UTC()
 	}
 
-	payload, err := json.Marshal(storedToken{
+	payload, err := json.Marshal(storedToken{ //nolint:gosec // Serialization is required before storing the token in the protected keyring.
 		RefreshToken: tok.RefreshToken,
 		Services:     tok.Services,
 		Scopes:       tok.Scopes,

@@ -186,7 +186,7 @@ func runWranglerCommand(ctx context.Context, dir string, stdin io.Reader, args .
 }
 
 func runWranglerCommandOutput(ctx context.Context, dir string, stdin io.Reader, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "wrangler", args...)
+	cmd := exec.CommandContext(ctx, "wrangler", args...) //nolint:gosec // Wrangler arguments are passed directly; no shell interpolation.
 	cmd.Dir = dir
 	cmd.Stdin = stdin
 

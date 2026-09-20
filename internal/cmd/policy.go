@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/steipete/gogcli/internal/access"
 	"github.com/steipete/gogcli/internal/config"
 	"github.com/steipete/gogcli/internal/outfmt"
 )
@@ -33,8 +34,8 @@ func (c *PolicyCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 		Name:    c.Name,
 		Account: flags.Account,
 		Client:  flags.Client,
-		Allow:   normalizePolicyInputs(splitCSV(c.Allow)),
-		Deny:    normalizePolicyInputs(splitCSV(c.Deny)),
+		Allow:   access.CanonicalActions(splitCSV(c.Allow)),
+		Deny:    access.CanonicalActions(splitCSV(c.Deny)),
 		Reason:  c.Reason,
 	}
 	if err := validatePolicyActions(policy); err != nil {
