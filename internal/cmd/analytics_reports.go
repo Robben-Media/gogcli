@@ -104,14 +104,14 @@ func (c *AnalyticsPivotReportCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"pivotHeaders":     resp.PivotHeaders,
 			"dimensionHeaders": resp.DimensionHeaders,
 			"metricHeaders":    resp.MetricHeaders,
 			"rows":             resp.Rows,
 			"metadata":         resp.Metadata,
 			"propertyQuota":    resp.PropertyQuota,
-		})
+		}, resp.Rows))
 	}
 
 	u := ui.FromContext(ctx)
@@ -135,7 +135,7 @@ func (c *AnalyticsPivotReportCmd) Run(ctx context.Context, flags *RootFlags) err
 			}
 		}
 	}
-	fmt.Fprintln(w, strings.Join(headers, "\t"))
+	writeTableRow(ctx, w, headers)
 
 	// Build data rows
 	for _, row := range resp.Rows {
@@ -146,7 +146,7 @@ func (c *AnalyticsPivotReportCmd) Run(ctx context.Context, flags *RootFlags) err
 		for _, mv := range row.MetricValues {
 			vals = append(vals, mv.Value)
 		}
-		fmt.Fprintln(w, strings.Join(vals, "\t"))
+		writeTableRow(ctx, w, vals)
 	}
 
 	return nil
@@ -201,9 +201,18 @@ func (c *AnalyticsBatchReportsCmd) Run(ctx context.Context, flags *RootFlags) er
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"reports": resp.Reports,
-		})
+		}, resp.Reports))
+	}
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		writeTableRow(ctx, w, []string{"REPORT_INDEX", "ROW_INDEX", "FIELD_KIND", "FIELD_NAME", "FIELD_VALUE"})
+		for reportIndex, report := range resp.Reports {
+			writeAnalyticsBatchPlainRows(ctx, w, reportIndex+1, report.DimensionHeaders, report.MetricHeaders, report.Rows)
+		}
+		return nil
 	}
 
 	u := ui.FromContext(ctx)
@@ -228,7 +237,7 @@ func (c *AnalyticsBatchReportsCmd) Run(ctx context.Context, flags *RootFlags) er
 			for _, mh := range report.MetricHeaders {
 				headers = append(headers, mh.Name)
 			}
-			fmt.Fprintln(w, strings.Join(headers, "\t"))
+			writeTableRow(ctx, w, headers)
 			for _, row := range report.Rows {
 				var vals []string
 				for _, dv := range row.DimensionValues {
@@ -237,12 +246,42 @@ func (c *AnalyticsBatchReportsCmd) Run(ctx context.Context, flags *RootFlags) er
 				for _, mv := range row.MetricValues {
 					vals = append(vals, mv.Value)
 				}
-				fmt.Fprintln(w, strings.Join(vals, "\t"))
+				writeTableRow(ctx, w, vals)
 			}
 		}
 	}
 
 	return nil
+}
+
+func writeAnalyticsBatchPlainRows(
+	ctx context.Context,
+	w io.Writer,
+	reportIndex int,
+	dimensionHeaders []*analyticsdata.DimensionHeader,
+	metricHeaders []*analyticsdata.MetricHeader,
+	rows []*analyticsdata.Row,
+) {
+	for rowIndex, row := range rows {
+		for fieldIndex, value := range row.DimensionValues {
+			fieldName := ""
+			if fieldIndex < len(dimensionHeaders) {
+				fieldName = dimensionHeaders[fieldIndex].Name
+			}
+			writeTableRow(ctx, w, []string{
+				fmt.Sprint(reportIndex), fmt.Sprint(rowIndex + 1), "DIMENSION", fieldName, value.Value,
+			})
+		}
+		for fieldIndex, value := range row.MetricValues {
+			fieldName := ""
+			if fieldIndex < len(metricHeaders) {
+				fieldName = metricHeaders[fieldIndex].Name
+			}
+			writeTableRow(ctx, w, []string{
+				fmt.Sprint(reportIndex), fmt.Sprint(rowIndex + 1), "METRIC", fieldName, value.Value,
+			})
+		}
+	}
 }
 
 // --- batch-pivot-reports ---
@@ -294,9 +333,18 @@ func (c *AnalyticsBatchPivotReportsCmd) Run(ctx context.Context, flags *RootFlag
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"pivotReports": resp.PivotReports,
-		})
+		}, resp.PivotReports))
+	}
+	if outfmt.IsPlain(ctx) {
+		w, flush := tableWriter(ctx)
+		defer flush()
+		writeTableRow(ctx, w, []string{"REPORT_INDEX", "ROW_INDEX", "FIELD_KIND", "FIELD_NAME", "FIELD_VALUE"})
+		for reportIndex, report := range resp.PivotReports {
+			writeAnalyticsBatchPlainRows(ctx, w, reportIndex+1, report.DimensionHeaders, report.MetricHeaders, report.Rows)
+		}
+		return nil
 	}
 
 	u := ui.FromContext(ctx)
@@ -318,7 +366,7 @@ func (c *AnalyticsBatchPivotReportsCmd) Run(ctx context.Context, flags *RootFlag
 			for _, dh := range report.DimensionHeaders {
 				headers = append(headers, dh.Name)
 			}
-			fmt.Fprintln(w, strings.Join(headers, "\t"))
+			writeTableRow(ctx, w, headers)
 			for _, row := range report.Rows {
 				var vals []string
 				for _, dv := range row.DimensionValues {
@@ -327,7 +375,7 @@ func (c *AnalyticsBatchPivotReportsCmd) Run(ctx context.Context, flags *RootFlag
 				for _, mv := range row.MetricValues {
 					vals = append(vals, mv.Value)
 				}
-				fmt.Fprintln(w, strings.Join(vals, "\t"))
+				writeTableRow(ctx, w, vals)
 			}
 		}
 	}
@@ -401,10 +449,10 @@ func (c *AnalyticsCheckCompatibilityCmd) Run(ctx context.Context, flags *RootFla
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"dimensionCompatibilities": resp.DimensionCompatibilities,
 			"metricCompatibilities":    resp.MetricCompatibilities,
-		})
+		}))
 	}
 
 	u := ui.FromContext(ctx)

@@ -40,7 +40,7 @@ func (c *SearchConsoleSitesGetCmd) Run(ctx context.Context, flags *RootFlags) er
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"site": site})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"site": site}, site))
 	}
 
 	// Text output
@@ -79,6 +79,10 @@ func (c *SearchConsoleSitesAddCmd) Run(ctx context.Context, flags *RootFlags) er
 		return err
 	}
 
+	if err := writeSearchConsoleMutationReceipt(ctx, "sites.add", siteURL, ""); err != nil {
+		return err
+	}
+	// Keep human confirmation on stderr in all modes (machine receipts go to stdout).
 	u.Err().Printf("Site added: %s. Verify ownership to access data.", siteURL)
 	return nil
 }
@@ -114,6 +118,10 @@ func (c *SearchConsoleSitesDeleteCmd) Run(ctx context.Context, flags *RootFlags)
 		return delErr
 	}
 
+	if err := writeSearchConsoleMutationReceipt(ctx, "sites.delete", siteURL, ""); err != nil {
+		return err
+	}
+	// Keep human confirmation on stderr in all modes (machine receipts go to stdout).
 	u.Err().Println("Site removed")
 	return nil
 }
@@ -152,7 +160,7 @@ func (c *SearchConsoleMobileFriendlyTestCmd) Run(ctx context.Context, flags *Roo
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"testResult": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"testResult": resp}, resp))
 	}
 
 	// Text output

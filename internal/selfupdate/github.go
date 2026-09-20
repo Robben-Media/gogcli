@@ -12,7 +12,10 @@ import (
 	"time"
 )
 
-const defaultRepo = "Robben-Media/gogcli"
+const (
+	defaultRepo = "Robben-Media/gogcli"
+	goosWindows = "windows"
+)
 
 var (
 	errReleaseMissingTag = errors.New("release missing tag_name")
@@ -121,7 +124,7 @@ func AssetNameFor(version string) string {
 	goarch := runtime.GOARCH
 	ext := "tar.gz"
 
-	if goos == "windows" {
+	if goos == goosWindows {
 		ext = "zip"
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strconv"
 
 	"github.com/alecthomas/kong"
 	"google.golang.org/api/gmail/v1"
@@ -52,7 +53,7 @@ func (c *GmailImapGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"imap": imap})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"imap": imap}, imap))
 	}
 
 	u.Out().Printf("enabled\t%t", imap.Enabled)
@@ -147,7 +148,12 @@ func (c *GmailImapUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"imap": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"imap": updated}, updated))
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainImapSetting(ctx, updated)
+		return nil
 	}
 
 	u.Out().Println("IMAP settings updated successfully")
@@ -184,7 +190,7 @@ func (c *GmailPopGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"pop": pop})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"pop": pop}, pop))
 	}
 
 	u.Out().Printf("access_window\t%s", pop.AccessWindow)
@@ -254,7 +260,12 @@ func (c *GmailPopUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"pop": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"pop": updated}, updated))
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainPopSetting(ctx, updated)
+		return nil
 	}
 
 	u.Out().Println("POP settings updated successfully")
@@ -287,7 +298,7 @@ func (c *GmailLanguageGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"language": lang})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"language": lang}, lang))
 	}
 
 	u.Out().Printf("display_language\t%s", lang.DisplayLanguage)
@@ -324,10 +335,37 @@ func (c *GmailLanguageUpdateCmd) Run(ctx context.Context, kctx *kong.Context, fl
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"language": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"language": updated}, updated))
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainLanguageSetting(ctx, updated)
+		return nil
 	}
 
 	u.Out().Println("Language settings updated successfully")
 	u.Out().Printf("display_language\t%s", updated.DisplayLanguage)
 	return nil
+}
+
+func writePlainImapSetting(ctx context.Context, imap *gmail.ImapSettings) {
+	writePlainSettingRows(ctx, "imap", [][2]string{
+		{"enabled", strconv.FormatBool(imap.Enabled)},
+		{"auto_expunge", strconv.FormatBool(imap.AutoExpunge)},
+		{"expunge_behavior", imap.ExpungeBehavior},
+		{"max_folder_size", strconv.FormatInt(imap.MaxFolderSize, 10)},
+	})
+}
+
+func writePlainPopSetting(ctx context.Context, pop *gmail.PopSettings) {
+	writePlainSettingRows(ctx, "pop", [][2]string{
+		{"access_window", pop.AccessWindow},
+		{"disposition", pop.Disposition},
+	})
+}
+
+func writePlainLanguageSetting(ctx context.Context, lang *gmail.LanguageSettings) {
+	writePlainSettingRows(ctx, "language", [][2]string{
+		{"display_language", lang.DisplayLanguage},
+	})
 }

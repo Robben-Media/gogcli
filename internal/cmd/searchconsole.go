@@ -61,9 +61,9 @@ func (c *SearchConsoleSitesListCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"sites": resp.SiteEntry,
-		})
+		}, resp.SiteEntry))
 	}
 
 	if len(resp.SiteEntry) == 0 {
@@ -88,6 +88,7 @@ type SearchConsoleQueryCmd struct {
 	EndDate    string `name:"end-date" required:"" help:"End date (YYYY-MM-DD)"`
 	Dimensions string `name:"dimensions" help:"Comma-separated dimensions: query,page,country,device,date" default:""`
 	RowLimit   int64  `name:"row-limit" help:"Max rows to return" default:"25"`
+	StartRow   int64  `name:"start-row" help:"Zero-based index of the first row to return" default:"0"`
 }
 
 func (c *SearchConsoleQueryCmd) Run(ctx context.Context, flags *RootFlags) error {
@@ -109,6 +110,9 @@ func (c *SearchConsoleQueryCmd) Run(ctx context.Context, flags *RootFlags) error
 	if endDate == "" {
 		return usage("--end-date required")
 	}
+	if c.StartRow < 0 {
+		return usage("--start-row must be >= 0")
+	}
 
 	svc, err := newSearchConsoleService(ctx, account)
 	if err != nil {
@@ -116,9 +120,11 @@ func (c *SearchConsoleQueryCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	req := &searchconsole.SearchAnalyticsQueryRequest{
-		StartDate: startDate,
-		EndDate:   endDate,
-		RowLimit:  c.RowLimit,
+		StartDate:       startDate,
+		EndDate:         endDate,
+		RowLimit:        c.RowLimit,
+		StartRow:        c.StartRow,
+		ForceSendFields: []string{"StartRow"},
 	}
 
 	if dims := strings.TrimSpace(c.Dimensions); dims != "" {
@@ -131,9 +137,9 @@ func (c *SearchConsoleQueryCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"rows": resp.Rows,
-		})
+		}, resp.Rows))
 	}
 
 	if len(resp.Rows) == 0 {
@@ -181,9 +187,9 @@ func (c *SearchConsoleSitemapsListCmd) Run(ctx context.Context, flags *RootFlags
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"sitemaps": resp.Sitemap,
-		})
+		}, resp.Sitemap))
 	}
 
 	if len(resp.Sitemap) == 0 {
@@ -233,6 +239,10 @@ func (c *SearchConsoleSubmitSitemapCmd) Run(ctx context.Context, flags *RootFlag
 		return err
 	}
 
+	if err := writeSearchConsoleMutationReceipt(ctx, "sitemaps.submit", siteURL, sitemapURL); err != nil {
+		return err
+	}
+	// Keep human confirmation on stderr in all modes (machine receipts go to stdout).
 	u.Err().Println("Sitemap submitted successfully")
 	return nil
 }
@@ -274,9 +284,9 @@ func (c *SearchConsoleInspectCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"inspectionResult": resp.InspectionResult,
-		})
+		}, resp.InspectionResult))
 	}
 
 	result := resp.InspectionResult
@@ -292,6 +302,31 @@ func (c *SearchConsoleInspectCmd) Run(ctx context.Context, flags *RootFlags) err
 	u.Out().Printf("pageFetchState\t%s", idx.PageFetchState)
 	u.Out().Printf("crawledAs\t%s", idx.CrawledAs)
 	u.Out().Printf("lastCrawlTime\t%s", idx.LastCrawlTime)
+	return nil
+}
+
+// writeSearchConsoleMutationReceipt emits a stable JSON/plain receipt for
+// successful site and sitemap mutations. Default text mode writes nothing to
+// stdout; callers retain existing stderr confirmations in all modes.
+func writeSearchConsoleMutationReceipt(ctx context.Context, action, siteURL, sitemapURL string) error {
+	if outfmt.IsJSON(ctx) {
+		payload := map[string]any{
+			"action":  action,
+			"siteUrl": siteURL,
+			"success": true,
+		}
+		if sitemapURL != "" {
+			payload["sitemapUrl"] = sitemapURL
+		}
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(payload))
+	}
+	if outfmt.IsPlain(ctx) {
+		writePlainReceipt(ctx,
+			[]string{"ACTION", "SITE_URL", "SITEMAP_URL", "SUCCESS"},
+			[]string{action, siteURL, sitemapURL, "true"},
+		)
+		return nil
+	}
 	return nil
 }
 

@@ -44,6 +44,21 @@ func TestParseGoogleOAuthClientJSON(t *testing.T) {
 	})
 }
 
+func TestParseGoogleInstalledOAuthClientJSON_RejectsWebClient(t *testing.T) {
+	if _, err := ParseGoogleInstalledOAuthClientJSON([]byte(`{"web":{"client_id":"id","client_secret":"sec"}}`)); err == nil {
+		t.Fatal("expected web client rejection")
+	}
+
+	got, err := ParseGoogleInstalledOAuthClientJSON([]byte(`{"installed":{"client_id":"id","client_secret":"sec"}}`))
+	if err != nil {
+		t.Fatalf("installed client: %v", err)
+	}
+
+	if got.ClientID != "id" {
+		t.Fatalf("client id = %q", got.ClientID)
+	}
+}
+
 func TestClientCredentials_Roundtrip(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

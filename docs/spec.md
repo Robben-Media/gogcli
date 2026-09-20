@@ -34,7 +34,10 @@ This replaces the existing separate CLIs (`gmcli`, `gccli`, `gdcli`) and the Pyt
 - Global flag:
   - `--color=auto|always|never` (default `auto`)
   - `--json` (JSON output to stdout)
+  - `--results-only` (emit the command's declared primary JSON result; requires `--json`)
+  - `--select <paths>` (project comma-separated dotted paths from JSON objects or arrays of objects; requires `--json`)
   - `--plain` (TSV output to stdout; stable/parseable; disables colors)
+  - `--wrap-untrusted` (JSON only: wrap free-text Workspace fields with untrusted-content fences; default off; no-op without JSON; does not change plain/human output)
   - `--force` (skip confirmations for destructive commands)
   - `--no-input` (never prompt; fail instead)
   - `--version` (print version)
@@ -49,6 +52,7 @@ Environment:
 - `GOG_COLOR=auto|always|never` (default `auto`, overridden by `--color`)
 - `GOG_JSON=1` (default JSON output; overridden by flags)
 - `GOG_PLAIN=1` (default plain output; overridden by flags)
+- `GOG_WRAP_UNTRUSTED=1` (default wrap-untrusted for JSON; same truthy values as other bool envs; overridden by flags)
 
 ## Output (TTY-aware colors)
 
@@ -105,12 +109,14 @@ Implementation: `internal/secrets/store.go`.
   - requests `access_type=offline`
   - supports `--force-consent` to force the consent prompt when Google doesn't return a refresh token
   - uses `include_granted_scopes=true` to support incremental auth re-runs
+  - preserves scopes recorded for an existing account when adding services
+  - supports `--replace-scopes` for an explicit exact-scope replacement (implies `--force-consent`)
 
 Scope selection note:
 
 - The consent screen shows the scopes the CLI requested.
 - Users cannot selectively un-check individual requested scopes in the consent screen; they either approve all requested scopes or cancel.
-- To request fewer scopes, choose fewer services via `gog auth add --services ...` or use `gog auth add --readonly` where applicable.
+- For a new account, request fewer scopes with `gog auth add --services ...` or `gog auth add --readonly`. Reauthorization is additive; use `--replace-scopes` to intentionally downgrade an existing grant.
 
 ## Config layout
 
@@ -134,6 +140,7 @@ Environment:
 - `GOG_KEYRING_BACKEND={auto|keychain|file}` (force backend; use `file` to avoid Keychain prompts and pair with `GOG_KEYRING_PASSWORD` for non-interactive)
 - `GOG_TIMEZONE=America/New_York` (default output timezone; IANA name or `UTC`; `local` forces local timezone)
 - `GOG_ENABLE_COMMANDS=calendar,tasks` (optional allowlist of top-level commands)
+- `GOG_ENABLE_COMMAND_PATHS=gmail search,calendar events` (optional allowlist of exact command paths; aliases canonicalize; parents do not allow children; ORs with top-level enablement; policies still apply after)
 - `config.json` can also set `keyring_backend` (JSON5; env vars take precedence)
 - `config.json` can also set `default_timezone` (IANA name or `UTC`)
 - `config.json` can also set `account_aliases` for `gog auth alias` (JSON5)
@@ -147,10 +154,11 @@ Flag aliases:
 
 ### Implemented
 
+- `gog auth setup` (guided project/API/OAuth client/first-account setup; see docs/auth-clients.md)
 - `gog auth credentials <credentials.json|->`
 - `gog auth credentials list`
 - `gog --client <name> auth credentials <credentials.json|->`
-- `gog auth add <email> [--services user|all|gmail,calendar,classroom,drive,docs,contacts,tasks,sheets,people,groups] [--readonly] [--drive-scope full|readonly|file] [--manual] [--force-consent]`
+- `gog auth add <email> [--services user|all|gmail,calendar,classroom,drive,docs,contacts,tasks,sheets,people,groups] [--readonly] [--drive-scope full|readonly|file] [--manual] [--force-consent] [--replace-scopes]`
 - `gog auth services [--markdown]`
 - `gog auth keep <email> --key <service-account.json>` (Google Keep; Workspace only)
 - `gog auth list`
@@ -307,6 +315,7 @@ Flag aliases:
 ### Planned high-level command tree
 
 - `gog auth …`
+  - `gog auth setup`
   - `gog auth credentials <credentials.json>`
   - `gog auth credentials list`
   - `gog --client <name> auth credentials <credentials.json>`
@@ -346,7 +355,9 @@ We store a single refresh token per Google account email.
 
 - `gog auth add` requests a union of scopes based on `--services`.
 - Each API client refreshes an access token for the subset of scopes needed for that service.
-- If you later want additional services, re-run `gog auth add <email> --services ...` (may require `--force-consent` to mint a new refresh token).
+- If you later want additional services, re-run `gog auth add <email> --services ...`; stored scopes are retained (and Google may require `--force-consent` to mint a new refresh token).
+- Use `--replace-scopes` only to intentionally replace an existing grant with exactly the selected services.
+- To recover after an accidental replacement, re-run `gog auth add <email> --services user --force-consent` (or list every service the account should retain).
 
 - Gmail: `https://mail.google.com/` (or narrower scopes if we decide later)
 - Calendar: `https://www.googleapis.com/auth/calendar`
@@ -369,9 +380,11 @@ Default: human-friendly tables (stdlib `text/tabwriter`).
 
 - Parseable stdout:
   - `--json`: JSON objects/arrays suitable for scripting
+  - `--wrap-untrusted` (with JSON mode): free-text content keys get spoof-resistant `<<<EXTERNAL_UNTRUSTED_CONTENT id="…">>>` / `<<<END_EXTERNAL_UNTRUSTED_CONTENT id="…">>>` fences; metadata keys (ids, tokens, URLs, emails, timestamps, mime types, etc.) stay plain; top-level `externalContent` annotation only when something was wrapped
   - `--plain`: stable TSV (tabs preserved; no alignment; no colors)
 - Human-facing hints/progress are written to stderr so stdout can be safely captured.
 - Colors are only used for human-facing output and are disabled automatically for `--json` and `--plain`.
+- `--wrap-untrusted` / `GOG_WRAP_UNTRUSTED` does not change plain or human output; it is a no-op without JSON mode.
 
 We avoid heavy table deps unless we decide we need them.
 

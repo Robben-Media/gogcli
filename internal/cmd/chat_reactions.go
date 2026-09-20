@@ -77,10 +77,10 @@ func (c *ChatReactionsListCmd) Run(ctx context.Context, flags *RootFlags) error 
 				User:     reactionUser(r),
 			})
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"reactions":     items,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, items))
 	}
 
 	if len(resp.Reactions) == 0 {
@@ -151,7 +151,7 @@ func (c *ChatReactionsCreateCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"reaction": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"reaction": resp}, resp))
 	}
 
 	if resp.Name != "" {

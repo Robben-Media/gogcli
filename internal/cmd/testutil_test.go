@@ -80,11 +80,17 @@ func captureStdout(t *testing.T, fn func()) string {
 	}
 	os.Stdout = w
 
+	result := make(chan []byte, 1)
+	go func() {
+		b, _ := io.ReadAll(r)
+		result <- b
+	}()
+
 	fn()
 
 	_ = w.Close()
 	os.Stdout = orig
-	b, _ := io.ReadAll(r)
+	b := <-result
 	_ = r.Close()
 	return string(b)
 }

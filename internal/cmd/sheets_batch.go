@@ -18,6 +18,33 @@ type SheetsBatchGetCmd struct {
 	Ranges        []string `arg:"" name:"ranges" help:"Ranges to read (e.g., Sheet1!A1:D10)"`
 }
 
+func writeSheetsValueRangesPlain(ctx context.Context, valueRanges []*sheets.ValueRange) {
+	writeTableRow(ctx, os.Stdout, []string{"RANGE", "ROW_INDEX", "COLUMN_INDEX", "VALUE"})
+	for _, valueRange := range valueRanges {
+		if valueRange == nil {
+			continue
+		}
+		for majorIndex, majorValues := range valueRange.Values {
+			for minorIndex, cell := range majorValues {
+				row, column := majorIndex, minorIndex
+				if strings.EqualFold(valueRange.MajorDimension, "COLUMNS") {
+					row, column = minorIndex, majorIndex
+				}
+				value := ""
+				if cell != nil {
+					value = fmt.Sprintf("%v", cell)
+				}
+				writeTableRow(ctx, os.Stdout, []string{
+					valueRange.Range,
+					fmt.Sprintf("%d", row),
+					fmt.Sprintf("%d", column),
+					value,
+				})
+			}
+		}
+	}
+}
+
 func (c *SheetsBatchGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	account, err := requireAccount(flags)
 	if err != nil {
@@ -47,10 +74,14 @@ func (c *SheetsBatchGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"spreadsheetId": resp.SpreadsheetId,
 			"valueRanges":   resp.ValueRanges,
-		})
+		}, resp.ValueRanges))
+	}
+	if outfmt.IsPlain(ctx) {
+		writeSheetsValueRangesPlain(ctx, resp.ValueRanges)
+		return nil
 	}
 
 	u := ui.FromContext(ctx)
@@ -61,7 +92,7 @@ func (c *SheetsBatchGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 			for i, cell := range row {
 				cells[i] = fmt.Sprintf("%v", cell)
 			}
-			u.Out().Println(strings.Join(cells, "\t"))
+			u.Out().Println(strings.Join(plainTableFields(ctx, cells), "\t"))
 		}
 	}
 	return nil
@@ -121,13 +152,32 @@ func (c *SheetsBatchUpdateCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"spreadsheetId":       resp.SpreadsheetId,
 			"totalUpdatedRows":    resp.TotalUpdatedRows,
 			"totalUpdatedColumns": resp.TotalUpdatedColumns,
 			"totalUpdatedCells":   resp.TotalUpdatedCells,
 			"totalUpdatedSheets":  resp.TotalUpdatedSheets,
-		})
+		}))
+	}
+	if outfmt.IsPlain(ctx) {
+		spreadsheetIDOut := sheetsMutationSpreadsheetID(id, resp.SpreadsheetId)
+		rows := make([]sheetsValueMutationPlainRow, 0, len(resp.Responses)+1)
+		for _, response := range resp.Responses {
+			if response != nil {
+				rows = append(rows, newSheetsValueMutationUpdateRow("batch-update", spreadsheetIDOut, response.UpdatedRange, response.UpdatedRows, response.UpdatedColumns, response.UpdatedCells))
+			}
+		}
+		writeSheetsValueMutationPlain(ctx, sheetsValueMutationRowsWithTotals(
+			"batch-update",
+			spreadsheetIDOut,
+			rows,
+			resp.TotalUpdatedRows,
+			resp.TotalUpdatedColumns,
+			resp.TotalUpdatedCells,
+			resp.TotalUpdatedSheets,
+		))
+		return nil
 	}
 
 	u := ui.FromContext(ctx)

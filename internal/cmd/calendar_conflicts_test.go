@@ -344,6 +344,112 @@ func TestCalendarConflictsCmd_MultiCalendar(t *testing.T) {
 	}
 }
 
+func TestCalendarConflictsCmd_WithConflicts_PlainOutput(t *testing.T) {
+	origNew := newCalendarService
+	t.Cleanup(func() { newCalendarService = origNew })
+
+	srv := httptest.NewServer(withPrimaryCalendar(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/freeBusy") && r.Method == http.MethodPost {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"calendars": map[string]any{
+					"z\ncalendar": map[string]any{"busy": []map[string]any{{
+						"start": "2024-12-13T10:00:00Z",
+						"end":   "2024-12-13T11:00:00Z",
+					}}},
+					"a\tcalendar": map[string]any{"busy": []map[string]any{{
+						"start": "2024-12-13T10:30:00Z",
+						"end":   "2024-12-13T11:30:00Z",
+					}}},
+				},
+			})
+			return
+		}
+		http.NotFound(w, r)
+	})))
+	defer srv.Close()
+
+	svc, err := calendar.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newCalendarService = func(context.Context, string) (*calendar.Service, error) { return svc, nil }
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain",
+				"--account", "a@b.com",
+				"calendar", "conflicts",
+				"--from", "2024-12-13T09:00:00Z",
+				"--to", "2024-12-13T12:00:00Z",
+				"--calendars", "z-calendar,a-calendar",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	want := "START\tEND\tCALENDARS\n" +
+		"2024-12-13T10:30:00Z\t2024-12-13T11:00:00Z\ta calendar, z calendar\n"
+	if out != want {
+		t.Fatalf("plain output mismatch\nwant: %q\n got: %q", want, out)
+	}
+}
+
+func TestCalendarConflictsCmd_NoConflicts_PlainOutput(t *testing.T) {
+	origNew := newCalendarService
+	t.Cleanup(func() { newCalendarService = origNew })
+
+	srv := httptest.NewServer(withPrimaryCalendar(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/freeBusy") && r.Method == http.MethodPost {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"calendars": map[string]any{
+					"primary":          map[string]any{"busy": []map[string]any{}},
+					"work@example.com": map[string]any{"busy": []map[string]any{}},
+				},
+			})
+			return
+		}
+		http.NotFound(w, r)
+	})))
+	defer srv.Close()
+
+	svc, err := calendar.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newCalendarService = func(context.Context, string) (*calendar.Service, error) { return svc, nil }
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain",
+				"--account", "a@b.com",
+				"calendar", "conflicts",
+				"--from", "2024-12-13T09:00:00Z",
+				"--to", "2024-12-13T14:00:00Z",
+				"--calendars", "primary,work@example.com",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	if want := "START\tEND\tCALENDARS\n"; out != want {
+		t.Fatalf("plain output mismatch\nwant: %q\n got: %q", want, out)
+	}
+}
+
 func TestCalendarConflictsCmd_NoConflicts_TableOutput(t *testing.T) {
 	origNew := newCalendarService
 	t.Cleanup(func() { newCalendarService = origNew })

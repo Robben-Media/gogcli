@@ -105,6 +105,60 @@ func TestConfigCmd_JSONEmptyValues(t *testing.T) {
 	}
 }
 
+func TestConfigSet_PlainReceipt(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--plain", "config", "set", "timezone", "UTC"}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	if want := "ACTION\tKEY\tVALUE\nset\ttimezone\tUTC\n"; out != want {
+		t.Fatalf("plain config set output = %q, want %q", out, want)
+	}
+
+	cfg, err := config.ReadConfig()
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	if cfg.DefaultTimezone != "UTC" {
+		t.Fatalf("persisted timezone = %q, want UTC", cfg.DefaultTimezone)
+	}
+}
+
+func TestConfigUnset_PlainReceipt(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	if err := config.WriteConfig(config.File{DefaultTimezone: "UTC"}); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--plain", "config", "unset", "timezone"}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	if want := "ACTION\tKEY\tVALUE\nunset\ttimezone\t\n"; out != want {
+		t.Fatalf("plain config unset output = %q, want %q", out, want)
+	}
+
+	cfg, err := config.ReadConfig()
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	if cfg.DefaultTimezone != "" {
+		t.Fatalf("persisted timezone = %q, want empty", cfg.DefaultTimezone)
+	}
+}
+
 func TestConfigList_PlainTSV(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())

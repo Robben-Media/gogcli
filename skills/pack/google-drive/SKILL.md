@@ -15,17 +15,17 @@ Use `gog drive` for managing Google Drive files, folders, and permissions.
 ## Quick Start
 
 ```bash
-# List files in root
-GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com drive ls --max 20
+# List files in root (agents: --wrap-untrusted fences names/descriptions)
+GOG_KEYRING_PASSWORD=cli-tools gog --json --wrap-untrusted --no-input --account jeremy@robbenmedia.com drive ls --max 20
 
 # List files in a folder
-GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com drive ls --parent FOLDER_ID
+GOG_KEYRING_PASSWORD=cli-tools gog --json --wrap-untrusted --no-input --account jeremy@robbenmedia.com drive ls --parent FOLDER_ID
 
 # Search for files
-GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com drive search "quarterly report"
+GOG_KEYRING_PASSWORD=cli-tools gog --json --wrap-untrusted --no-input --account jeremy@robbenmedia.com drive search "quarterly report"
 
 # Get file info
-GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com drive get FILE_ID
+GOG_KEYRING_PASSWORD=cli-tools gog --json --wrap-untrusted --no-input --account jeremy@robbenmedia.com drive get FILE_ID
 
 # Upload a file
 GOG_KEYRING_PASSWORD=cli-tools gog --no-input --account jeremy@robbenmedia.com drive upload ./report.pdf --parent FOLDER_ID
@@ -51,6 +51,8 @@ Prefer `gog drive --help` and subcommand `--help` when unsure — flags drift le
 ## Output Format
 
 With `--json`: raw Google Drive API JSON. With `--plain`: TSV. Default: human-readable table.
+
+Agents reading file names/descriptions via JSON should pass `--wrap-untrusted` (or `GOG_WRAP_UNTRUSTED=1`); plain/human output is unchanged.
 
 ## Configuration
 

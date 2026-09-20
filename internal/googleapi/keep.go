@@ -3,8 +3,10 @@ package googleapi
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/keep/v1"
 	"google.golang.org/api/option"
@@ -39,8 +41,16 @@ func NewKeepWithServiceAccount(ctx context.Context, serviceAccountPath, imperson
 	}
 
 	config.Subject = impersonateEmail
+	tokenSource := config.TokenSource(ctx)
+	httpClient := &http.Client{
+		Transport: readOnlyTransportFromContext(ctx, NewRetryTransport(&oauth2.Transport{
+			Source: tokenSource,
+			Base:   http.DefaultTransport,
+		})),
+		Timeout: defaultHTTPTimeout,
+	}
 
-	svc, err := keep.NewService(ctx, option.WithTokenSource(config.TokenSource(ctx)))
+	svc, err := keep.NewService(ctx, option.WithHTTPClient(httpClient))
 	if err != nil {
 		return nil, fmt.Errorf("create keep service: %w", err)
 	}

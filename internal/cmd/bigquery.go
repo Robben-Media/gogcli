@@ -69,11 +69,11 @@ func (c *BigqueryQueryCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"schema":    resp.Schema,
 			"rows":      resp.Rows,
 			"totalRows": resp.TotalRows,
-		})
+		}, resp.Rows))
 	}
 
 	if resp.Schema == nil || len(resp.Schema.Fields) == 0 {
@@ -89,17 +89,24 @@ func (c *BigqueryQueryCmd) Run(ctx context.Context, flags *RootFlags) error {
 	for i, field := range resp.Schema.Fields {
 		headers[i] = field.Name
 	}
-	fmt.Fprintln(w, strings.Join(headers, "\t"))
+	writeTableRow(ctx, w, headers)
 
 	// Print rows
 	for _, row := range resp.Rows {
-		vals := make([]string, len(row.F))
+		rowWidth := len(row.F)
+		if outfmt.IsPlain(ctx) {
+			rowWidth = len(resp.Schema.Fields)
+		}
+		vals := make([]string, rowWidth)
 		for i, cell := range row.F {
+			if i >= len(vals) {
+				break
+			}
 			if cell.V != nil {
 				vals[i] = fmt.Sprintf("%v", cell.V)
 			}
 		}
-		fmt.Fprintln(w, strings.Join(vals, "\t"))
+		writeTableRow(ctx, w, vals)
 	}
 
 	u.Err().Printf("Total rows: %d", resp.TotalRows)
@@ -140,10 +147,10 @@ func (c *BigqueryDatasetsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"datasets":      resp.Datasets,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Datasets))
 	}
 
 	if len(resp.Datasets) == 0 {
@@ -204,10 +211,10 @@ func (c *BigqueryTablesCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"tables":        resp.Tables,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Tables))
 	}
 
 	if len(resp.Tables) == 0 {
@@ -267,9 +274,9 @@ func (c *BigquerySchemaCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"schema": tbl.Schema,
-		})
+		}, tbl.Schema))
 	}
 
 	if tbl.Schema == nil || len(tbl.Schema.Fields) == 0 {
@@ -326,10 +333,10 @@ func (c *BigqueryJobsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"jobs":          resp.Jobs,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Jobs))
 	}
 
 	if len(resp.Jobs) == 0 {

@@ -75,6 +75,84 @@ func TestPolicyCreateListGetDelete(t *testing.T) {
 	})
 }
 
+func TestPolicyCreate_PlainReceiptUsesPersistedNormalizedPolicy(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain",
+				"--account", "USER@EXAMPLE.COM",
+				"--client", "personal",
+				"policy", "create", "Safe",
+				"--allow", "gmail:read,gmail:batch-modify",
+				"--deny", "gmail:send",
+				"--reason", "  Needed for triage  ",
+			}); err != nil {
+				t.Fatalf("policy create: %v", err)
+			}
+		})
+	})
+
+	want := "ACTION\tNAME\tACCOUNT\tCLIENT\tALLOW\tDENY\tREASON\n" +
+		"create\tsafe\tuser@example.com\tpersonal\tgmail:batch.modify,gmail:read\tgmail:send\tNeeded for triage\n"
+	if out != want {
+		t.Fatalf("plain policy create output = %q, want %q", out, want)
+	}
+
+	cfg, err := config.ReadConfig()
+	if err != nil {
+		t.Fatalf("ReadConfig: %v", err)
+	}
+	policy, ok := config.GetPolicy(cfg, "safe")
+	if !ok {
+		t.Fatal("expected persisted policy")
+	}
+	if policy.Name != "safe" || policy.Account != "user@example.com" || policy.Client != "personal" ||
+		strings.Join(policy.Allow, ",") != "gmail:batch.modify,gmail:read" ||
+		strings.Join(policy.Deny, ",") != "gmail:send" || policy.Reason != "Needed for triage" {
+		t.Fatalf("unexpected persisted policy: %#v", policy)
+	}
+}
+
+func TestPolicyDelete_PlainReceiptIdentifiesOnlyDeletedPolicy(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	if err := config.WriteConfig(config.File{Policies: []config.Policy{
+		{Name: "keep", Account: "keep@example.com", Allow: []string{"gmail:read"}},
+		{Name: "safe", Account: "user@example.com", Client: "personal", Allow: []string{"gmail:read"}, Reason: "remove me"},
+	}}); err != nil {
+		t.Fatalf("WriteConfig: %v", err)
+	}
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--plain", "policy", "delete", "SAFE"}); err != nil {
+				t.Fatalf("policy delete: %v", err)
+			}
+		})
+	})
+
+	want := "ACTION\tNAME\tACCOUNT\tCLIENT\tALLOW\tDENY\tREASON\n" +
+		"delete\tsafe\t\t\t\t\t\n"
+	if out != want {
+		t.Fatalf("plain policy delete output = %q, want %q", out, want)
+	}
+
+	cfg, err := config.ReadConfig()
+	if err != nil {
+		t.Fatalf("ReadConfig: %v", err)
+	}
+	if _, ok := config.GetPolicy(cfg, "safe"); ok {
+		t.Fatal("deleted policy remains persisted")
+	}
+	if _, ok := config.GetPolicy(cfg, "keep"); !ok {
+		t.Fatal("unrelated policy was removed")
+	}
+}
+
 func TestPolicyList_PlainTSV(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())

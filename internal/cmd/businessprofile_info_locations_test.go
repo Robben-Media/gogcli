@@ -171,8 +171,9 @@ func TestExecute_BusinessProfileInfoLocationsDelete_JSON(t *testing.T) {
 		return svc, nil
 	}
 
-	_ = captureStdout(t, func() {
-		_ = captureStderr(t, func() {
+	var stderr string
+	out := captureStdout(t, func() {
+		stderr = captureStderr(t, func() {
 			if err := Execute([]string{
 				"--json", "--force", "--account", "a@b.com",
 				"business-profile", "info-locations", "delete", "123",
@@ -181,6 +182,9 @@ func TestExecute_BusinessProfileInfoLocationsDelete_JSON(t *testing.T) {
 			}
 		})
 	})
+	if !strings.Contains(stderr, "Deleted") {
+		t.Fatalf("expected success diagnostic, got %q", stderr)
+	}
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -189,6 +193,63 @@ func TestExecute_BusinessProfileInfoLocationsDelete_JSON(t *testing.T) {
 	}
 	if !strings.Contains(gotPath, "locations/123") {
 		t.Fatalf("expected path to contain 'locations/123', got %q", gotPath)
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatalf("parsing JSON: %v\nout=%q", err, out)
+	}
+	if result["action"] != "delete" {
+		t.Fatalf("expected action=delete, got %v", result["action"])
+	}
+	if result["resource"] != "locations/123" {
+		t.Fatalf("expected resource locations/123, got %v", result["resource"])
+	}
+	if result["success"] != true {
+		t.Fatalf("expected success=true, got %v", result["success"])
+	}
+}
+
+func TestExecute_BusinessProfileInfoLocationsDelete_Plain(t *testing.T) {
+	origInfo := newBusinessProfileInfoService
+	t.Cleanup(func() { newBusinessProfileInfoService = origInfo })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || !strings.Contains(r.URL.Path, "/locations/") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{})
+	}))
+	defer srv.Close()
+
+	svc, err := mybusinessbusinessinformation.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newBusinessProfileInfoService = func(context.Context, string) (*mybusinessbusinessinformation.Service, error) {
+		return svc, nil
+	}
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain", "--force", "--account", "a@b.com",
+				"business-profile", "info-locations", "delete", "123",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	want := "ACTION\tRESOURCE\tSUCCESS\ndelete\tlocations/123\ttrue\n"
+	if out != want {
+		t.Fatalf("plain receipt mismatch:\n got %q\nwant %q", out, want)
 	}
 }
 

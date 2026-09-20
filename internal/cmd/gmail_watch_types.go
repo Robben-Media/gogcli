@@ -124,3 +124,56 @@ type gmailHookPayload struct {
 	HistoryID string             `json:"historyId"`
 	Messages  []gmailHookMessage `json:"messages"`
 }
+
+// gmailWatchStatusHook is the public hook view for status output.
+// It intentionally omits the bearer token.
+type gmailWatchStatusHook struct {
+	URL         string `json:"url"`
+	IncludeBody bool   `json:"includeBody,omitempty"`
+	MaxBytes    int    `json:"maxBytes,omitempty"`
+}
+
+// gmailWatchStatusView is the redacted public representation of watch state.
+// Persistence continues to use gmailWatchState, which retains the real hook token.
+type gmailWatchStatusView struct {
+	Account                string                `json:"account"`
+	Topic                  string                `json:"topic"`
+	Labels                 []string              `json:"labels,omitempty"`
+	HistoryID              string                `json:"historyId"`
+	ExpirationMs           int64                 `json:"expirationMs,omitempty"`
+	ProviderExpirationMs   int64                 `json:"providerExpirationMs,omitempty"`
+	RenewAfterMs           int64                 `json:"renewAfterMs,omitempty"`
+	UpdatedAtMs            int64                 `json:"updatedAtMs,omitempty"`
+	Hook                   *gmailWatchStatusHook `json:"hook,omitempty"`
+	HookTokenConfigured    bool                  `json:"hookTokenConfigured"`
+	LastDeliveryStatus     string                `json:"lastDeliveryStatus,omitempty"`
+	LastDeliveryAtMs       int64                 `json:"lastDeliveryAtMs,omitempty"`
+	LastDeliveryStatusNote string                `json:"lastDeliveryStatusNote,omitempty"`
+	LastPushMessageID      string                `json:"lastPushMessageId,omitempty"`
+}
+
+func watchStatusView(state gmailWatchState) gmailWatchStatusView {
+	view := gmailWatchStatusView{
+		Account:                state.Account,
+		Topic:                  state.Topic,
+		Labels:                 state.Labels,
+		HistoryID:              state.HistoryID,
+		ExpirationMs:           state.ExpirationMs,
+		ProviderExpirationMs:   state.ProviderExpirationMs,
+		RenewAfterMs:           state.RenewAfterMs,
+		UpdatedAtMs:            state.UpdatedAtMs,
+		LastDeliveryStatus:     state.LastDeliveryStatus,
+		LastDeliveryAtMs:       state.LastDeliveryAtMs,
+		LastDeliveryStatusNote: state.LastDeliveryStatusNote,
+		LastPushMessageID:      state.LastPushMessageID,
+	}
+	if state.Hook != nil {
+		view.Hook = &gmailWatchStatusHook{
+			URL:         state.Hook.URL,
+			IncludeBody: state.Hook.IncludeBody,
+			MaxBytes:    state.Hook.MaxBytes,
+		}
+		view.HookTokenConfigured = state.Hook.Token != ""
+	}
+	return view
+}

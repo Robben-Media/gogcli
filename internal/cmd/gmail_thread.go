@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -26,6 +27,8 @@ import (
 )
 
 // HTML stripping patterns for cleaner text output.
+const gmailThreadRecordDownload = "download"
+
 var (
 	// Remove script blocks entirely (including content)
 	scriptPattern = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
@@ -113,10 +116,13 @@ func (c *GmailThreadGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 				downloadedFiles = append(downloadedFiles, attachmentDownloadSummaries(downloads)...)
 			}
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"thread":     thread,
 			"downloaded": downloadedFiles,
-		})
+		}, thread))
+	}
+	if outfmt.IsPlain(ctx) {
+		return writeGmailThreadPlainTSV(ctx, os.Stdout, threadID, thread, c.Full, c.Download, attachDir, svc)
 	}
 	if thread == nil || len(thread.Messages) == 0 {
 		u.Err().Println("Empty thread")
@@ -177,6 +183,87 @@ func (c *GmailThreadGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	return nil
 }
 
+// writeGmailThreadPlainTSV emits framed plain TSV for thread detail.
+// Schema: RECORD_TYPE THREAD_ID MESSAGE_ID NAME VALUE PATH BYTES CACHED
+func writeGmailThreadPlainTSV(
+	ctx context.Context,
+	w io.Writer,
+	threadID string,
+	thread *gmail.Thread,
+	full bool,
+	download bool,
+	attachDir string,
+	svc *gmail.Service,
+) error {
+	writeTableRow(ctx, w, []string{"RECORD_TYPE", "THREAD_ID", "MESSAGE_ID", "NAME", "VALUE", "PATH", "BYTES", "CACHED"})
+	if thread == nil || len(thread.Messages) == 0 {
+		return nil
+	}
+
+	writeTableRow(ctx, w, []string{
+		"metadata", threadID, "", "message_count", strconv.Itoa(len(thread.Messages)), "", "", "",
+	})
+
+	for _, msg := range thread.Messages {
+		if msg == nil {
+			continue
+		}
+		msgID := msg.Id
+		for _, name := range []string{"From", "To", "Subject", "Date"} {
+			writeTableRow(ctx, w, []string{
+				"header", threadID, msgID, name, headerValue(msg.Payload, name), "", "", "",
+			})
+		}
+
+		body, isHTML := bestBodyForDisplay(msg.Payload)
+		if body != "" {
+			cleanBody := body
+			if isHTML {
+				cleanBody = stripHTMLTags(body)
+			}
+			runes := []rune(cleanBody)
+			if len(runes) > 500 && !full {
+				cleanBody = string(runes[:500]) + "... [truncated]"
+			}
+			writeTableRow(ctx, w, []string{"body", threadID, msgID, "", cleanBody, "", "", ""})
+		}
+
+		attachments := collectAttachments(msg.Payload)
+		for _, a := range attachments {
+			writeTableRow(ctx, w, []string{
+				"attachment",
+				threadID,
+				msgID,
+				a.Filename,
+				a.MimeType,
+				a.AttachmentID,
+				strconv.FormatInt(a.Size, 10),
+				"",
+			})
+		}
+
+		if download && len(attachments) > 0 {
+			downloads, err := downloadAttachmentOutputs(ctx, svc, msg.Id, attachments, attachDir)
+			if err != nil {
+				return err
+			}
+			for _, a := range downloads {
+				writeTableRow(ctx, w, []string{
+					gmailThreadRecordDownload,
+					threadID,
+					msgID,
+					a.Filename,
+					"",
+					url.PathEscape(a.Path),
+					strconv.FormatInt(a.Bytes, 10),
+					strconv.FormatBool(a.Cached),
+				})
+			}
+		}
+	}
+	return nil
+}
+
 type GmailThreadModifyCmd struct {
 	ThreadID string `arg:"" name:"threadId" help:"Thread ID"`
 	Add      string `name:"add" help:"Labels to add (comma-separated, name or ID)"`
@@ -224,11 +311,18 @@ func (c *GmailThreadModifyCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"modified":      threadID,
 			"addedLabels":   addIDs,
 			"removedLabels": removeIDs,
-		})
+		}))
+	}
+	if outfmt.IsPlain(ctx) {
+		writePlainReceipt(ctx,
+			[]string{"THREAD_ID", "ADDED_LABELS", "REMOVED_LABELS"},
+			[]string{threadID, joinCSV(addIDs), joinCSV(removeIDs)},
+		)
+		return nil
 	}
 
 	u.Out().Printf("Modified thread %s", threadID)
@@ -265,10 +359,13 @@ func (c *GmailThreadAttachmentsCmd) Run(ctx context.Context, flags *RootFlags) e
 
 	if thread == nil || len(thread.Messages) == 0 {
 		if outfmt.IsJSON(ctx) {
-			return outfmt.WriteJSON(os.Stdout, map[string]any{
+			return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 				"threadId":    threadID,
 				"attachments": []any{},
-			})
+			}, []any{}))
+		}
+		if outfmt.IsPlain(ctx) {
+			return writeGmailThreadAttachmentsPlainTSV(ctx, threadID, nil, false)
 		}
 		u.Err().Println("Empty thread")
 		return nil
@@ -305,10 +402,13 @@ func (c *GmailThreadAttachmentsCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"threadId":    threadID,
 			"attachments": allAttachments,
-		})
+		}, allAttachments))
+	}
+	if outfmt.IsPlain(ctx) {
+		return writeGmailThreadAttachmentsPlainTSV(ctx, threadID, allAttachments, c.Download)
 	}
 
 	if len(allAttachments) == 0 {
@@ -331,6 +431,39 @@ func (c *GmailThreadAttachmentsCmd) Run(ctx context.Context, flags *RootFlags) e
 	return nil
 }
 
+// writeGmailThreadAttachmentsPlainTSV emits the shared attachments plain schema:
+// THREAD_ID MESSAGE_ID ATTACHMENT_ID FILENAME MIME_TYPE BYTES PATH CACHED
+// Listing leaves PATH/CACHED empty and uses metadata size for BYTES.
+// Download fills PATH/CACHED and uses exact transfer/cache byte counts.
+func writeGmailThreadAttachmentsPlainTSV(ctx context.Context, threadID string, attachments []attachmentDownloadOutput, download bool) error {
+	w, flush := tableWriter(ctx)
+	defer flush()
+	writeTableRow(ctx, w, []string{
+		"THREAD_ID", "MESSAGE_ID", "ATTACHMENT_ID", "FILENAME", "MIME_TYPE", "BYTES", "PATH", "CACHED",
+	})
+	for _, a := range attachments {
+		bytesField := strconv.FormatInt(a.Size, 10)
+		pathField := ""
+		cachedField := ""
+		if download {
+			bytesField = strconv.FormatInt(a.Bytes, 10)
+			pathField = a.Path
+			cachedField = strconv.FormatBool(a.Cached)
+		}
+		writeTableRow(ctx, w, []string{
+			threadID,
+			a.MessageID,
+			a.AttachmentID,
+			a.Filename,
+			a.MimeType,
+			bytesField,
+			pathField,
+			cachedField,
+		})
+	}
+	return nil
+}
+
 type GmailURLCmd struct {
 	ThreadIDs []string `arg:"" name:"threadId" help:"Thread IDs"`
 }
@@ -349,7 +482,7 @@ func (c *GmailURLCmd) Run(ctx context.Context, flags *RootFlags) error {
 				"url": fmt.Sprintf("https://mail.google.com/mail/?authuser=%s#all/%s", url.QueryEscape(account), id),
 			})
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"urls": urls})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"urls": urls}, urls))
 	}
 	for _, id := range c.ThreadIDs {
 		threadURL := fmt.Sprintf("https://mail.google.com/mail/?authuser=%s#all/%s", url.QueryEscape(account), id)
@@ -647,9 +780,9 @@ func decodeBase64URL(s string) (string, error) {
 	return string(b), nil
 }
 
-func downloadAttachment(ctx context.Context, svc *gmail.Service, messageID string, a attachmentInfo, dir string) (string, bool, error) {
+func attachmentDownloadPath(messageID string, a attachmentInfo, dir string) (string, error) {
 	if strings.TrimSpace(messageID) == "" || strings.TrimSpace(a.AttachmentID) == "" {
-		return "", false, errors.New("missing messageID/attachmentID")
+		return "", errors.New("missing messageID/attachmentID")
 	}
 	if strings.TrimSpace(dir) == "" {
 		dir = "."
@@ -658,16 +791,23 @@ func downloadAttachment(ctx context.Context, svc *gmail.Service, messageID strin
 	if len(shortID) > 8 {
 		shortID = shortID[:8]
 	}
-	// Sanitize filename to prevent path traversal attacks
+	// Sanitize filename to prevent path traversal attacks.
 	safeFilename := filepath.Base(a.Filename)
 	if safeFilename == "" || safeFilename == "." || safeFilename == ".." {
 		safeFilename = "attachment"
 	}
 	filename := fmt.Sprintf("%s_%s_%s", messageID, shortID, safeFilename)
-	outPath := filepath.Join(dir, filename)
-	path, cached, _, err := downloadAttachmentToPath(ctx, svc, messageID, a.AttachmentID, outPath, a.Size)
+	return filepath.Join(dir, filename), nil
+}
+
+func downloadAttachment(ctx context.Context, svc *gmail.Service, messageID string, a attachmentInfo, dir string) (string, bool, int64, error) {
+	outPath, err := attachmentDownloadPath(messageID, a, dir)
 	if err != nil {
-		return "", false, err
+		return "", false, 0, err
 	}
-	return path, cached, nil
+	path, cached, byteCount, err := downloadAttachmentToPath(ctx, svc, messageID, a.AttachmentID, outPath, a.Size)
+	if err != nil {
+		return "", false, 0, err
+	}
+	return path, cached, byteCount, nil
 }

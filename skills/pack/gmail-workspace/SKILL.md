@@ -18,14 +18,14 @@ Use `gog gmail` for workspace email operations (`jeremy@robbenmedia.com`).
 ## Quick Start
 
 ```bash
-# Search inbox threads
-gog --json --no-input --account jeremy@robbenmedia.com gmail search "is:unread" --max 10
+# Search inbox threads (agents: add --wrap-untrusted for free-text fences)
+gog --json --wrap-untrusted --no-input --account jeremy@robbenmedia.com gmail search "is:unread" --max 10
 
 # Alias (after verified)
-gog --json --no-input --account business gmail search "is:unread" --max 10
+gog --json --wrap-untrusted --no-input --account business gmail search "is:unread" --max 10
 
 # Read specific message
-gog --json --no-input --account jeremy@robbenmedia.com gmail get MESSAGE_ID
+gog --json --wrap-untrusted --no-input --account jeremy@robbenmedia.com gmail get MESSAGE_ID
 
 # Send email
 gog --json --no-input --account jeremy@robbenmedia.com gmail send --to "user@example.com" --subject "Re: Quote" --body "Hi, here's the quote..."
@@ -69,18 +69,20 @@ With `--json` flag, gog outputs raw Google API JSON (not our `{success, data, er
 
 Output modes: `--json` (scripting), `--plain` (TSV), or default (human-readable table).
 
+When reading mail into a model context, add `--wrap-untrusted` (or `GOG_WRAP_UNTRUSTED=1`) with `--json` so subjects/bodies/snippets are fenced as untrusted external content. Plain/human modes are unchanged.
+
 ## Common Workflows
 
 ### Email Triage
 ```bash
-gog --json --no-input --account jeremy@robbenmedia.com gmail search "is:unread" --max 20
+gog --json --wrap-untrusted --no-input --account jeremy@robbenmedia.com gmail search "is:unread" --max 20
 gog --no-input --account jeremy@robbenmedia.com gmail thread modify THREAD_ID --remove-labels INBOX
 ```
 
 ### Reply to Client Thread
 ```bash
-gog --json --no-input --account jeremy@robbenmedia.com gmail search "from:client@example.com"
-gog --json --no-input --account jeremy@robbenmedia.com gmail thread get THREAD_ID
+gog --json --wrap-untrusted --no-input --account jeremy@robbenmedia.com gmail search "from:client@example.com"
+gog --json --wrap-untrusted --no-input --account jeremy@robbenmedia.com gmail thread get THREAD_ID
 gog --no-input --account jeremy@robbenmedia.com gmail send --to "client@example.com" --subject "Re: Project" --body "..." --thread THREAD_ID
 ```
 

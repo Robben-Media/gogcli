@@ -66,7 +66,7 @@ func (c *CalendarEventsWatchCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"channel": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"channel": resp}, resp))
 	}
 
 	u.Out().Printf("channel_id\t%s", resp.Id)
@@ -174,7 +174,7 @@ func (c *CalendarEventsImportCmd) Run(ctx context.Context, flags *RootFlags) err
 
 	tz, loc, _ := getCalendarLocation(ctx, svc, calendarID)
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"event": wrapEventWithDaysWithTimezone(imported, tz, loc)})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"event": wrapEventWithDaysWithTimezone(imported, tz, loc)}, wrapEventWithDaysWithTimezone(imported, tz, loc)))
 	}
 	printCalendarEventWithTimezone(u, imported, tz, loc)
 	return nil
@@ -239,11 +239,11 @@ func (c *CalendarEventsInstancesCmd) Run(ctx context.Context, flags *RootFlags) 
 
 	tz, _, _ := getCalendarLocation(ctx, svc, calendarID)
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"instances":     resp.Items,
 			"nextPageToken": resp.NextPageToken,
 			"timeZone":      tz,
-		})
+		}, resp.Items))
 	}
 
 	if len(resp.Items) == 0 {
@@ -268,7 +268,7 @@ func (c *CalendarEventsInstancesCmd) Run(ctx context.Context, flags *RootFlags) 
 type CalendarEventsQuickAddCmd struct {
 	CalendarID string `arg:"" name:"calendarId" help:"Calendar ID (default: primary)"`
 	Text       string `arg:"" name:"text" help:"Event description (e.g., 'Meeting tomorrow at 3pm')"`
-	SendUpdate string `name:"send-updates" help:"Notification mode: all, externalOnly, none (default: all)"`
+	SendUpdate string `name:"send-updates" help:"Notification mode: all, externalOnly, none (default: all)" default:"all"`
 }
 
 func (c *CalendarEventsQuickAddCmd) Run(ctx context.Context, flags *RootFlags) error {
@@ -309,7 +309,7 @@ func (c *CalendarEventsQuickAddCmd) Run(ctx context.Context, flags *RootFlags) e
 
 	tz, loc, _ := getCalendarLocation(ctx, svc, calendarID)
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"event": wrapEventWithDaysWithTimezone(created, tz, loc)})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"event": wrapEventWithDaysWithTimezone(created, tz, loc)}, wrapEventWithDaysWithTimezone(created, tz, loc)))
 	}
 	printCalendarEventWithTimezone(u, created, tz, loc)
 	return nil
@@ -320,7 +320,7 @@ type CalendarEventsMoveCmd struct {
 	SourceCalendarID      string `arg:"" name:"sourceCalendarId" help:"Source calendar ID (default: primary)"`
 	EventID               string `arg:"" name:"eventId" help:"Event ID"`
 	DestinationCalendarID string `arg:"" name:"destinationCalendarId" help:"Destination calendar ID"`
-	SendUpdate            string `name:"send-updates" help:"Notification mode: all, externalOnly, none (default: all)"`
+	SendUpdate            string `name:"send-updates" help:"Notification mode: all, externalOnly, none (default: all)" default:"all"`
 }
 
 func (c *CalendarEventsMoveCmd) Run(ctx context.Context, flags *RootFlags) error {
@@ -365,11 +365,12 @@ func (c *CalendarEventsMoveCmd) Run(ctx context.Context, flags *RootFlags) error
 
 	tz, loc, _ := getCalendarLocation(ctx, svc, destinationCalendarID)
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
-			"event":          wrapEventWithDaysWithTimezone(moved, tz, loc),
+		event := wrapEventWithDaysWithTimezone(moved, tz, loc)
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
+			"event":          event,
 			"sourceCalendar": sourceCalendarID,
 			"destCalendar":   destinationCalendarID,
-		})
+		}, event))
 	}
 
 	u.Out().Printf("moved\ttrue")

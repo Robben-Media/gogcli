@@ -12,7 +12,7 @@ import (
 	"google.golang.org/api/option"
 )
 
-func TestExecute_GmailMessagesSearch_Text(t *testing.T) {
+func TestExecute_GmailMessagesSearch_PlainKeepsOneRowPerMessage(t *testing.T) {
 	origNew := newGmailService
 	t.Cleanup(func() { newGmailService = origNew })
 
@@ -37,8 +37,8 @@ func TestExecute_GmailMessagesSearch_Text(t *testing.T) {
 				"payload": map[string]any{
 					"mimeType": "text/plain",
 					"headers": []map[string]any{
-						{"name": "From", "value": "Example <no-reply@example.com>"},
-						{"name": "Subject", "value": "Receipt"},
+						{"name": "From", "value": "Example\tSender\nTeam"},
+						{"name": "Subject", "value": "Receipt\rArchive\r\nCopy"},
 						{"name": "Date", "value": "Mon, 02 Jan 2006 15:04:05 -0700"},
 					},
 				},
@@ -84,15 +84,39 @@ func TestExecute_GmailMessagesSearch_Text(t *testing.T) {
 	}
 	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
-	out := captureStdout(t, func() {
+	textOut := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
 			if err := Execute([]string{"--account", "a@b.com", "gmail", "messages", "search", "from:example.com", "--max", "2"}); err != nil {
+				t.Fatalf("Execute default output: %v", err)
+			}
+		})
+	})
+	if !strings.Contains(textOut, "m1") || !strings.Contains(textOut, "m2") {
+		t.Fatalf("expected both message IDs in default output, got: %q", textOut)
+	}
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--plain", "--account", "a@b.com", "gmail", "messages", "search", "from:example.com", "--max", "2"}); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
 		})
 	})
-	if !strings.Contains(out, "m1") || !strings.Contains(out, "m2") {
-		t.Fatalf("expected both message IDs, got: %q", out)
+
+	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+	if got, want := len(lines), 3; got != want {
+		t.Fatalf("physical rows = %d, want %d; output=%q", got, want, out)
+	}
+	for i, line := range lines {
+		if got, want := len(strings.Split(line, "\t")), 6; got != want {
+			t.Fatalf("row %d columns = %d, want %d; row=%q", i, got, want, line)
+		}
+		if strings.ContainsRune(line, '\r') {
+			t.Fatalf("row %d contains carriage return: %q", i, line)
+		}
+	}
+	if !strings.Contains(out, "Example Sender Team") || !strings.Contains(out, "Receipt Archive Copy") {
+		t.Fatalf("sanitized fields missing from output: %q", out)
 	}
 }
 

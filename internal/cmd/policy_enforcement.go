@@ -13,6 +13,10 @@ import (
 type policyDecision = access.Decision
 
 func enforceCommandPolicies(kctx *kong.Context, flags *RootFlags) error {
+	if isSchemaCommand(kctx.Command()) {
+		return nil
+	}
+
 	cfg, err := config.ReadConfig()
 	if err != nil {
 		return fmt.Errorf("read config: %w", err)
@@ -77,18 +81,16 @@ func evaluatePolicies(policies []config.Policy, action string, account string, c
 	return access.Evaluate(policies, action, account, client)
 }
 
+func mostSpecificApplicablePolicies(policies []config.Policy, account string, client string) []config.Policy {
+	return access.ApplicablePolicies(policies, account, client)
+}
+
+func normalizeCommandService(raw string) string {
+	return access.CanonicalService(raw)
+}
+
 func commandActionID(kctx *kong.Context) string {
-	if kctx == nil {
-		return ""
-	}
-	rawParts := strings.Fields(strings.ToLower(strings.TrimSpace(kctx.Command())))
-	parts := make([]string, 0, len(rawParts))
-	for _, part := range rawParts {
-		if strings.HasPrefix(part, "<") && strings.HasSuffix(part, ">") {
-			continue
-		}
-		parts = append(parts, part)
-	}
+	parts := commandPath(kctx)
 	if len(parts) < 2 {
 		return ""
 	}

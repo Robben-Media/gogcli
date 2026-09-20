@@ -74,10 +74,10 @@ func (c *GroupsListCmd) Run(ctx context.Context, flags *RootFlags) error {
 				Role:        getRelationType(m.RelationType),
 			})
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"groups":        items,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, items))
 	}
 
 	if len(resp.Memberships) == 0 {
@@ -187,10 +187,10 @@ func (c *GroupsMembersCmd) Run(ctx context.Context, flags *RootFlags) error {
 				Type:  m.Type,
 			})
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"members":       items,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, items))
 	}
 
 	if len(resp.Memberships) == 0 {

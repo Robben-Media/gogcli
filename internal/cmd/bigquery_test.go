@@ -232,9 +232,16 @@ func TestExecute_BigqueryListCommands_FirstPageOmitsPageToken(t *testing.T) {
 	}
 }
 
-func TestExecute_BigqueryQuery_JSON(t *testing.T) {
+func TestExecute_BigqueryQuery_OutputModes(t *testing.T) {
 	origNew := newBigqueryService
 	t.Cleanup(func() { newBigqueryService = origNew })
+
+	const (
+		tabValue  = "tab\tvalue"
+		lfValue   = "lf\nvalue"
+		crValue   = "cr\rvalue"
+		crlfValue = "crlf\r\nvalue"
+	)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/queries") && r.Method == http.MethodPost {
@@ -243,25 +250,41 @@ func TestExecute_BigqueryQuery_JSON(t *testing.T) {
 				"jobComplete": true,
 				"schema": map[string]any{
 					"fields": []map[string]any{
-						{"name": "name", "type": "STRING"},
-						{"name": "age", "type": "INTEGER"},
+						{"name": "tab\tcolumn", "type": "STRING"},
+						{"name": "lf\ncolumn", "type": "STRING"},
+						{"name": "cr\rcolumn", "type": "STRING"},
+						{"name": "crlf\r\ncolumn", "type": "STRING"},
+						{"name": "number", "type": "INTEGER"},
+						{"name": "nullable", "type": "STRING"},
 					},
 				},
 				"rows": []map[string]any{
 					{
 						"f": []map[string]any{
-							{"v": "Alice"},
-							{"v": "30"},
+							{"v": tabValue},
+							{"v": lfValue},
+							{"v": crValue},
+							{"v": crlfValue},
+							{"v": 42},
+							{"v": nil},
 						},
 					},
 					{
+						"f": []map[string]any{{"v": "short"}},
+					},
+					{
 						"f": []map[string]any{
-							{"v": "Bob"},
-							{"v": "25"},
+							{"v": "one"},
+							{"v": "two"},
+							{"v": "three"},
+							{"v": "four"},
+							{"v": "five"},
+							{"v": "six"},
+							{"v": "seven"},
 						},
 					},
 				},
-				"totalRows": "2",
+				"totalRows": "3",
 			})
 			return
 		}
@@ -304,17 +327,54 @@ func TestExecute_BigqueryQuery_JSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
 		t.Fatalf("json parse: %v\nout=%q", err, out)
 	}
-	if len(parsed.Schema.Fields) != 2 {
-		t.Fatalf("expected 2 schema fields, got %d", len(parsed.Schema.Fields))
+	if len(parsed.Schema.Fields) != 6 {
+		t.Fatalf("expected 6 schema fields, got %d", len(parsed.Schema.Fields))
 	}
-	if parsed.Schema.Fields[0].Name != "name" {
+	if parsed.Schema.Fields[0].Name != "tab\tcolumn" {
 		t.Fatalf("unexpected field name: %q", parsed.Schema.Fields[0].Name)
 	}
-	if len(parsed.Rows) != 2 {
-		t.Fatalf("expected 2 rows, got %d", len(parsed.Rows))
+	if len(parsed.Rows) != 3 {
+		t.Fatalf("expected 3 rows, got %d", len(parsed.Rows))
 	}
-	if parsed.TotalRows != 2 {
+	if len(parsed.Rows[0].F) != 6 {
+		t.Fatalf("expected 6 cells, got %d", len(parsed.Rows[0].F))
+	}
+	for i, want := range []string{tabValue, lfValue, crValue, crlfValue} {
+		if got := parsed.Rows[0].F[i].V; got != want {
+			t.Fatalf("JSON cell %d = %q, want %q", i, got, want)
+		}
+	}
+	if len(parsed.Rows[2].F) != 7 || parsed.Rows[2].F[6].V != "seven" {
+		t.Fatalf("JSON did not preserve extra API cell: %#v", parsed.Rows[2].F)
+	}
+	if parsed.TotalRows != 3 {
 		t.Fatalf("unexpected totalRows: %d", parsed.TotalRows)
+	}
+
+	plain := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--plain", "--account", "a@b.com", "bigquery", "query", "--project", "proj1", "--sql", "SELECT * FROM users"}); err != nil {
+				t.Fatalf("Execute plain: %v", err)
+			}
+		})
+	})
+	wantPlain := "tab column\tlf column\tcr column\tcrlf column\tnumber\tnullable\n" +
+		"tab value\tlf value\tcr value\tcrlf value\t42\t\n" +
+		"short\t\t\t\t\t\n" +
+		"one\ttwo\tthree\tfour\tfive\tsix\n"
+	if plain != wantPlain {
+		t.Fatalf("plain output = %q, want %q", plain, wantPlain)
+	}
+
+	human := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--account", "a@b.com", "bigquery", "query", "--project", "proj1", "--sql", "SELECT * FROM users"}); err != nil {
+				t.Fatalf("Execute human: %v", err)
+			}
+		})
+	})
+	if !strings.Contains(human, "seven") {
+		t.Fatalf("human output dropped extra API cell: %q", human)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"google.golang.org/api/option"
@@ -97,6 +98,49 @@ func TestExecute_SheetsSheetAdd_JSON(t *testing.T) {
 	}
 }
 
+func TestExecute_SheetsSheetDelete_NoInputRefusesBeforeRequest(t *testing.T) {
+	origNew := newSheetsService
+	t.Cleanup(func() { newSheetsService = origNew })
+
+	var batchUpdateRequests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/spreadsheets/s1:batchUpdate") && r.Method == http.MethodPost {
+			batchUpdateRequests.Add(1)
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"spreadsheetId": "s1"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	svc, err := sheets.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newSheetsService = func(context.Context, string) (*sheets.Service, error) { return svc, nil }
+
+	var executeErr error
+	_ = captureStderr(t, func() {
+		_ = captureStdout(t, func() {
+			executeErr = Execute([]string{"--json", "--no-input", "--account", "a@b.com", "sheets", "sheet", "delete", "s1", "--sheet-id", "42"})
+		})
+	})
+	if executeErr == nil {
+		t.Fatal("expected non-interactive deletion to require --force")
+	}
+	if !strings.Contains(executeErr.Error(), "without --force") {
+		t.Fatalf("expected --force guidance, got %v", executeErr)
+	}
+	if got := batchUpdateRequests.Load(); got != 0 {
+		t.Fatalf("expected no batchUpdate request after refusal, got %d", got)
+	}
+}
+
 func TestExecute_SheetsSheetDelete_JSON(t *testing.T) {
 	origNew := newSheetsService
 	t.Cleanup(func() { newSheetsService = origNew })
@@ -134,7 +178,7 @@ func TestExecute_SheetsSheetDelete_JSON(t *testing.T) {
 	}
 	newSheetsService = func(context.Context, string) (*sheets.Service, error) { return svc, nil }
 
-	flags := &RootFlags{Account: "a@b.com"}
+	flags := &RootFlags{Account: "a@b.com", Force: true}
 	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
 	if uiErr != nil {
 		t.Fatalf("ui.New: %v", uiErr)

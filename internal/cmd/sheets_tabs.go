@@ -73,7 +73,16 @@ func (c *SheetsSheetAddCmd) Run(ctx context.Context, flags *RootFlags) error {
 			out["sheetId"] = addedProps.SheetId
 			out["title"] = addedProps.Title
 		}
-		return outfmt.WriteJSON(os.Stdout, out)
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(out))
+	}
+	if outfmt.IsPlain(ctx) {
+		sheetID, title := "", ""
+		if addedProps != nil {
+			sheetID = fmt.Sprintf("%d", addedProps.SheetId)
+			title = addedProps.Title
+		}
+		writeSheetsStructuralPlain(ctx, "add", resp.SpreadsheetId, sheetID, title, "")
+		return nil
 	}
 
 	u := ui.FromContext(ctx)
@@ -99,6 +108,9 @@ func (c *SheetsSheetDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 	if id == "" {
 		return usage("empty spreadsheetId")
 	}
+	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("delete sheet tab %d from spreadsheet %s", c.SheetID, id)); confirmErr != nil {
+		return confirmErr
+	}
 
 	svc, err := newSheetsService(ctx, account)
 	if err != nil {
@@ -119,10 +131,14 @@ func (c *SheetsSheetDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"spreadsheetId":  resp.SpreadsheetId,
 			"deletedSheetId": c.SheetID,
-		})
+		}))
+	}
+	if outfmt.IsPlain(ctx) {
+		writeSheetsStructuralPlain(ctx, "delete", resp.SpreadsheetId, fmt.Sprintf("%d", c.SheetID), "", "")
+		return nil
 	}
 
 	u := ui.FromContext(ctx)
@@ -196,11 +212,15 @@ func (c *SheetsSheetUpdateCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"spreadsheetId": resp.SpreadsheetId,
 			"sheetId":       c.SheetID,
 			"updatedFields": fields,
-		})
+		}))
+	}
+	if outfmt.IsPlain(ctx) {
+		writeSheetsStructuralPlain(ctx, "update", resp.SpreadsheetId, fmt.Sprintf("%d", c.SheetID), strings.TrimSpace(c.Title), "")
+		return nil
 	}
 
 	u := ui.FromContext(ctx)

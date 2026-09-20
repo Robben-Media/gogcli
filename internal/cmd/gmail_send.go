@@ -324,7 +324,7 @@ func writeSendResults(ctx context.Context, u *ui.UI, fromAddr string, results []
 			if results[0].TrackingID != "" {
 				resp["tracking_id"] = results[0].TrackingID
 			}
-			return outfmt.WriteJSON(os.Stdout, resp)
+			return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(resp))
 		}
 
 		items := make([]map[string]any, 0, len(results))
@@ -342,7 +342,7 @@ func writeSendResults(ctx context.Context, u *ui.UI, fromAddr string, results []
 			}
 			items = append(items, item)
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"messages": items})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"messages": items}, items))
 	}
 
 	if len(results) == 1 {

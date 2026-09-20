@@ -3,7 +3,9 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"strconv"
 
 	"google.golang.org/api/gmail/v1"
 
@@ -22,9 +24,17 @@ type GmailBatchDeleteCmd struct {
 
 func (c *GmailBatchDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u := ui.FromContext(ctx)
+	if len(c.MessageIDs) == 0 {
+		return usage("at least one message ID is required")
+	}
+
 	account, err := requireAccount(flags)
 	if err != nil {
 		return err
+	}
+
+	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("permanently delete %d gmail message(s)", len(c.MessageIDs))); confirmErr != nil {
+		return confirmErr
 	}
 
 	svc, err := newGmailService(ctx, account)
@@ -40,10 +50,14 @@ func (c *GmailBatchDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"deleted": c.MessageIDs,
 			"count":   len(c.MessageIDs),
-		})
+		}, c.MessageIDs))
+	}
+
+	if outfmt.IsPlain(ctx) {
+		return writeGmailBatchPlainReceipt(ctx, "delete", len(c.MessageIDs), nil, nil)
 	}
 
 	u.Out().Printf("Deleted %d messages", len(c.MessageIDs))
@@ -92,14 +106,31 @@ func (c *GmailBatchModifyCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"modified":      c.MessageIDs,
 			"count":         len(c.MessageIDs),
 			"addedLabels":   addIDs,
 			"removedLabels": removeIDs,
-		})
+		}, c.MessageIDs))
+	}
+
+	if outfmt.IsPlain(ctx) {
+		return writeGmailBatchPlainReceipt(ctx, "modify", len(c.MessageIDs), addIDs, removeIDs)
 	}
 
 	u.Out().Printf("Modified %d messages", len(c.MessageIDs))
+	return nil
+}
+
+func writeGmailBatchPlainReceipt(ctx context.Context, action string, count int, addedLabels, removedLabels []string) error {
+	w, flush := tableWriter(ctx)
+	defer flush()
+	writeTableRow(ctx, w, []string{"ACTION", "COUNT", "ADDED_LABELS", "REMOVED_LABELS"})
+	writeTableRow(ctx, w, []string{
+		action,
+		strconv.Itoa(count),
+		joinCSV(addedLabels),
+		joinCSV(removedLabels),
+	})
 	return nil
 }

@@ -43,7 +43,7 @@ func (c *SearchConsoleSitemapsGetCmd) Run(ctx context.Context, flags *RootFlags)
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"sitemap": sm})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"sitemap": sm}, sm))
 	}
 
 	// Text output
@@ -95,6 +95,10 @@ func (c *SearchConsoleSitemapsDeleteCmd) Run(ctx context.Context, flags *RootFla
 		return delErr
 	}
 
+	if err := writeSearchConsoleMutationReceipt(ctx, "sitemaps.delete", siteURL, feedpath); err != nil {
+		return err
+	}
+	// Keep human confirmation on stderr in all modes (machine receipts go to stdout).
 	u.Err().Println("Sitemap deleted")
 	return nil
 }

@@ -21,8 +21,8 @@ GOG_KEYRING_PASSWORD=cli-tools gog --no-input --account jeremy@robbenmedia.com d
 # Export as PDF
 GOG_KEYRING_PASSWORD=cli-tools gog --no-input --account jeremy@robbenmedia.com docs export DOC_ID --format pdf --output ./doc.pdf
 
-# Get doc metadata
-GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com docs info DOC_ID
+# Get doc metadata (agents: --wrap-untrusted fences free-text JSON fields)
+GOG_KEYRING_PASSWORD=cli-tools gog --json --wrap-untrusted --no-input --account jeremy@robbenmedia.com docs info DOC_ID
 
 # Create a new doc
 GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com docs create "New Document"
@@ -41,6 +41,8 @@ Note: gogcli exports Docs via Drive API. For reading content, use `export --form
 ## Output Format
 
 With `--json`: raw Google API JSON metadata. Export outputs file content directly.
+
+Agents consuming Docs-related JSON text should pass `--wrap-untrusted` (or `GOG_WRAP_UNTRUSTED=1`) with `--json`; plain/human and binary exports are unchanged.
 
 ## Configuration
 

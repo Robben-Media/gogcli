@@ -65,6 +65,8 @@ linters:
       min-occurrences: 4
       ignore-map-keys: true
       ignore-string-values:
+        # Upper-case table column headers are output vocabulary, not constants.
+        - '^[A-Z][A-Z_]+$'
         - '^web_hook$'
         - '^yes$'
         - '^snippet$'

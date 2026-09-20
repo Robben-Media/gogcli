@@ -58,10 +58,10 @@ func (c *CalendarSearchCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"events": wrapEventsWithDays(resp.Items),
 			"query":  query,
-		})
+		}, wrapEventsWithDays(resp.Items)))
 	}
 
 	if len(resp.Items) == 0 {

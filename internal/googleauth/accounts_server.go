@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/99designs/keyring"
 	"golang.org/x/oauth2"
 
 	"github.com/steipete/gogcli/internal/config"
@@ -36,6 +37,7 @@ type ManageServerOptions struct {
 	Timeout      time.Duration
 	Services     []Service
 	ForceConsent bool
+	Readonly     bool
 	Client       string
 }
 
@@ -240,7 +242,7 @@ func (ms *ManageServer) handleAuthStart(w http.ResponseWriter, r *http.Request) 
 
 	services := manageServices(ms.opts.Services)
 
-	scopes, err := ScopesForManage(services)
+	scopes, err := ScopesForManageWithOptions(services, ScopeOptions{Readonly: ms.opts.Readonly})
 	if err != nil {
 		http.Error(w, "Failed to get scopes", http.StatusInternalServerError)
 		return
@@ -257,7 +259,7 @@ func (ms *ManageServer) handleAuthStart(w http.ResponseWriter, r *http.Request) 
 		Scopes:       scopes,
 	}
 
-	authURL := cfg.AuthCodeURL(state, authURLParams(ms.opts.ForceConsent, true)...)
+	authURL := cfg.AuthCodeURL(state, authURLParams(ms.opts.ForceConsent, !ms.opts.ForceConsent && !ms.opts.Readonly)...)
 	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
@@ -282,12 +284,9 @@ func (ms *ManageServer) handleAuthUpgrade(w http.ResponseWriter, r *http.Request
 	}
 	ms.oauthState = state
 
-	// Use requested manage services (exclude Keep)
-	services := manageServices(ms.opts.Services)
-
-	scopes, err := ScopesForManage(services)
+	_, scopes, err := ms.authGrant(email)
 	if err != nil {
-		http.Error(w, "Failed to get scopes", http.StatusInternalServerError)
+		http.Error(w, "Failed to read existing authorization", http.StatusInternalServerError)
 		return
 	}
 
@@ -305,7 +304,7 @@ func (ms *ManageServer) handleAuthUpgrade(w http.ResponseWriter, r *http.Request
 	// Always force consent for upgrades to ensure user sees all scopes
 	// Add login_hint to pre-select the account
 	authURL := cfg.AuthCodeURL(state,
-		append(authURLParams(true, true),
+		append(authURLParams(true, false),
 			oauth2.SetAuthURLParam("login_hint", email))...)
 
 	// Both URLs are built from the configured OAuth endpoint. The email only
@@ -358,7 +357,7 @@ func (ms *ManageServer) handleOAuthCallback(w http.ResponseWriter, r *http.Reque
 
 	services := manageServices(ms.opts.Services)
 
-	scopes, err := ScopesForManage(services)
+	scopes, err := ScopesForManageWithOptions(services, ScopeOptions{Readonly: ms.opts.Readonly})
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		renderErrorPage(w, "Failed to get scopes: "+err.Error())
@@ -409,6 +408,14 @@ func (ms *ManageServer) handleOAuthCallback(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	services, scopes, err = ms.authGrant(email)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		renderErrorPage(w, "Failed to read existing authorization: "+err.Error())
+
+		return
+	}
+
 	// Pre-flight: ensure keychain is accessible before storing token
 	needKeychain, err := shouldEnsureKeychainAccess()
 	if err != nil {
@@ -448,6 +455,30 @@ func (ms *ManageServer) handleOAuthCallback(w http.ResponseWriter, r *http.Reque
 	// Render success page with the new template
 	w.WriteHeader(http.StatusOK)
 	renderSuccessPageWithDetails(w, email, serviceNames)
+}
+
+func (ms *ManageServer) authGrant(email string) ([]Service, []string, error) {
+	services := manageServices(ms.opts.Services)
+
+	scopes, err := ScopesForManageWithOptions(services, ScopeOptions{Readonly: ms.opts.Readonly})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	existing, err := ms.store.GetToken(ms.client, email)
+	if errors.Is(err, keyring.ErrKeyNotFound) {
+		return services, scopes, nil
+	}
+
+	if err != nil {
+		return nil, nil, fmt.Errorf("read existing token: %w", err)
+	}
+
+	if !ms.opts.Readonly {
+		services, scopes = MergeAuthGrant(services, scopes, existing.Services, existing.Scopes)
+	}
+
+	return services, scopes, nil
 }
 
 func (ms *ManageServer) handleSetDefault(w http.ResponseWriter, r *http.Request) {

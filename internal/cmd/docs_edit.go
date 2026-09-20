@@ -34,6 +34,10 @@ func (c *DocsDeleteRangeCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("start must be less than end")
 	}
 
+	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("delete range %d-%d from doc %s", c.Start, c.End, id)); confirmErr != nil {
+		return confirmErr
+	}
+
 	svc, err := newDocsService(ctx, account)
 	if err != nil {
 		return err
@@ -56,10 +60,10 @@ func (c *DocsDeleteRangeCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"documentId": resp.DocumentId,
 			"replies":    resp.Replies,
-		})
+		}, resp.Replies))
 	}
 
 	u.Out().Printf("id\t%s", resp.DocumentId)
@@ -176,10 +180,10 @@ func (c *DocsFormatCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"documentId": resp.DocumentId,
 			"replies":    resp.Replies,
-		})
+		}, resp.Replies))
 	}
 
 	u.Out().Printf("id\t%s", resp.DocumentId)
@@ -237,10 +241,10 @@ func (c *DocsInsertTableCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"documentId": resp.DocumentId,
 			"replies":    resp.Replies,
-		})
+		}, resp.Replies))
 	}
 
 	u.Out().Printf("id\t%s", resp.DocumentId)
@@ -295,10 +299,10 @@ func (c *DocsInsertImageCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"documentId": resp.DocumentId,
 			"replies":    resp.Replies,
-		})
+		}, resp.Replies))
 	}
 
 	u.Out().Printf("id\t%s", resp.DocumentId)
@@ -358,10 +362,10 @@ func (c *DocsBulletsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"documentId": resp.DocumentId,
 			"replies":    resp.Replies,
-		})
+		}, resp.Replies))
 	}
 
 	u.Out().Printf("id\t%s", resp.DocumentId)

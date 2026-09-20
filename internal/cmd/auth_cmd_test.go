@@ -97,6 +97,18 @@ func (s *memSecretsStore) ListTokens() ([]secrets.Token, error) {
 	return out, nil
 }
 
+func (s *memSecretsStore) InspectTokens() ([]secrets.TokenInspection, error) {
+	tokens, err := s.ListTokens()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]secrets.TokenInspection, 0, len(tokens))
+	for _, token := range tokens {
+		out = append(out, secrets.TokenInspection{Client: token.Client, Email: token.Email, Token: token})
+	}
+	return out, nil
+}
+
 func (s *memSecretsStore) GetDefaultAccount(client string) (string, error) {
 	if client == "" {
 		client = config.DefaultClientName

@@ -110,6 +110,21 @@ func TestExecute_GmailSearch_JSON(t *testing.T) {
 	if len(parsed.Threads[0].Labels) != 1 || parsed.Threads[0].Labels[0] != "INBOX" {
 		t.Fatalf("unexpected labels: %#v", parsed.Threads[0].Labels)
 	}
+
+	resultsOnly := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--json", "--results-only", "--select", "id,subject", "--account", "a@b.com", "gmail", "search", "newer_than:7d", "--max", "1", "--timezone", "UTC"}); err != nil {
+				t.Fatalf("Execute results-only: %v", err)
+			}
+		})
+	})
+	var threads []map[string]any
+	if err := json.Unmarshal([]byte(resultsOnly), &threads); err != nil {
+		t.Fatalf("results-only JSON parse: %v\nout=%q", err, resultsOnly)
+	}
+	if len(threads) != 1 || len(threads[0]) != 2 || threads[0]["id"] != "t1" || threads[0]["subject"] != "Hello" {
+		t.Fatalf("unexpected results-only threads: %#v", threads)
+	}
 }
 
 func TestExecute_GmailURL_JSON(t *testing.T) {

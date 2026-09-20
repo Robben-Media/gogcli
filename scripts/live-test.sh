@@ -31,7 +31,7 @@ Skip keys (base):
   tasks, contacts, people, groups, keep, classroom
 
 Env:
-  GOG_LIVE_EMAIL_TEST=steipete+gogtest@gmail.com
+  GOG_LIVE_EMAIL_TEST=test-account@example.com  # required when Gmail or Drive runs; no default
   GOG_LIVE_GROUP_EMAIL=<group@domain>
   GOG_LIVE_CLASSROOM_COURSE=<courseId>
   GOG_LIVE_CLASSROOM_CREATE=1
@@ -137,12 +137,17 @@ fi
 
 echo "Using account: $ACCOUNT"
 
-EMAIL_TEST="${GOG_LIVE_EMAIL_TEST:-steipete+gogtest@gmail.com}"
+source scripts/live-tests/common.sh
+
+EMAIL_TEST="${GOG_LIVE_EMAIL_TEST:-}"
+if [ -z "$EMAIL_TEST" ] && { ! skip "gmail" || ! skip "drive"; }; then
+  echo "GOG_LIVE_EMAIL_TEST is required when Gmail or Drive live tests run; no external test mailbox is used by default." >&2
+  exit 2
+fi
 TS=$(date +%Y%m%d%H%M%S)
 LIVE_TMP=$(mktemp -d "${TMPDIR:-/tmp}/gog-live-$TS-XXXX")
 trap 'rm -rf "$LIVE_TMP"' EXIT
 
-source scripts/live-tests/common.sh
 source scripts/live-tests/core.sh
 source scripts/live-tests/gmail.sh
 source scripts/live-tests/drive.sh

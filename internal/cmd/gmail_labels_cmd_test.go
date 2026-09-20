@@ -424,6 +424,72 @@ func TestGmailLabelsCreateCmd_Text(t *testing.T) {
 	}
 }
 
+func TestExecute_GmailLabelsCreate_Plain(t *testing.T) {
+	srv := newLabelsServer(t, []map[string]any{}, func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Name string `json:"name"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if body.Name != "My Label" {
+			http.Error(w, "unexpected name", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id":   "Label_789",
+			"name": body.Name,
+			"type": "user",
+		})
+	})
+	defer srv.Close()
+	stubGmailService(t, srv)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain", "--account", "a@b.com",
+				"gmail", "labels", "create", "My Label",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	const want = "ID\tNAME\nLabel_789\tMy Label\n"
+	if out != want {
+		t.Fatalf("plain output mismatch:\nwant %q\ngot  %q", want, out)
+	}
+}
+
+func TestExecute_GmailLabelsCreate_Plain_SanitizesTSVFields(t *testing.T) {
+	srv := newLabelsServer(t, []map[string]any{}, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id":   "Label_1\tX",
+			"name": "A\tB\nC\rD",
+			"type": "user",
+		})
+	})
+	defer srv.Close()
+	stubGmailService(t, srv)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain", "--account", "a@b.com",
+				"gmail", "labels", "create", "A",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	const want = "ID\tNAME\nLabel_1 X\tA B C D\n"
+	if out != want {
+		t.Fatalf("plain output mismatch:\nwant %q\ngot  %q", want, out)
+	}
+}
+
 func TestGmailLabelsCreateCmd_EmptyName(t *testing.T) {
 	origNew := newGmailService
 	t.Cleanup(func() { newGmailService = origNew })

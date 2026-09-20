@@ -62,10 +62,10 @@ func (c *KeepListCmd) Run(ctx context.Context, flags *RootFlags, keep *KeepCmd) 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"notes":         resp.Notes,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Notes))
 	}
 
 	if len(resp.Notes) == 0 {
@@ -152,11 +152,11 @@ func (c *KeepSearchCmd) Run(ctx context.Context, flags *RootFlags, keep *KeepCmd
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"notes": allNotes,
 			"query": c.Query,
 			"count": len(allNotes),
-		})
+		}, allNotes))
 	}
 
 	if len(allNotes) == 0 {
@@ -201,7 +201,10 @@ func (c *KeepGetCmd) Run(ctx context.Context, flags *RootFlags, keep *KeepCmd) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"note": note})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"note": note}, note))
+	}
+	if outfmt.IsPlain(ctx) {
+		return writeKeepGetPlain(ctx, note)
 	}
 
 	u.Out().Printf("name\t%s", note.Name)
@@ -221,6 +224,61 @@ func (c *KeepGetCmd) Run(ctx context.Context, flags *RootFlags, keep *KeepCmd) e
 		}
 	}
 	return nil
+}
+
+// writeKeepGetPlain emits stable TSV for a note detail:
+// RECORD_TYPE NOTE_NAME TITLE CREATED UPDATED TRASHED ATTACHMENT_NAME MIME_TYPE VALUE
+// with a metadata row always, plus optional body/attachment rows that repeat note identity.
+func writeKeepGetPlain(ctx context.Context, note *keepapi.Note) error {
+	w, flush := tableWriter(ctx)
+	defer flush()
+
+	writeTableRow(ctx, w, []string{
+		"RECORD_TYPE",
+		"NOTE_NAME",
+		"TITLE",
+		"CREATED",
+		"UPDATED",
+		"TRASHED",
+		"ATTACHMENT_NAME",
+		"MIME_TYPE",
+		"VALUE",
+	})
+	if note == nil {
+		return nil
+	}
+
+	writeKeepGetPlainRow(ctx, w, "metadata", note, "", "", "")
+	if note.Body != nil && note.Body.Text != nil && note.Body.Text.Text != "" {
+		writeKeepGetPlainRow(ctx, w, "body", note, "", "", note.Body.Text.Text)
+	}
+	for _, a := range note.Attachments {
+		if a == nil {
+			continue
+		}
+		writeKeepGetPlainRow(ctx, w, "attachment", note, a.Name, strings.Join(a.MimeType, ","), "")
+	}
+	return nil
+}
+
+func writeKeepGetPlainRow(
+	ctx context.Context,
+	w io.Writer,
+	recordType string,
+	note *keepapi.Note,
+	attachmentName, mimeType, value string,
+) {
+	writeTableRow(ctx, w, []string{
+		recordType,
+		note.Name,
+		note.Title,
+		note.CreateTime,
+		note.UpdateTime,
+		boolString(note.Trashed),
+		attachmentName,
+		mimeType,
+		value,
+	})
 }
 
 type KeepAttachmentCmd struct {
@@ -260,23 +318,19 @@ func (c *KeepAttachmentCmd) Run(ctx context.Context, flags *RootFlags, keep *Kee
 		}
 	}
 
-	f, err := os.Create(outPath) //nolint:gosec // user-provided output path
-	if err != nil {
-		return fmt.Errorf("create output file: %w", err)
-	}
-	defer f.Close()
-
-	written, err := io.Copy(f, resp.Body)
+	written, _, err := writeDownloadFile(outPath, 0o644, func(w io.Writer) (int64, error) {
+		return io.Copy(w, resp.Body)
+	})
 	if err != nil {
 		return fmt.Errorf("write attachment: %w", err)
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"downloaded": true,
 			"path":       outPath,
 			"bytes":      written,
-		})
+		}))
 	}
 
 	u.Out().Printf("path\t%s", outPath)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strconv"
 
 	"github.com/alecthomas/kong"
 	"google.golang.org/api/gmail/v1"
@@ -37,7 +38,7 @@ func (c *GmailAutoForwardGetCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"autoForwarding": autoForward})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"autoForwarding": autoForward}, autoForward))
 	}
 
 	u.Out().Printf("enabled\t%t", autoForward.Enabled)
@@ -116,7 +117,12 @@ func (c *GmailAutoForwardUpdateCmd) Run(ctx context.Context, kctx *kong.Context,
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"autoForwarding": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"autoForwarding": updated}, updated))
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainAutoForwardSetting(ctx, updated)
+		return nil
 	}
 
 	u.Out().Println("Auto-forwarding settings updated successfully")
@@ -128,4 +134,12 @@ func (c *GmailAutoForwardUpdateCmd) Run(ctx context.Context, kctx *kong.Context,
 		u.Out().Printf("disposition\t%s", updated.Disposition)
 	}
 	return nil
+}
+
+func writePlainAutoForwardSetting(ctx context.Context, autoForward *gmail.AutoForwarding) {
+	writePlainSettingRows(ctx, "auto_forwarding", [][2]string{
+		{"enabled", strconv.FormatBool(autoForward.Enabled)},
+		{"email_address", autoForward.EmailAddress},
+		{"disposition", autoForward.Disposition},
+	})
 }

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"google.golang.org/api/chat/v1"
@@ -109,10 +110,10 @@ func (c *ChatMediaUploadCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"attachmentDataRef": resp.AttachmentDataRef,
 			"filename":          filename,
-		})
+		}))
 	}
 
 	if resp.AttachmentDataRef != nil {
@@ -188,25 +189,28 @@ func (c *ChatMediaDownloadCmd) Run(ctx context.Context, flags *RootFlags) error 
 		return fmt.Errorf("expanding output path: %w", err)
 	}
 
-	// Create the output file
-	f, err := os.Create(destPath) //nolint:gosec // user-provided path
-	if err != nil {
-		return fmt.Errorf("creating output file: %w", err)
-	}
-	defer f.Close()
-
-	// Copy the response body to the file
-	n, err := io.Copy(f, resp.Body)
+	n, committedPath, err := writeDownloadFile(destPath, 0o644, func(w io.Writer) (int64, error) {
+		return io.Copy(w, resp.Body)
+	})
 	if err != nil {
 		return fmt.Errorf("writing file: %w", err)
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"resource": resource,
 			"path":     destPath,
 			"size":     n,
-		})
+		}))
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainReceipt(
+			ctx,
+			[]string{"RESOURCE", "PATH", "BYTES"},
+			[]string{resource, committedPath, strconv.FormatInt(n, 10)},
+		)
+		return nil
 	}
 
 	u.Out().Printf("Downloaded %s to %s (%s)", resource, destPath, formatDriveSize(n))

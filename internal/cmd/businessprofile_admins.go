@@ -52,9 +52,9 @@ func (c *BusinessProfileAccountAdminsListCmd) Run(ctx context.Context, flags *Ro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"admins": resp.AccountAdmins,
-		})
+		}, resp.AccountAdmins))
 	}
 
 	if len(resp.AccountAdmins) == 0 {
@@ -114,7 +114,7 @@ func (c *BusinessProfileAccountAdminsCreateCmd) Run(ctx context.Context, flags *
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"admin": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"admin": resp}, resp))
 	}
 
 	if resp.Name != "" {
@@ -160,7 +160,7 @@ func (c *BusinessProfileAccountAdminsDeleteCmd) Run(ctx context.Context, flags *
 	}
 
 	u.Err().Println("Deleted")
-	return nil
+	return writeBusinessProfileMutationReceipt(ctx, "delete", name, "")
 }
 
 // BusinessProfileAccountAdminsPatchCmd patches an admin's role.
@@ -205,7 +205,7 @@ func (c *BusinessProfileAccountAdminsPatchCmd) Run(ctx context.Context, flags *R
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"admin": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"admin": resp}, resp))
 	}
 
 	if resp.Name != "" {

@@ -1,6 +1,7 @@
 package secrets
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -267,6 +268,77 @@ func TestOpenKeyring_NoDBus_ForcesFileBackend(t *testing.T) {
 
 	if store == nil {
 		t.Fatal("expected non-nil store")
+	}
+}
+
+func TestOpenReadOnlyDefault_DoesNotCreateFileKeyringDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg-config"))
+	t.Setenv("GOG_KEYRING_BACKEND", "file")
+	t.Setenv("GOG_KEYRING_PASSWORD", "testpw")
+
+	keyringDir, err := config.KeyringDir()
+	if err != nil {
+		t.Fatalf("KeyringDir: %v", err)
+	}
+
+	if _, err := OpenReadOnlyDefault(); err == nil {
+		t.Fatal("expected missing file keyring directory to be reported")
+	}
+
+	if _, err := os.Stat(keyringDir); !os.IsNotExist(err) {
+		t.Fatalf("read-only open created keyring dir %q: %v", keyringDir, err)
+	}
+}
+
+func TestKeyringStoreInspectTokens_IsReadOnlyAndContinues(t *testing.T) {
+	ring := keyring.NewArrayKeyring(nil)
+	store := &KeyringStore{ring: ring}
+
+	payload, marshalErr := json.Marshal(storedToken{RefreshToken: "good-refresh-token"})
+	if marshalErr != nil {
+		t.Fatalf("encode token: %v", marshalErr)
+	}
+
+	if err := ring.Set(keyring.Item{Key: legacyTokenKey("legacy@example.com"), Data: payload}); err != nil {
+		t.Fatalf("store legacy token: %v", err)
+	}
+
+	if err := ring.Set(keyring.Item{Key: tokenKey("work", "corrupt@example.com"), Data: []byte("not json")}); err != nil {
+		t.Fatalf("store corrupt token: %v", err)
+	}
+
+	inspections, err := store.InspectTokens()
+	if err != nil {
+		t.Fatalf("InspectTokens: %v", err)
+	}
+
+	if len(inspections) != 2 {
+		t.Fatalf("expected two inspections, got %#v", inspections)
+	}
+
+	var legacy, corrupt TokenInspection
+
+	for _, inspection := range inspections {
+		switch inspection.Email {
+		case "legacy@example.com":
+			legacy = inspection
+		case "corrupt@example.com":
+			corrupt = inspection
+		}
+	}
+
+	if legacy.Err != nil || legacy.Token.RefreshToken != "good-refresh-token" {
+		t.Fatalf("legacy token inspection: %#v", legacy)
+	}
+
+	if corrupt.Err == nil {
+		t.Fatalf("corrupt token should have an inspection error: %#v", corrupt)
+	}
+
+	if _, err := ring.Get(tokenKey(config.DefaultClientName, "legacy@example.com")); !errors.Is(err, keyring.ErrKeyNotFound) {
+		t.Fatalf("read-only inspection migrated legacy token: %v", err)
 	}
 }
 

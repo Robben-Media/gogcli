@@ -77,10 +77,10 @@ func (c *ChatEmojiListCmd) Run(ctx context.Context, flags *RootFlags) error {
 				ImageURI: emoji.TemporaryImageUri,
 			})
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"customEmojis":  items,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, items))
 	}
 
 	if len(resp.CustomEmojis) == 0 {
@@ -141,7 +141,7 @@ func (c *ChatEmojiGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"customEmoji": emoji})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"customEmoji": emoji}, emoji))
 	}
 
 	if emoji.Name != "" {
@@ -240,7 +240,7 @@ func (c *ChatEmojiCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"customEmoji": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"customEmoji": resp}, resp))
 	}
 
 	if resp.Name != "" {

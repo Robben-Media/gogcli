@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	stdbytes "bytes"
 	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,7 +65,7 @@ func (c *GmailAttachmentCmd) Run(ctx context.Context, flags *RootFlags) error {
 			return dlErr
 		}
 		if outfmt.IsJSON(ctx) {
-			return outfmt.WriteJSON(os.Stdout, map[string]any{"path": path, "cached": cached, "bytes": bytes})
+			return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{"path": path, "cached": cached, "bytes": bytes}))
 		}
 		u.Out().Printf("path\t%s", path)
 		u.Out().Printf("cached\t%t", cached)
@@ -80,7 +82,7 @@ func (c *GmailAttachmentCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"path": path, "cached": cached, "bytes": bytes})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{"path": path, "cached": cached, "bytes": bytes}))
 	}
 	u.Out().Printf("path\t%s", path)
 	u.Out().Printf("cached\t%t", cached)
@@ -100,13 +102,13 @@ func downloadAttachmentToPath(
 		return "", false, 0, errors.New("missing outPath")
 	}
 
+	resolvedPath, err := resolveDownloadDestination(outPath)
+	if err != nil {
+		return "", false, 0, err
+	}
 	if expectedSize > 0 {
-		if st, err := os.Stat(outPath); err == nil && st.Size() == expectedSize {
-			return outPath, true, st.Size(), nil
-		}
-	} else if expectedSize == -1 {
-		if st, err := os.Stat(outPath); err == nil && st.Size() > 0 {
-			return outPath, true, st.Size(), nil
+		if st, statErr := os.Stat(resolvedPath); statErr == nil && st.Size() == expectedSize {
+			return resolvedPath, true, st.Size(), nil
 		}
 	}
 
@@ -126,11 +128,14 @@ func downloadAttachmentToPath(
 		}
 	}
 
-	if err := os.MkdirAll(filepath.Dir(outPath), 0o700); err != nil {
+	if mkdirErr := os.MkdirAll(filepath.Dir(outPath), 0o700); mkdirErr != nil {
+		return "", false, 0, mkdirErr
+	}
+	written, committedPath, err := writeDownloadFile(outPath, 0o600, func(w io.Writer) (int64, error) {
+		return io.Copy(w, stdbytes.NewReader(data))
+	})
+	if err != nil {
 		return "", false, 0, err
 	}
-	if err := os.WriteFile(outPath, data, 0o600); err != nil {
-		return "", false, 0, err
-	}
-	return outPath, false, int64(len(data)), nil
+	return committedPath, false, written, nil
 }

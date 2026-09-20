@@ -77,6 +77,7 @@ func setupDocsEditTest(t *testing.T, batchRequests *[][]*docs.Request) (context.
 func TestExecute_DocsDeleteRange_JSON(t *testing.T) {
 	var batchRequests [][]*docs.Request
 	ctx, flags := setupDocsEditTest(t, &batchRequests)
+	flags.Force = true
 
 	out := captureStdout(t, func() {
 		err := runKong(t, &DocsDeleteRangeCmd{}, []string{"doc1", "--start", "5", "--end", "10"}, ctx, flags)
@@ -105,9 +106,43 @@ func TestExecute_DocsDeleteRange_JSON(t *testing.T) {
 	}
 }
 
+func TestExecute_DocsDeleteRange_RefusesWithoutForceBeforeServiceCreation(t *testing.T) {
+	var batchRequests [][]*docs.Request
+	ctx, flags := setupDocsEditTest(t, &batchRequests)
+	flags.NoInput = true
+
+	serviceCalls := 0
+	stubDocsService := newDocsService
+	newDocsService = func(ctx context.Context, account string) (*docs.Service, error) {
+		serviceCalls++
+		return stubDocsService(ctx, account)
+	}
+
+	err := runKong(t, &DocsDeleteRangeCmd{}, []string{"doc1", "--start", "5", "--end", "10"}, ctx, flags)
+	if err == nil {
+		t.Fatal("expected confirmation refusal")
+	}
+	if !strings.Contains(err.Error(), "delete range 5-10 from doc doc1") {
+		t.Fatalf("expected confirmation to identify range and document, got: %v", err)
+	}
+	if serviceCalls != 0 {
+		t.Fatalf("expected service not to be created, got %d creation(s)", serviceCalls)
+	}
+	if len(batchRequests) != 0 {
+		t.Fatalf("expected 0 batch requests, got %d", len(batchRequests))
+	}
+}
+
 func TestExecute_DocsDeleteRange_InvalidRange(t *testing.T) {
 	var batchRequests [][]*docs.Request
 	ctx, flags := setupDocsEditTest(t, &batchRequests)
+
+	serviceCalls := 0
+	stubDocsService := newDocsService
+	newDocsService = func(ctx context.Context, account string) (*docs.Service, error) {
+		serviceCalls++
+		return stubDocsService(ctx, account)
+	}
 
 	// start == end
 	err := runKong(t, &DocsDeleteRangeCmd{}, []string{"doc1", "--start", "5", "--end", "5"}, ctx, flags)
@@ -127,6 +162,9 @@ func TestExecute_DocsDeleteRange_InvalidRange(t *testing.T) {
 		t.Fatalf("expected 'start must be less than end' error, got: %v", err)
 	}
 
+	if serviceCalls != 0 {
+		t.Fatalf("expected validation before service creation, got %d creation(s)", serviceCalls)
+	}
 	// No batch requests should have been made
 	if len(batchRequests) != 0 {
 		t.Fatalf("expected 0 batch requests, got %d", len(batchRequests))

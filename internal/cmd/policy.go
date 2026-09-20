@@ -49,10 +49,18 @@ func (c *PolicyCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	saved, _ := config.GetPolicy(cfg, c.Name)
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"created": true,
 			"policy":  saved,
+		}, saved))
+	}
+	if outfmt.IsPlain(ctx) {
+		fmt.Fprintln(os.Stdout, "ACTION\tNAME\tACCOUNT\tCLIENT\tALLOW\tDENY\tREASON")
+		writeTableRow(ctx, os.Stdout, []string{
+			"create", saved.Name, saved.Account, saved.Client,
+			joinCSV(saved.Allow), joinCSV(saved.Deny), saved.Reason,
 		})
+		return nil
 	}
 	fmt.Fprintf(os.Stdout, "Saved policy %s\n", saved.Name)
 	return nil
@@ -74,7 +82,7 @@ func (c *PolicyGetCmd) Run(ctx context.Context) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"policy": policy})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"policy": policy}, policy))
 	}
 	fmt.Fprintf(os.Stdout, "name\t%s\n", policy.Name)
 	if policy.Account != "" {
@@ -104,7 +112,7 @@ func (c *PolicyListCmd) Run(ctx context.Context) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"policies": cfg.Policies})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"policies": cfg.Policies}, cfg.Policies))
 	}
 	if len(cfg.Policies) == 0 && !outfmt.IsPlain(ctx) {
 		fmt.Fprintln(os.Stdout, "No policies")
@@ -131,6 +139,7 @@ func (c *PolicyDeleteCmd) Run(ctx context.Context) error {
 		return err
 	}
 
+	deleted, _ := config.GetPolicy(cfg, c.Name)
 	if err := config.DeletePolicy(&cfg, c.Name); err != nil {
 		return usage(err.Error())
 	}
@@ -139,10 +148,15 @@ func (c *PolicyDeleteCmd) Run(ctx context.Context) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"deleted": true,
 			"name":    c.Name,
-		})
+		}))
+	}
+	if outfmt.IsPlain(ctx) {
+		fmt.Fprintln(os.Stdout, "ACTION\tNAME\tACCOUNT\tCLIENT\tALLOW\tDENY\tREASON")
+		writeTableRow(ctx, os.Stdout, []string{"delete", deleted.Name, "", "", "", "", ""})
+		return nil
 	}
 	fmt.Fprintf(os.Stdout, "Deleted policy %s\n", c.Name)
 	return nil

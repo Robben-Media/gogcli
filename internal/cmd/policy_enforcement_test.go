@@ -172,6 +172,82 @@ func TestCommandActionID_FlattensGmailSettingsAndAliases(t *testing.T) {
 	}
 }
 
+func TestPolicyEnforcement_NormalizesHyphenatedServicesAndAliases(t *testing.T) {
+	tests := []struct {
+		name      string
+		commands  [][]string
+		action    string
+		otherRule string
+	}{
+		{
+			name: "business profile",
+			commands: [][]string{
+				{"business-profile", "accounts", "list"},
+				{"gbp", "accounts", "list"},
+				{"business", "accounts", "list"},
+			},
+			action:    "businessprofile:accounts.list",
+			otherRule: "businessprofile:locations.list",
+		},
+		{
+			name: "search console",
+			commands: [][]string{
+				{"search-console", "sites", "list"},
+				{"gsc", "sites", "list"},
+				{"sc", "sites", "list"},
+			},
+			action:    "searchconsole:sites.list",
+			otherRule: "searchconsole:sitemaps.list",
+		},
+		{
+			name: "tag manager",
+			commands: [][]string{
+				{"tag-manager", "accounts"},
+				{"gtm", "accounts"},
+			},
+			action:    "tagmanager:accounts",
+			otherRule: "tagmanager:containers",
+		},
+	}
+
+	parser, _, err := newParser("test")
+	if err != nil {
+		t.Fatalf("newParser: %v", err)
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, command := range tt.commands {
+				kctx, err := parser.Parse(command)
+				if err != nil {
+					t.Fatalf("Parse(%q): %v", command, err)
+				}
+				action := commandActionID(kctx)
+				if action != tt.action {
+					t.Fatalf("commandActionID(%q) = %q, want %q", command, action, tt.action)
+				}
+
+				service, _, _ := strings.Cut(action, ":")
+				explicitDeny := []config.Policy{{Name: "deny", Deny: []string{tt.action}}}
+				if !hasPolicyForService(explicitDeny, service) {
+					t.Fatalf("explicit deny policy not discovered for %q", command)
+				}
+				if decision := evaluatePolicies(explicitDeny, action, "", ""); !decision.Denied || decision.ImplicitAllowlist {
+					t.Fatalf("explicit deny decision for %q = %#v", command, decision)
+				}
+
+				allowlist := []config.Policy{{Name: "allow-other", Allow: []string{tt.otherRule}}}
+				if !hasPolicyForService(allowlist, service) {
+					t.Fatalf("allowlist policy not discovered for %q", command)
+				}
+				if decision := evaluatePolicies(allowlist, action, "", ""); !decision.Denied || !decision.ImplicitAllowlist {
+					t.Fatalf("implicit allowlist decision for %q = %#v", command, decision)
+				}
+			}
+		})
+	}
+}
+
 func TestPolicyCommandsBypassPolicyEnforcement(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())

@@ -3,7 +3,9 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"google.golang.org/api/tagmanager/v2"
@@ -15,15 +17,19 @@ import (
 
 var newTagManagerService = googleapi.NewTagManager
 
+const tagManagerParameterTypeList = "list"
+
 type TagManagerCmd struct {
-	Accounts        TagManagerAccountsCmd        `cmd:"" name:"accounts" group:"Read" help:"List GTM accounts"`
-	Containers      TagManagerContainersCmd      `cmd:"" name:"containers" group:"Read" help:"List containers in an account"`
-	Tags            TagManagerTagsCmd            `cmd:"" name:"tags" group:"Read" help:"List tags in a workspace"`
-	Tag             TagManagerTagCmd             `cmd:"" name:"tag" group:"Read" help:"Get a single tag by path"`
-	Triggers        TagManagerTriggersCmd        `cmd:"" name:"triggers" group:"Read" help:"List triggers in a workspace"`
-	Variables       TagManagerVariablesCmd       `cmd:"" name:"variables" group:"Read" help:"List variables in a workspace"`
-	Versions        TagManagerVersionsCmd        `cmd:"" name:"versions" group:"Read" help:"List container version headers"`
-	UserPermissions TagManagerUserPermissionsCmd `cmd:"" name:"user-permissions" group:"Admin" help:"Manage GTM user permissions"`
+	Accounts         TagManagerAccountsCmd         `cmd:"" name:"accounts" group:"Read" help:"List GTM accounts"`
+	BuiltInVariables TagManagerBuiltInVariablesCmd `cmd:"" name:"built-in-variables" group:"Write" help:"Manage built-in variables in a workspace"`
+	Containers       TagManagerContainersCmd       `cmd:"" name:"containers" group:"Read" help:"List containers in an account"`
+	Tags             TagManagerTagsCmd             `cmd:"" name:"tags" group:"Read" help:"List tags in a workspace"`
+	Tag              TagManagerTagCmd              `cmd:"" name:"tag" group:"Read" help:"Get a single tag by path"`
+	Triggers         TagManagerTriggersCmd         `cmd:"" name:"triggers" group:"Write" help:"Manage triggers in a workspace"`
+	Variables        TagManagerVariablesCmd        `cmd:"" name:"variables" group:"Write" help:"Manage variables in a workspace"`
+	Versions         TagManagerVersionsCmd         `cmd:"" name:"versions" group:"Read" help:"List container version headers"`
+	Workspaces       TagManagerWorkspacesCmd       `cmd:"" name:"workspaces" group:"Write" help:"Manage GTM workspaces"`
+	UserPermissions  TagManagerUserPermissionsCmd  `cmd:"" name:"user-permissions" group:"Admin" help:"Manage GTM user permissions"`
 }
 
 func gtmWorkspacePath(accountID, containerID, workspaceID string) string {
@@ -52,9 +58,9 @@ func (c *TagManagerAccountsCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"accounts": resp.Account,
-		})
+		}, resp.Account))
 	}
 
 	if len(resp.Account) == 0 {
@@ -99,9 +105,9 @@ func (c *TagManagerContainersCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"containers": resp.Container,
-		})
+		}, resp.Container))
 	}
 
 	if len(resp.Container) == 0 {
@@ -151,9 +157,9 @@ func (c *TagManagerTagsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"tags": resp.Tag,
-		})
+		}, resp.Tag))
 	}
 
 	if len(resp.Tag) == 0 {
@@ -198,7 +204,10 @@ func (c *TagManagerTagCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"tag": tag})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"tag": tag}, tag))
+	}
+	if outfmt.IsPlain(ctx) {
+		return writeTagManagerTagPlain(ctx, tag)
 	}
 
 	u.Out().Printf("tagId\t%s", tag.TagId)
@@ -219,15 +228,104 @@ func (c *TagManagerTagCmd) Run(ctx context.Context, flags *RootFlags) error {
 	return nil
 }
 
+// writeTagManagerTagPlain emits stable TSV for a single tag detail:
+// RECORD_TYPE<TAB>TAG_ID<TAB>KEY<TAB>TYPE<TAB>VALUE
+// with one row per metadata field, firing/blocking trigger, and parameter leaf.
+func writeTagManagerTagPlain(ctx context.Context, tag *tagmanager.Tag) error {
+	w, flush := tableWriter(ctx)
+	defer flush()
+	writeTableRow(ctx, w, []string{"RECORD_TYPE", "TAG_ID", "KEY", "TYPE", "VALUE"})
+	if tag == nil {
+		return nil
+	}
+	tagID := tag.TagId
+	writeTableRow(ctx, w, []string{"METADATA", tagID, "name", "", tag.Name})
+	writeTableRow(ctx, w, []string{"METADATA", tagID, "type", "", tag.Type})
+	for _, id := range tag.FiringTriggerId {
+		writeTableRow(ctx, w, []string{"FIRING_TRIGGER", tagID, "", "", id})
+	}
+	for _, id := range tag.BlockingTriggerId {
+		writeTableRow(ctx, w, []string{"BLOCKING_TRIGGER", tagID, "", "", id})
+	}
+	for _, p := range tag.Parameter {
+		writeTagManagerParameterLeaves(ctx, w, tagID, "", p, false)
+	}
+	return nil
+}
+
+func tagManagerParamPath(prefix, segment string) string {
+	if segment == "" {
+		return prefix
+	}
+	segment = strings.ReplaceAll(segment, `\`, `\\`)
+	segment = strings.ReplaceAll(segment, ".", `\.`)
+	segment = strings.ReplaceAll(segment, "[", `\[`)
+	segment = strings.ReplaceAll(segment, "]", `\]`)
+	if prefix == "" {
+		return segment
+	}
+	return prefix + "." + segment
+}
+
+func tagManagerParamListPath(prefix string, index int) string {
+	return prefix + "[" + strconv.Itoa(index) + "]"
+}
+
+// writeTagManagerParameterLeaves flattens nested GTM parameters into leaf rows.
+// Map keys are dot-separated with backslash-escaped `\\.[]`; list indexes use
+// brackets, producing unambiguous paths such as list[0].mapKey. ignoreKey is set
+// for list children because GTM ignores keys on list values.
+func writeTagManagerParameterLeaves(ctx context.Context, w io.Writer, tagID, prefix string, p *tagmanager.Parameter, ignoreKey bool) {
+	if p == nil {
+		return
+	}
+	segment := p.Key
+	if ignoreKey {
+		segment = ""
+	}
+	path := tagManagerParamPath(prefix, segment)
+	paramType := strings.ToLower(p.Type)
+	switch {
+	case len(p.List) > 0 || paramType == tagManagerParameterTypeList:
+		if len(p.List) == 0 {
+			writeTableRow(ctx, w, []string{"PARAMETER", tagID, path, p.Type, p.Value})
+			return
+		}
+		for i, child := range p.List {
+			childPrefix := tagManagerParamListPath(path, i)
+			writeTagManagerParameterLeaves(ctx, w, tagID, childPrefix, child, true)
+		}
+	case len(p.Map) > 0 || paramType == "map":
+		if len(p.Map) == 0 {
+			writeTableRow(ctx, w, []string{"PARAMETER", tagID, path, p.Type, p.Value})
+			return
+		}
+		for _, child := range p.Map {
+			writeTagManagerParameterLeaves(ctx, w, tagID, path, child, false)
+		}
+	default:
+		writeTableRow(ctx, w, []string{"PARAMETER", tagID, path, p.Type, p.Value})
+	}
+}
+
 // --- triggers ---
 
 type TagManagerTriggersCmd struct {
+	List   TagManagerTriggersListCmd   `cmd:"" default:"withargs" help:"List triggers in a workspace"`
+	Create TagManagerTriggersCreateCmd `cmd:"" name:"create" help:"Create a trigger"`
+	Delete TagManagerTriggersDeleteCmd `cmd:"" name:"delete" help:"Delete a trigger"`
+	Get    TagManagerTriggersGetCmd    `cmd:"" name:"get" help:"Get a trigger"`
+	Revert TagManagerTriggersRevertCmd `cmd:"" name:"revert" help:"Revert a trigger"`
+	Update TagManagerTriggersUpdateCmd `cmd:"" name:"update" help:"Update a trigger"`
+}
+
+type TagManagerTriggersListCmd struct {
 	AccountID   string `name:"account-id" required:"" help:"GTM account ID"`
 	ContainerID string `name:"container-id" required:"" help:"GTM container ID"`
 	WorkspaceID string `name:"workspace-id" help:"GTM workspace ID (default: 0)" default:"0"`
 }
 
-func (c *TagManagerTriggersCmd) Run(ctx context.Context, flags *RootFlags) error {
+func (c *TagManagerTriggersListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u := ui.FromContext(ctx)
 	account, err := requireAccount(flags)
 	if err != nil {
@@ -252,9 +350,9 @@ func (c *TagManagerTriggersCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"triggers": resp.Trigger,
-		})
+		}, resp.Trigger))
 	}
 
 	if len(resp.Trigger) == 0 {
@@ -274,12 +372,21 @@ func (c *TagManagerTriggersCmd) Run(ctx context.Context, flags *RootFlags) error
 // --- variables ---
 
 type TagManagerVariablesCmd struct {
+	List   TagManagerVariablesListCmd   `cmd:"" default:"withargs" help:"List variables in a workspace"`
+	Create TagManagerVariablesCreateCmd `cmd:"" name:"create" help:"Create a variable"`
+	Delete TagManagerVariablesDeleteCmd `cmd:"" name:"delete" help:"Delete a variable"`
+	Get    TagManagerVariablesGetCmd    `cmd:"" name:"get" help:"Get a variable"`
+	Revert TagManagerVariablesRevertCmd `cmd:"" name:"revert" help:"Revert a variable"`
+	Update TagManagerVariablesUpdateCmd `cmd:"" name:"update" help:"Update a variable"`
+}
+
+type TagManagerVariablesListCmd struct {
 	AccountID   string `name:"account-id" required:"" help:"GTM account ID"`
 	ContainerID string `name:"container-id" required:"" help:"GTM container ID"`
 	WorkspaceID string `name:"workspace-id" help:"GTM workspace ID (default: 0)" default:"0"`
 }
 
-func (c *TagManagerVariablesCmd) Run(ctx context.Context, flags *RootFlags) error {
+func (c *TagManagerVariablesListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u := ui.FromContext(ctx)
 	account, err := requireAccount(flags)
 	if err != nil {
@@ -304,9 +411,9 @@ func (c *TagManagerVariablesCmd) Run(ctx context.Context, flags *RootFlags) erro
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"variables": resp.Variable,
-		})
+		}, resp.Variable))
 	}
 
 	if len(resp.Variable) == 0 {
@@ -326,11 +433,16 @@ func (c *TagManagerVariablesCmd) Run(ctx context.Context, flags *RootFlags) erro
 // --- versions ---
 
 type TagManagerVersionsCmd struct {
+	List    TagManagerVersionsListCmd    `cmd:"" default:"withargs" help:"List container version headers"`
+	Publish TagManagerVersionsPublishCmd `cmd:"" name:"publish" help:"Publish a container version"`
+}
+
+type TagManagerVersionsListCmd struct {
 	AccountID   string `name:"account-id" required:"" help:"GTM account ID"`
 	ContainerID string `name:"container-id" required:"" help:"GTM container ID"`
 }
 
-func (c *TagManagerVersionsCmd) Run(ctx context.Context, flags *RootFlags) error {
+func (c *TagManagerVersionsListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u := ui.FromContext(ctx)
 	account, err := requireAccount(flags)
 	if err != nil {
@@ -355,9 +467,9 @@ func (c *TagManagerVersionsCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"versionHeaders": resp.ContainerVersionHeader,
-		})
+		}, resp.ContainerVersionHeader))
 	}
 
 	if len(resp.ContainerVersionHeader) == 0 {

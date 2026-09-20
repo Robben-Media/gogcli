@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +12,43 @@ import (
 	"google.golang.org/api/gmail/v1"
 	"google.golang.org/api/option"
 )
+
+func TestExecute_GmailSettingsDestructiveCommandsRequireForce(t *testing.T) {
+	origNew := newGmailService
+	t.Cleanup(func() { newGmailService = origNew })
+
+	serviceCreations := 0
+	newGmailService = func(context.Context, string) (*gmail.Service, error) {
+		serviceCreations++
+		return nil, errors.New("gmail service should not be created")
+	}
+
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "delegate removal", args: []string{"gmail", "settings", "delegates", "remove", "delegate@example.com"}},
+		{name: "send-as deletion", args: []string{"gmail", "settings", "sendas", "delete", "alias@example.com"}},
+		{name: "filter deletion", args: []string{"gmail", "settings", "filters", "delete", "filter-1"}},
+		{name: "forwarding address deletion", args: []string{"gmail", "settings", "forwarding", "delete", "forward@example.com"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := append([]string{"--account", "a@b.com", "--no-input"}, tt.args...)
+			err := Execute(args)
+			if err == nil {
+				t.Fatal("expected destructive command to require --force")
+			}
+			if !strings.Contains(err.Error(), "without --force") {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if serviceCreations != 0 {
+				t.Fatalf("gmail service created %d times before refusal", serviceCreations)
+			}
+		})
+	}
+}
 
 func TestExecute_GmailSettingsMoreCommands_JSON(t *testing.T) {
 	origNew := newGmailService
@@ -222,7 +260,7 @@ func TestExecute_GmailSettingsMoreCommands_JSON(t *testing.T) {
 			}
 		})
 		_ = captureStdout(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "gmail", "delegates", "remove", "d@b.com"}); err != nil {
+			if err := Execute([]string{"--json", "--account", "a@b.com", "--force", "gmail", "delegates", "remove", "d@b.com"}); err != nil {
 				t.Fatalf("delegates remove: %v", err)
 			}
 		})
@@ -243,7 +281,7 @@ func TestExecute_GmailSettingsMoreCommands_JSON(t *testing.T) {
 			}
 		})
 		_ = captureStdout(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "gmail", "forwarding", "delete", "f@b.com"}); err != nil {
+			if err := Execute([]string{"--json", "--account", "a@b.com", "--force", "gmail", "forwarding", "delete", "f@b.com"}); err != nil {
 				t.Fatalf("forwarding delete: %v", err)
 			}
 		})
@@ -286,7 +324,7 @@ func TestExecute_GmailSettingsMoreCommands_JSON(t *testing.T) {
 			}
 		})
 		_ = captureStdout(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "gmail", "filters", "delete", "f1"}); err != nil {
+			if err := Execute([]string{"--json", "--account", "a@b.com", "--force", "gmail", "filters", "delete", "f1"}); err != nil {
 				t.Fatalf("filters delete: %v", err)
 			}
 		})
@@ -317,7 +355,7 @@ func TestExecute_GmailSettingsMoreCommands_JSON(t *testing.T) {
 			}
 		})
 		_ = captureStdout(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "gmail", "sendas", "delete", "alias@b.com"}); err != nil {
+			if err := Execute([]string{"--json", "--account", "a@b.com", "--force", "gmail", "sendas", "delete", "alias@b.com"}); err != nil {
 				t.Fatalf("sendas delete: %v", err)
 			}
 		})

@@ -24,7 +24,7 @@ The [native Google MCP implementation plan](docs/plans/native-google-mcp.html) o
 - **Groups** - list groups you belong to, view group members (Google Workspace)
 - **Local time** - quick local/UTC time display for scripts and agents
 - **Multiple accounts** - manage multiple Google accounts simultaneously (with aliases)
-- **Command allowlist** - restrict top-level commands for sandboxed/agent runs
+- **Command allowlist** - restrict top-level services and/or exact command paths for sandboxed/agent runs
 - **Secure credential storage** using OS keyring or encrypted on-disk keyring (configurable)
 - **Auto-refreshing tokens** - authenticate once, use indefinitely
 - **Least-privilege auth** - `--readonly` and `--drive-scope` to request fewer scopes
@@ -33,25 +33,23 @@ The [native Google MCP implementation plan](docs/plans/native-google-mcp.html) o
 
 ## Installation
 
-### Homebrew
+Robben Media maintains this fork independently. Build and install it from the Robben Media repository:
 
 ```bash
-brew install steipete/tap/gogcli
-```
-
-### Build from Source
-
-```bash
-git clone https://github.com/steipete/gogcli.git
+git clone https://github.com/Robben-Media/gogcli.git
 cd gogcli
-make
+make build
+install -m 755 bin/gog ~/.local/bin/gog
 ```
 
-Run:
+Verify the installed binary:
 
 ```bash
-./bin/gog --help
+gog --version
+gog --help
 ```
+
+Upstream Homebrew taps and `go install ...@main` are not supported installation methods for this fork. The retained Go module namespace is an implementation compatibility detail, not an install target.
 
 ### Updates (binary + companion skills)
 
@@ -80,6 +78,8 @@ Help:
 - `gog --help` shows top-level command groups.
 - Drill down with `gog <group> --help` (and deeper subcommands).
 - For the full expanded command list: `GOG_HELP=full gog --help`.
+- For machine-readable discovery: `gog schema` emits one deterministic, versioned JSON document describing visible commands, aliases, arguments, flags, global flags, exit-code classes, and effective automation/policy state.
+- `gog schema` is read-only and remains available under `--enable-commands` restrictions; it does not authenticate, call Google APIs, prompt, check for updates, write configuration, or expose stored credentials and secret environment values.
 - Make shortcut: `make gog -- --help` (or `make gog -- gmail --help`).
 - `make gog-help` shows CLI help (note: `make gog --help` is Make’s own help; use `--`).
 
@@ -109,7 +109,25 @@ Before adding an account, create OAuth2 credentials from Google Cloud Console:
    - Application type: "Desktop app"
    - Download the JSON file (usually named `client_secret_....apps.googleusercontent.com.json`)
 
-### 2. Store Credentials
+### 2. Guided setup (recommended)
+
+For a re-runnable, agent-friendly flow that discovers or creates a Cloud project, enables APIs, guides Console-only OAuth client steps, installs credentials, and can authorize the first account:
+
+```bash
+gog auth setup
+```
+
+Non-interactive discovery / resume:
+
+```bash
+gog --json --no-input auth setup --discover
+gog --no-input --force auth setup --project my-proj --enable-apis --credentials ~/Downloads/client_secret.json
+```
+
+See [docs/auth-clients.md](docs/auth-clients.md) for flags, acknowledgments, and exit codes. Advanced users can still run the manual steps below.
+
+### 3. Store Credentials (manual)
+
 
 ```bash
 gog auth credentials ~/Downloads/client_secret_....json
@@ -122,7 +140,7 @@ gog --client work auth credentials ~/Downloads/work-client.json
 gog auth credentials list
 ```
 
-### 3. Authorize Your Account
+### 4. Authorize Your Account
 
 ```bash
 gog auth add you@gmail.com
@@ -130,7 +148,7 @@ gog auth add you@gmail.com
 
 This will open a browser window for OAuth authorization. The refresh token is stored securely in your system keychain.
 
-### 4. Test Authentication
+### 5. Test Authentication
 
 ```bash
 export GOG_ACCOUNT=you@gmail.com
@@ -163,6 +181,13 @@ Show current auth state/services for the active account:
 
 ```bash
 gog auth status
+```
+
+Run a read-only auth health check (config, keyring, credentials, accounts, token usability):
+
+```bash
+gog auth doctor
+gog --json auth doctor
 ```
 
 ### Multiple OAuth clients
@@ -281,8 +306,14 @@ gog auth list
 - Default: human-friendly tables on stdout.
 - `--plain`: stable TSV on stdout (tabs preserved; best for piping to tools that expect `\t`).
 - `--json`: JSON on stdout (best for scripting).
+- `--results-only`: with `--json`, emit only the command's declared primary result instead of its response envelope.
+- `--select <paths>`: with `--json`, project comma-separated fields such as `id,name` or `sender.email`; dotted paths preserve nested shape and missing fields are omitted.
+- When combined, `--results-only` runs before `--select`.
+- `--wrap-untrusted` / `GOG_WRAP_UNTRUSTED`: when combined with JSON mode, free-text fields from Workspace (mail bodies/subjects, doc/sheet text, names, summaries, etc.) are wrapped in machine-readable untrusted-content fences so agents can treat them as data, not instructions. Default **off**. No effect on `--plain` or human table output; no-op without JSON mode.
 - Human-facing hints/progress go to stderr.
 - Colors are enabled only in rich TTY output and are disabled automatically for `--json` and `--plain`.
+
+Agent tip: prefer `gog --json --wrap-untrusted …` (or `GOG_JSON=1 GOG_WRAP_UNTRUSTED=1`) when reading Gmail/Docs/Sheets/Drive/Calendar text into a model context.
 
 ### Service Scopes
 
@@ -294,7 +325,7 @@ To request fewer scopes:
 gog auth add you@gmail.com --services drive,calendar
 ```
 
-To request read-only scopes (write operations will fail with 403 insufficient scopes):
+To request read-only scopes for a new account:
 
 ```bash
 gog auth add you@gmail.com --services drive,calendar --readonly
@@ -312,13 +343,24 @@ Notes:
 
 - `--drive-scope readonly` is enough for listing/downloading/exporting via Drive (write operations will 403).
 - `--drive-scope file` is write-capable (limited to files created/opened by this app) and can’t be combined with `--readonly`.
+- Reauthorization is additive by default. If the account already has write scopes, `--readonly` retains them; add `--replace-scopes` to intentionally downgrade the grant.
 
-If you need to add services later and Google doesn't return a refresh token, re-run with `--force-consent`:
+To add services later, re-run `auth add` with the additional services. Existing stored scopes are retained. If Google doesn't return a refresh token, add `--force-consent`:
+
+```bash
+gog auth add you@gmail.com --services sheets --force-consent
+```
+
+To intentionally replace the existing grant with exactly the selected services, use `--replace-scopes` (which implies `--force-consent`):
+
+```bash
+gog auth add you@gmail.com --services sheets --replace-scopes
+```
+
+To recover after replacing scopes accidentally, reauthorize with every service the account should retain. For the default user-service set:
 
 ```bash
 gog auth add you@gmail.com --services user --force-consent
-# Or add just Sheets
-gog auth add you@gmail.com --services sheets --force-consent
 ```
 
 `--services all` is accepted as an alias for `user` for backwards compatibility.
@@ -342,7 +384,15 @@ Service scope matrix (auto-generated; run `go run scripts/gen-auth-services-md.g
 | people | yes | People API | `profile` | OIDC profile scope |
 | groups | no | Cloud Identity API | `https://www.googleapis.com/auth/cloud-identity.groups.readonly` | Workspace only |
 | keep | no | Keep API | `https://www.googleapis.com/auth/keep.readonly` | Workspace only; service account (domain-wide delegation) |
+| youtube | yes | YouTube Data API v3 | `https://www.googleapis.com/auth/youtube.readonly` |  |
+| bigquery | yes | BigQuery API | `https://www.googleapis.com/auth/bigquery`<br>`https://www.googleapis.com/auth/bigquery.readonly` |  |
+| analytics | yes | Analytics Data API, Analytics Admin API | `https://www.googleapis.com/auth/analytics.readonly`<br>`https://www.googleapis.com/auth/analytics.edit`<br>`https://www.googleapis.com/auth/analytics.manage.users.readonly`<br>`https://www.googleapis.com/auth/analytics.manage.users` | Includes manage.users for accessBindings / invite users |
+| searchconsole | yes | Search Console API | `https://www.googleapis.com/auth/webmasters.readonly`<br>`https://www.googleapis.com/auth/webmasters` |  |
+| tagmanager | yes | Tag Manager API v2 | `https://www.googleapis.com/auth/tagmanager.readonly`<br>`https://www.googleapis.com/auth/tagmanager.edit.containers`<br>`https://www.googleapis.com/auth/tagmanager.edit.containerversions`<br>`https://www.googleapis.com/auth/tagmanager.manage.accounts`<br>`https://www.googleapis.com/auth/tagmanager.manage.users`<br>`https://www.googleapis.com/auth/tagmanager.publish` | Includes manage.users + edit/publish (not delete.containers) |
+| businessprofile | yes | Business Information API, Business Account Management API | `https://www.googleapis.com/auth/business.manage` |  |
 <!-- auth-services:end -->
+
+GA4 access bindings require an email backed by a Google account. The Analytics Admin API cannot grant access to a Google Workspace alias or group address; use an individual Google account or the GA4 web interface instead.
 
 ### Service Accounts (Workspace only)
 
@@ -403,6 +453,7 @@ gog keep get <noteId> --account you@yourdomain.com
 - `GOG_COLOR` - Color mode: `auto` (default), `always`, or `never`
 - `GOG_TIMEZONE` - Default output timezone for Calendar/Gmail (IANA name, `UTC`, or `local`)
 - `GOG_ENABLE_COMMANDS` - Comma-separated allowlist of top-level commands (e.g., `calendar,tasks`)
+- `GOG_ENABLE_COMMAND_PATHS` - Comma-separated allowlist of exact command paths (e.g., `gmail search,calendar events`)
 
 ### Config File (JSON5)
 
@@ -461,13 +512,34 @@ Aliases work anywhere you pass `--account` or `GOG_ACCOUNT` (reserved: `auto`, `
 
 ### Command Allowlist (Sandboxing)
 
+Two complementary invocation allowlists restrict which commands may run:
+
+- `--enable-commands` / `GOG_ENABLE_COMMANDS`: top-level services only (e.g. `gmail`, `calendar`)
+- `--enable-command-paths` / `GOG_ENABLE_COMMAND_PATHS`: exact parser-resolved command paths (e.g. `gmail search`, `gmail thread get`)
+
+Matching rules for exact paths:
+
+- Identity is the Kong-resolved command path: command segments only (flags and positional values are excluded)
+- Documented aliases resolve via the parser model (`mail search` == `gmail search`; `gmail read` == `gmail thread get`); parent paths written by primary name do not implicitly allow default child leaves
+- Parent paths do **not** allow children (`gmail thread` does not allow `gmail thread get`)
+- When both lists are set, a match in **either** list permits the command (OR)
+- When neither list is set, enablement is unrestricted
+- Persisted `policy` rules remain a separate subsequent gate (AND with enablement)
+
 ```bash
-# Only allow calendar + tasks commands for an agent
+# Only allow calendar + tasks commands for an agent (top-level)
 gog --enable-commands calendar,tasks calendar events --today
 
 # Same via env
 export GOG_ENABLE_COMMANDS=calendar,tasks
 gog tasks list <tasklistId>
+
+# Exact paths: allow Gmail search without other Gmail commands
+gog --enable-command-paths "gmail search" gmail search 'is:unread'
+export GOG_ENABLE_COMMAND_PATHS='gmail search,calendar events'
+
+# Compose: top-level calendar OR exact gmail search
+gog --enable-commands calendar --enable-command-paths "gmail search" gmail search 'is:unread'
 ```
  
 ## Security
@@ -511,6 +583,7 @@ Flag aliases:
 ### Authentication
 
 ```bash
+gog auth setup                        # Guided Cloud project + OAuth client setup
 gog auth credentials <path>           # Store OAuth client credentials
 gog auth credentials list             # List stored OAuth client credentials
 gog --client work auth credentials <path>  # Store named OAuth client credentials
@@ -521,6 +594,7 @@ gog auth service-account unset <email>             # Remove service account
 gog auth keep <email> --key <path>                 # Legacy alias (Keep)
 gog auth keyring [backend]            # Show/set keyring backend (auto|keychain|file)
 gog auth status                       # Show current auth state/services
+gog auth doctor                       # Read-only auth/keyring/token health check
 gog auth services                     # List available services and OAuth scopes
 gog auth list                         # List stored accounts
 gog auth list --check                 # Validate stored refresh tokens
@@ -604,6 +678,39 @@ gog gmail watch serve --bind 0.0.0.0 --verify-oidc --oidc-email <svc@...> --hook
 gog gmail history --since <historyId>
 ```
 
+`gog gmail get <messageId> --plain` uses the same five-column TSV schema for
+`full`, `metadata`, and `raw` fetch formats:
+
+```text
+RECORD_TYPE	MESSAGE_ID	THREAD_ID	NAME	VALUE
+```
+
+`RECORD_TYPE` is `metadata`, `header`, `attachment`, `body`, or `raw`.
+`NAME` identifies the metadata, header, or attachment field and is empty for
+body and raw records; `VALUE` contains its value. Every row includes the
+message and thread IDs. Tabs, newlines, and carriage returns in free-form
+fields are replaced with spaces so each record occupies one physical TSV row.
+
+`gog gmail thread get <threadId> --plain` uses an eight-column TSV schema:
+
+```text
+RECORD_TYPE	THREAD_ID	MESSAGE_ID	NAME	VALUE	PATH	BYTES	CACHED
+```
+
+Record meanings:
+
+- `metadata`: `NAME` is `message_count` and `VALUE` is the count; `MESSAGE_ID` is empty.
+- `header`: `NAME` is `From`, `To`, `Subject`, or `Date`; `VALUE` is the header value.
+- `body`: `VALUE` is the selected body, using the same HTML cleanup and preview truncation as human output.
+- `attachment`: `NAME` is the filename, `VALUE` is the MIME type, `PATH` is the Gmail attachment ID, and `BYTES` is the declared attachment size.
+- `download`: `NAME` is the filename, `PATH` is the committed on-disk path, `BYTES` is the exact committed byte count, and `CACHED` is `true` or `false`.
+
+Every message-specific record includes both IDs. Free-form fields are kept to one
+physical row. Download `PATH` values use reversible URL path-segment percent
+encoding (decode with any URL percent-decoder), so tabs, newlines, and other path
+bytes remain lossless without creating extra TSV rows or columns. An empty thread
+emits only the header.
+
 Gmail watch (Pub/Sub push):
 - Create Pub/Sub topic + push subscription (OIDC preferred; shared token ok for dev).
 - Full flow + payload details: `docs/watch.md`.
@@ -652,6 +759,10 @@ gog calendar events <calendarId> --from 2025-01-01T00:00:00Z --to 2025-01-08T00:
 gog calendar events --all             # Fetch events from all calendars
 gog calendar events --calendars 1,3   # Fetch events from calendar indices (see gog calendar calendars)
 gog calendar events --cal Work --cal Personal  # Fetch events from calendars by name/ID
+# Multi-calendar --plain rows use: TYPE CALENDAR ID START END SUMMARY ERROR
+# With --weekday: TYPE CALENDAR ID START START_DOW END END_DOW SUMMARY ERROR
+# TYPE is "event" or "calendar_error"; errors occupy CALENDAR and ERROR.
+# Multi-calendar --json returns events, per-calendar errors, and a complete boolean.
 gog calendar event <calendarId> <eventId>
 gog calendar get <calendarId> <eventId>                     # Alias for event
 gog calendar search "meeting" --today
@@ -684,6 +795,14 @@ gog calendar team <group-email> --today           # Show team's events for today
 gog calendar team <group-email> --week            # Show team's events for the week (use --week-start)
 gog calendar team <group-email> --freebusy        # Show only busy/free blocks (faster)
 gog calendar team <group-email> --query "standup" # Filter by event title
+
+# In event mode, --json includes complete and errors fields. If any member
+# calendar fails, successful events are still rendered with complete=false and
+# one {calendarId,error} entry per failure, then the command exits nonzero.
+# In --plain mode, incomplete results use this six-column TSV schema:
+# TYPE  WHO  START  END  SUMMARY  ERROR
+# Records are typed as event or calendar_error. Complete results keep the
+# existing WHO/START/END/SUMMARY schema; --freebusy behavior is unchanged.
 
 # Create and update
 gog calendar create <calendarId> \
@@ -923,6 +1042,8 @@ gog sheets format <spreadsheetId> 'Sheet1!A1:B2' --format-json '{"textFormat":{"
 gog sheets create "My New Spreadsheet" --sheets "Sheet1,Sheet2"
 ```
 
+`gog sheets metadata <spreadsheetId> --plain` emits headerless TSV with columns `SPREADSHEET_ID`, `SPREADSHEET_TITLE`, `LOCALE`, `TIMEZONE`, `URL`, `SHEET_ID`, `SHEET_TITLE`, `ROWS`, and `COLUMNS`, in that order. It emits one row per sheet; a spreadsheet with no sheets emits one row with the four sheet fields empty.
+
 ### People
 
 ```bash
@@ -1139,15 +1260,17 @@ $ gog gmail messages search 'newer_than:7d' --max 1 --include-body --json
 }
 ```
 
-Data goes to stdout, errors and progress to stderr for clean piping:
+Data goes to stdout, errors and progress to stderr for clean piping. Built-in projection can replace common envelope-scraping `jq` usage:
 
 ```bash
-gog --json drive ls --max 5 | jq '.files[] | select(.mimeType=="application/pdf")'
+# Emit the file array without nextPageToken, then retain only selected fields.
+gog --json --results-only --select id,name,mimeType drive ls --max 5
+
+# Filtering expressions remain a jq use case.
+gog --json --results-only drive ls --max 5 | jq '.[] | select(.mimeType=="application/pdf")'
 ```
 
-Useful pattern:
-
-- `gog --json ... | jq .`
+`--select` projects objects or each object in an array. It is separate from command-specific options such as Calendar's `--fields`: `--fields` controls the Google API partial response, while `--select` shapes the JSON printed by `gog`; they can be combined.
 
 Calendar JSON convenience fields:
 
@@ -1270,7 +1393,10 @@ All commands support these flags:
 
 - `--account <email|alias|auto>` - Account to use (overrides GOG_ACCOUNT)
 - `--enable-commands <csv>` - Allowlist top-level commands (e.g., `calendar,tasks`)
+- `--enable-command-paths <csv>` - Allowlist exact command paths (e.g., `gmail search,calendar events`)
 - `--json` - Output JSON to stdout (best for scripting)
+- `--results-only` - Output the command's declared primary result (requires `--json`)
+- `--select <paths>` - Project comma-separated dotted paths from JSON output (requires `--json`)
 - `--plain` - Output stable, parseable text to stdout (TSV; no colors)
 - `--color <mode>` - Color mode: `auto`, `always`, or `never` (default: auto)
 - `--force` - Skip confirmations for destructive commands
@@ -1383,7 +1509,7 @@ Optional env:
 - `GOG_LIVE_SKIP=groups,keep`
 - `GOG_LIVE_AUTH=all,groups`
 - `GOG_LIVE_ALLOW_NONTEST=1`
-- `GOG_LIVE_EMAIL_TEST=steipete+gogtest@gmail.com`
+- `GOG_LIVE_EMAIL_TEST=test-account@example.com` (required for Gmail send and Drive sharing tests)
 - `GOG_LIVE_GROUP_EMAIL=group@domain`
 - `GOG_LIVE_CLASSROOM_COURSE=<courseId>`
 - `GOG_LIVE_CLASSROOM_CREATE=1`
@@ -1415,7 +1541,8 @@ MIT
 
 ## Links
 
-- [GitHub Repository](https://github.com/steipete/gogcli)
+- [Robben Media fork](https://github.com/Robben-Media/gogcli)
+- [Original project by Peter Steinberger](https://github.com/steipete/gogcli)
 - [Gmail API Documentation](https://developers.google.com/gmail/api)
 - [Google Calendar API Documentation](https://developers.google.com/calendar)
 - [Google Drive API Documentation](https://developers.google.com/drive)
@@ -1426,7 +1553,9 @@ MIT
 
 ## Credits
 
-This project is inspired by Mario Zechner's original CLIs:
+This Robben Media fork is based on Peter Steinberger's original [`gogcli`](https://github.com/steipete/gogcli). We are grateful for the foundation he created and retain attribution under the MIT license while maintaining this fork independently going forward.
+
+The original project was inspired by Mario Zechner's CLIs:
 
 - [gmcli](https://github.com/badlogic/gmcli)
 - [gccli](https://github.com/badlogic/gccli)

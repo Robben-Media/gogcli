@@ -15,11 +15,11 @@ Use `gog calendar` for managing calendar events, scheduling, and availability.
 ## Quick Start
 
 ```bash
-# List upcoming events (today)
-GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com calendar events --today
+# List upcoming events (today; agents: --wrap-untrusted fences summaries/descriptions)
+GOG_KEYRING_PASSWORD=cli-tools gog --json --wrap-untrusted --no-input --account jeremy@robbenmedia.com calendar events --today
 
 # List next 7 days
-GOG_KEYRING_PASSWORD=cli-tools gog --json --no-input --account jeremy@robbenmedia.com calendar events --days 7
+GOG_KEYRING_PASSWORD=cli-tools gog --json --wrap-untrusted --no-input --account jeremy@robbenmedia.com calendar events --days 7
 
 # Create an event
 GOG_KEYRING_PASSWORD=cli-tools gog --no-input --account jeremy@robbenmedia.com calendar create primary --summary "Meeting" --start "2026-02-10T10:00:00" --end "2026-02-10T11:00:00"
@@ -48,6 +48,8 @@ Default calendarId is `primary`.
 ## Output Format
 
 With `--json`: raw Google Calendar API JSON. With `--plain`: TSV. Default: human-readable table with times.
+
+Agents consuming event text via JSON should pass `--wrap-untrusted` (or `GOG_WRAP_UNTRUSTED=1`) so summaries/descriptions are fenced as untrusted; plain/human output is unchanged.
 
 ## Configuration
 

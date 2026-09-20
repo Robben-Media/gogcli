@@ -18,6 +18,35 @@ var (
 	newBusinessProfileInfoService     = googleapi.NewBusinessProfileInfo
 )
 
+// writeBusinessProfileMutationReceipt emits a machine-readable success receipt for
+// empty-body Business Profile mutations. JSON: action/resource/success (+destination).
+// Plain: one TSV data row under stable headers.
+func writeBusinessProfileMutationReceipt(ctx context.Context, action, resource, destination string) error {
+	if outfmt.IsJSON(ctx) {
+		payload := map[string]any{
+			"action":   action,
+			"resource": resource,
+			"success":  true,
+		}
+		if destination != "" {
+			payload["destination"] = destination
+		}
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(payload))
+	}
+
+	if outfmt.IsPlain(ctx) {
+		headers := []string{"ACTION", "RESOURCE", "SUCCESS"}
+		fields := []string{action, resource, "true"}
+		if destination != "" {
+			headers = append(headers, "DESTINATION")
+			fields = append(fields, destination)
+		}
+		return writePlainReceiptError(ctx, headers, fields)
+	}
+
+	return nil
+}
+
 type BusinessProfileCmd struct {
 	Accounts        BusinessProfileAccountsCmd            `cmd:"" name:"accounts" help:"Account management"`
 	Admins          BusinessProfileAccountAdminsCmd       `cmd:"" name:"account-admins" help:"Account admin management"`
@@ -82,10 +111,10 @@ func (c *BusinessProfileLocationsCmd) Run(ctx context.Context, flags *RootFlags)
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"locations":     resp.Locations,
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Locations))
 	}
 
 	if len(resp.Locations) == 0 {
@@ -137,7 +166,7 @@ func (c *BusinessProfileGetCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"location": loc})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"location": loc}, loc))
 	}
 
 	u.Out().Printf("name\t%s", loc.Name)

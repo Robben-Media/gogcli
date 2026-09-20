@@ -77,7 +77,7 @@ func (c *ChatDMSendCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"message": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"message": resp}, resp))
 	}
 
 	if resp == nil {
@@ -126,7 +126,7 @@ func (c *ChatDMSpaceCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"space": space})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"space": space}, space))
 	}
 	if space.Name != "" {
 		u.Out().Printf("resource\t%s", space.Name)

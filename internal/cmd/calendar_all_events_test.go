@@ -89,12 +89,62 @@ func TestListAllCalendarsEvents_JSON(t *testing.T) {
 	})
 
 	var parsed struct {
-		Events []map[string]any `json:"events"`
+		Events   []map[string]any `json:"events"`
+		Errors   []map[string]any `json:"errors"`
+		Complete bool             `json:"complete"`
 	}
 	if err := json.Unmarshal([]byte(jsonOut), &parsed); err != nil {
 		t.Fatalf("json parse: %v", err)
 	}
 	if len(parsed.Events) != 2 {
 		t.Fatalf("unexpected events: %#v", parsed.Events)
+	}
+	if !parsed.Complete || len(parsed.Errors) != 0 {
+		t.Fatalf("unexpected completeness metadata: complete=%v errors=%#v", parsed.Complete, parsed.Errors)
+	}
+}
+
+func TestListAllCalendarsEvents_JSON_EmptySelectionIsComplete(t *testing.T) {
+	srv := httptest.NewServer(withPrimaryCalendar(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/calendarList") && r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": []map[string]any{}})
+			return
+		}
+		http.NotFound(w, r)
+	})))
+	defer srv.Close()
+
+	svc, err := calendar.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+
+	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
+	if err != nil {
+		t.Fatalf("ui.New: %v", err)
+	}
+	ctx := outfmt.WithMode(ui.WithUI(context.Background(), u), outfmt.Mode{JSON: true})
+
+	jsonOut := captureStdout(t, func() {
+		if err := listAllCalendarsEvents(ctx, svc, "2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z", 10, "", "", "", "", "", false); err != nil {
+			t.Fatalf("listAllCalendarsEvents: %v", err)
+		}
+	})
+
+	var parsed struct {
+		Events   []map[string]any `json:"events"`
+		Errors   []map[string]any `json:"errors"`
+		Complete bool             `json:"complete"`
+	}
+	if err := json.Unmarshal([]byte(jsonOut), &parsed); err != nil {
+		t.Fatalf("json parse: %v", err)
+	}
+	if !parsed.Complete || len(parsed.Events) != 0 || len(parsed.Errors) != 0 {
+		t.Fatalf("unexpected empty result: %#v", parsed)
 	}
 }

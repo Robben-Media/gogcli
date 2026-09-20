@@ -92,7 +92,7 @@ func TestSheetsCommands_JSON(t *testing.T) {
 	}
 	newSheetsService = func(context.Context, string) (*sheets.Service, error) { return svc, nil }
 
-	flags := &RootFlags{Account: "a@b.com"}
+	flags := &RootFlags{Account: "a@b.com", Force: true}
 	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
 	if uiErr != nil {
 		t.Fatalf("ui.New: %v", uiErr)
@@ -218,7 +218,7 @@ func TestSheetsCommands_Text(t *testing.T) {
 	}
 	newSheetsService = func(context.Context, string) (*sheets.Service, error) { return svc, nil }
 
-	flags := &RootFlags{Account: "a@b.com"}
+	flags := &RootFlags{Account: "a@b.com", Force: true}
 
 	out := captureStdout(t, func() {
 		u, uiErr := ui.New(ui.Options{Stdout: os.Stdout, Stderr: io.Discard, Color: "never"})

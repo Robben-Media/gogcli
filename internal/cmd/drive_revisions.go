@@ -60,12 +60,12 @@ func (c *DriveRevisionsListCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"fileId":        fileID,
 			"revisions":     resp.Revisions,
 			"revisionCount": len(resp.Revisions),
 			"nextPageToken": resp.NextPageToken,
-		})
+		}, resp.Revisions))
 	}
 
 	if len(resp.Revisions) == 0 {
@@ -140,7 +140,7 @@ func (c *DriveRevisionsGetCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"revision": rev})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"revision": rev}, rev))
 	}
 
 	u.Out().Printf("id\t%s", rev.Id)
@@ -170,27 +170,20 @@ func downloadRevision(ctx context.Context, svc *drive.Service, fileID, revisionI
 		outputPath = fmt.Sprintf("%s-revision-%s", fileID, revisionID)
 	}
 
-	// Create output file
-	// #nosec G304 -- User-provided output path for downloaded revision
-	f, err := os.Create(outputPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	// Copy content
-	size, err := io.Copy(f, resp.Body)
+	size, _, err := writeDownloadFile(outputPath, 0o644, func(w io.Writer) (int64, error) {
+		return io.Copy(w, resp.Body)
+	})
 	if err != nil {
 		return err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"path":       outputPath,
 			"size":       size,
 			"revisionId": revisionID,
 			"mimeType":   rev.MimeType,
-		})
+		}))
 	}
 
 	u.Out().Printf("path\t%s", outputPath)
@@ -233,11 +226,11 @@ func (c *DriveRevisionsDeleteCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"deleted":    true,
 			"fileId":     fileID,
 			"revisionId": revisionID,
-		})
+		}))
 	}
 
 	u.Out().Printf("deleted\ttrue")
@@ -298,7 +291,7 @@ func (c *DriveRevisionsUpdateCmd) Run(ctx context.Context, flags *RootFlags) err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"revision": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"revision": updated}, updated))
 	}
 
 	u.Out().Printf("id\t%s", updated.Id)

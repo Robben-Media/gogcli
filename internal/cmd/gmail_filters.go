@@ -41,7 +41,7 @@ func (c *GmailFiltersListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"filters": resp.Filter})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"filters": resp.Filter}, resp.Filter))
 	}
 
 	if len(resp.Filter) == 0 {
@@ -100,7 +100,7 @@ func (c *GmailFiltersGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"filter": filter})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"filter": filter}, filter))
 	}
 
 	u.Out().Printf("id\t%s", filter.Id)
@@ -293,7 +293,12 @@ func (c *GmailFiltersCreateCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"filter": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"filter": created}, created))
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainRoutingReceipt(ctx, "filter", "create", created.Id, "success")
+		return nil
 	}
 
 	u.Out().Println("Filter created successfully")
@@ -327,25 +332,34 @@ func (c *GmailFiltersDeleteCmd) Run(ctx context.Context, flags *RootFlags) error
 		return err
 	}
 
+	filterID := strings.TrimSpace(c.FilterID)
+	if filterID == "" {
+		return usage("empty filterId")
+	}
+	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("delete gmail filter %s", filterID)); confirmErr != nil {
+		return confirmErr
+	}
+
 	svc, err := newGmailService(ctx, account)
 	if err != nil {
 		return err
 	}
 
-	filterID := strings.TrimSpace(c.FilterID)
-	if filterID == "" {
-		return usage("empty filterId")
-	}
 	err = svc.Users.Settings.Filters.Delete("me", filterID).Do()
 	if err != nil {
 		return err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"success":  true,
 			"filterId": filterID,
-		})
+		}))
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainRoutingReceipt(ctx, "filter", "delete", filterID, "success")
+		return nil
 	}
 
 	u.Out().Printf("Filter %s deleted successfully", filterID)

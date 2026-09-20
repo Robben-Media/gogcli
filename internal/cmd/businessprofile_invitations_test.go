@@ -245,8 +245,9 @@ func TestExecute_BusinessProfileInvitationsAccept_JSON(t *testing.T) {
 		return svc, nil
 	}
 
-	stderr := captureStderr(t, func() {
-		captureStdout(t, func() {
+	var stderr string
+	out := captureStdout(t, func() {
+		stderr = captureStderr(t, func() {
 			if err := Execute([]string{
 				"--json", "--account", "a@b.com",
 				"business-profile", "account-invitations", "accept",
@@ -256,6 +257,9 @@ func TestExecute_BusinessProfileInvitationsAccept_JSON(t *testing.T) {
 			}
 		})
 	})
+	if !strings.Contains(stderr, "accepted") {
+		t.Fatalf("expected success diagnostic, got %q", stderr)
+	}
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -265,8 +269,63 @@ func TestExecute_BusinessProfileInvitationsAccept_JSON(t *testing.T) {
 	if !strings.Contains(gotPath, ":accept") {
 		t.Fatalf("expected path to contain ':accept', got %q", gotPath)
 	}
-	if !strings.Contains(stderr, "accepted") {
-		t.Fatalf("expected stderr to contain 'accepted', got %q", stderr)
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatalf("parsing JSON: %v\nout=%q", err, out)
+	}
+	if result["action"] != "accept" {
+		t.Fatalf("expected action=accept, got %v", result["action"])
+	}
+	if result["resource"] != "accounts/123/invitations/456" {
+		t.Fatalf("expected resource accounts/123/invitations/456, got %v", result["resource"])
+	}
+	if result["success"] != true {
+		t.Fatalf("expected success=true, got %v", result["success"])
+	}
+}
+
+func TestExecute_BusinessProfileInvitationsAccept_Plain(t *testing.T) {
+	origAccounts := newBusinessProfileAccountsService
+	t.Cleanup(func() { newBusinessProfileAccountsService = origAccounts })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || !strings.Contains(r.URL.Path, ":accept") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{})
+	}))
+	defer srv.Close()
+
+	svc, err := mybusinessaccountmanagement.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newBusinessProfileAccountsService = func(context.Context, string) (*mybusinessaccountmanagement.Service, error) {
+		return svc, nil
+	}
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain", "--account", "a@b.com",
+				"business-profile", "account-invitations", "accept",
+				"accounts/123/invitations/456",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	want := "ACTION\tRESOURCE\tSUCCESS\naccept\taccounts/123/invitations/456\ttrue\n"
+	if out != want {
+		t.Fatalf("plain receipt mismatch:\n got %q\nwant %q", out, want)
 	}
 }
 
@@ -305,8 +364,9 @@ func TestExecute_BusinessProfileInvitationsDecline_JSON(t *testing.T) {
 		return svc, nil
 	}
 
-	stderr := captureStderr(t, func() {
-		captureStdout(t, func() {
+	var stderr string
+	out := captureStdout(t, func() {
+		stderr = captureStderr(t, func() {
 			if err := Execute([]string{
 				"--json", "--account", "a@b.com",
 				"business-profile", "account-invitations", "decline",
@@ -316,6 +376,9 @@ func TestExecute_BusinessProfileInvitationsDecline_JSON(t *testing.T) {
 			}
 		})
 	})
+	if !strings.Contains(stderr, "declined") {
+		t.Fatalf("expected success diagnostic, got %q", stderr)
+	}
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -325,7 +388,62 @@ func TestExecute_BusinessProfileInvitationsDecline_JSON(t *testing.T) {
 	if !strings.Contains(gotPath, ":decline") {
 		t.Fatalf("expected path to contain ':decline', got %q", gotPath)
 	}
-	if !strings.Contains(stderr, "declined") {
-		t.Fatalf("expected stderr to contain 'declined', got %q", stderr)
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatalf("parsing JSON: %v\nout=%q", err, out)
+	}
+	if result["action"] != "decline" {
+		t.Fatalf("expected action=decline, got %v", result["action"])
+	}
+	if result["resource"] != "accounts/123/invitations/456" {
+		t.Fatalf("expected resource accounts/123/invitations/456, got %v", result["resource"])
+	}
+	if result["success"] != true {
+		t.Fatalf("expected success=true, got %v", result["success"])
+	}
+}
+
+func TestExecute_BusinessProfileInvitationsDecline_Plain(t *testing.T) {
+	origAccounts := newBusinessProfileAccountsService
+	t.Cleanup(func() { newBusinessProfileAccountsService = origAccounts })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || !strings.Contains(r.URL.Path, ":decline") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{})
+	}))
+	defer srv.Close()
+
+	svc, err := mybusinessaccountmanagement.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newBusinessProfileAccountsService = func(context.Context, string) (*mybusinessaccountmanagement.Service, error) {
+		return svc, nil
+	}
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--plain", "--account", "a@b.com",
+				"business-profile", "account-invitations", "decline",
+				"accounts/123/invitations/456",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	want := "ACTION\tRESOURCE\tSUCCESS\ndecline\taccounts/123/invitations/456\ttrue\n"
+	if out != want {
+		t.Fatalf("plain receipt mismatch:\n got %q\nwant %q", out, want)
 	}
 }

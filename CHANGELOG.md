@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+### Added
+
+- MCP: add a native Go MCP server (`gog-mcp`) with browser OAuth account connect/reconnect/disconnect, curated read tools, an opt-in compact Google API catalog with guided workflow recipes, formatted mail preparation, and bounded Gmail/Drive media operations; CLI access is preserved. (#266, #159) Thanks @itsjeremyjohnson.
+- Auth: add guided `gog auth setup` for project selection/creation, selected-project API enablement, Console-only OAuth client guidance, credential install, and first-account authorization (re-runnable; agent-friendly). (#158)
+- Auth: add `gog auth doctor` for unified read-only diagnostics of config, keyring, OAuth client credentials, stored identities, and refresh-token usability. (#157)
+- CLI: add `--results-only` and `--select` for concise, projected JSON output. (#156)
+- CLI: add `gog schema` for deterministic, versioned JSON discovery of commands, flags, exit codes, and effective automation safeguards. (#152)
+- CLI: add opt-in `--wrap-untrusted` / `GOG_WRAP_UNTRUSTED` JSON fences for external Workspace text used by agents. (#155)
+- CLI: add `--enable-command-paths` / `GOG_ENABLE_COMMAND_PATHS` for exact command-path allowlisting alongside top-level `--enable-commands`. (#153)
+- Safety: add fail-closed runtime `--readonly` mode that blocks mutating Google API requests while allowing reviewed read operations. (#154)
+- Search Console: add `--start-row` to `search-console query` for zero-based Search Analytics result windows. (#98)
+- Tag Manager: add workspace trigger and variable create/delete/get/revert/update commands plus built-in-variable management. (#12, #45, #46, #47)
+- Tag Manager: add composable workspace version creation and container-version publishing commands. (#11)
+
+### Changed
+
+- Distribution: use `Robben-Media/gogcli` as the sole install and release source; remove upstream Homebrew/tap assumptions.
+- Auth: request the full Analytics and Tag Manager administration scopes, preserve existing scopes during service-specific reauthorization, add explicit `--replace-scopes`, and allow up to 10 minutes for browser consent. (#13)
+
+### Fixed
+
+- Calendar: paginate multi-calendar event listings with an opaque per-calendar aggregate `--page` cursor so busy calendars are not silently truncated. (#99)
+- Policy: enforce normalized service policies for canonical hyphenated Business Profile, Search Console, and Tag Manager commands. (#50, #100)
+- Analytics: preserve physical TSV row and column boundaries for report and audience values in `--plain` output. (#51, #101)
+- BigQuery: preserve physical TSV row and column boundaries for query results in `--plain` output. (#52, #102)
+- Sheets: preserve physical TSV row and column boundaries for single-range, batch-range, and filter-range values in `--plain` output. (#53, #103)
+- Docs: require shared destructive confirmation before `docs delete-range` submits a content deletion. (#54)
+- Gmail: require message IDs and shared destructive confirmation before permanent batch deletion. (#55)
+- Gmail: require shared destructive confirmation before deleting a resolved label. (#56)
+- Gmail: require shared destructive confirmation before removing a delegate, send-as alias, filter, or forwarding address. (#57)
+- Sheets: require shared destructive confirmation before deleting a sheet tab. (#58)
+- Sheets: require shared destructive confirmation before `sheets clear` removes values from a range. (#59)
+- Gmail: honor `--json` and `--plain` for tracking setup and status. (#60)
+- Analytics: include measurement IDs in the stable six-column data-stream detail TSV schema. (#61)
+
 ## 0.10.0 - 2026-08-07
 
 ### Highlights
@@ -24,6 +59,7 @@
 
 ### Fixed
 
+- CLI: keep `gog update` output script-safe, throttle failed release checks, and preserve the existing binary when atomic replacement fails.
 - CLI: correct the shared `--out` flag help for download/export commands (sheets, docs, slides, drive, gmail attachments, chat media) to describe the derived default filename instead of an inaccurate "gogcli config dir". (#37)
 - CLI: make `--plain config list` and `--plain policy list` emit stable TSV for scriptable output. (#26)
 - Calendar: fix recurrence rules with BYDAY parameter (e.g., `BYDAY=MO,TU,WE,TH,FR`). (#120)

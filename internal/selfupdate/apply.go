@@ -20,8 +20,10 @@ import (
 var (
 	errRefuseDevDirty   = errors.New("refusing to self-update dev/dirty build")
 	errAlreadyLatest    = errors.New("already on latest version")
+	errChecksumRequired = errors.New("checksums required")
 	errChecksumMismatch = errors.New("checksum mismatch")
 	errArchiveNoBinary  = errors.New("archive missing gog binary")
+	renameFile          = os.Rename
 )
 
 // ApplyOptions controls binary replacement.
@@ -157,6 +159,10 @@ func Apply(ctx context.Context, opts ApplyOptions) (CheckResult, error) {
 		return check, err
 	}
 
+	if checksums.Name == "" || strings.TrimSpace(checksums.BrowserDownloadURL) == "" {
+		return check, fmt.Errorf("%w: release %s missing checksums.txt asset", errChecksumRequired, rel.TagName)
+	}
+
 	var buf bytes.Buffer
 	if err = client.Download(ctx, asset.BrowserDownloadURL, &buf); err != nil {
 		return check, err
@@ -164,18 +170,16 @@ func Apply(ctx context.Context, opts ApplyOptions) (CheckResult, error) {
 
 	raw := buf.Bytes()
 
-	if checksums.BrowserDownloadURL != "" {
-		var cbuf bytes.Buffer
-		if err = client.Download(ctx, checksums.BrowserDownloadURL, &cbuf); err != nil {
-			return check, fmt.Errorf("download checksums: %w", err)
-		}
+	var cbuf bytes.Buffer
+	if err = client.Download(ctx, checksums.BrowserDownloadURL, &cbuf); err != nil {
+		return check, fmt.Errorf("download checksums: %w", err)
+	}
 
-		sum := sha256.Sum256(raw)
-		want := hex.EncodeToString(sum[:])
+	sum := sha256.Sum256(raw)
+	archiveSHA256 := hex.EncodeToString(sum[:])
 
-		if !checksumLineMatch(cbuf.String(), asset.Name, want) {
-			return check, fmt.Errorf("%w for %s", errChecksumMismatch, asset.Name)
-		}
+	if !checksumManifestMatches(cbuf.String(), asset.Name, archiveSHA256) {
+		return check, fmt.Errorf("%w for %s", errChecksumMismatch, asset.Name)
 	}
 
 	bin, err := extractBinary(raw, asset.Name)
@@ -205,28 +209,51 @@ func Apply(ctx context.Context, opts ApplyOptions) (CheckResult, error) {
 	return check, nil
 }
 
-func checksumLineMatch(checksums, assetName, gotHex string) bool {
-	for _, line := range strings.Split(checksums, "\n") {
-		line = strings.TrimSpace(line)
+func checksumManifestMatches(checksums, assetName, archiveSHA256 string) bool {
+	matchingEntries := 0
+	lines := strings.Split(checksums, "\n")
+
+	for i, line := range lines {
 		if line == "" {
+			if i == len(lines)-1 {
+				continue
+			}
+
+			return false
+		}
+
+		if len(line) < sha256.Size*2+3 {
+			return false
+		}
+
+		digest := line[:sha256.Size*2]
+
+		separator := line[sha256.Size*2 : sha256.Size*2+2]
+		if separator != "  " && separator != " *" {
+			return false
+		}
+
+		if _, err := hex.DecodeString(digest); err != nil {
+			return false
+		}
+
+		name := line[sha256.Size*2+2:]
+		if strings.ContainsAny(name, "\r\t") {
+			return false
+		}
+
+		if name != assetName {
 			continue
 		}
 
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
+		matchingEntries++
 
-		sum := fields[0]
-		name := fields[len(fields)-1]
-		name = strings.TrimPrefix(name, "*")
-
-		if name == assetName && strings.EqualFold(sum, gotHex) {
-			return true
+		if !strings.EqualFold(digest, archiveSHA256) {
+			return false
 		}
 	}
 
-	return false
+	return matchingEntries == 1
 }
 
 func extractBinary(archive []byte, assetName string) ([]byte, error) {
@@ -331,13 +358,13 @@ func replaceExecutable(dest string, data []byte) error {
 	backup := dest + ".bak"
 	_ = os.Remove(backup)
 
-	if runtime.GOOS == "windows" {
-		if err := os.Rename(dest, backup); err != nil && !os.IsNotExist(err) {
+	if runtime.GOOS == goosWindows {
+		if err := renameFile(dest, backup); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("backup current binary: %w", err)
 		}
 
-		if err := os.Rename(tmpName, dest); err != nil {
-			_ = os.Rename(backup, dest)
+		if err := renameFile(tmpName, dest); err != nil {
+			_ = renameFile(backup, dest)
 
 			return fmt.Errorf("replace binary: %w", err)
 		}
@@ -347,13 +374,7 @@ func replaceExecutable(dest string, data []byte) error {
 		return nil
 	}
 
-	if err := os.Rename(tmpName, dest); err != nil {
-		if err2 := os.Remove(dest); err2 == nil {
-			if err3 := os.Rename(tmpName, dest); err3 == nil {
-				return nil
-			}
-		}
-
+	if err := renameFile(tmpName, dest); err != nil {
 		return fmt.Errorf("replace binary: %w", err)
 	}
 

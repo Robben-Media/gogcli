@@ -39,7 +39,7 @@ func (c *ConfigGetCmd) Run(ctx context.Context) error {
 	value := config.GetValue(cfg, key)
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, outfmt.KeyValuePayload(key.String(), value))
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(outfmt.KeyValuePayload(key.String(), value)))
 	}
 	fmt.Fprintln(os.Stdout, formatConfigValue(value, spec.EmptyHint))
 	return nil
@@ -50,7 +50,7 @@ type ConfigKeysCmd struct{}
 func (c *ConfigKeysCmd) Run(ctx context.Context) error {
 	keys := config.KeyNames()
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, outfmt.KeysPayload(keys))
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(outfmt.KeysPayload(keys), keys))
 	}
 	for _, key := range keys {
 		fmt.Fprintln(os.Stdout, key)
@@ -85,7 +85,12 @@ func (c *ConfigSetCmd) Run(ctx context.Context) error {
 	if outfmt.IsJSON(ctx) {
 		payload := outfmt.KeyValuePayload(key.String(), c.Value)
 		payload["saved"] = true
-		return outfmt.WriteJSON(os.Stdout, payload)
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(payload))
+	}
+	if outfmt.IsPlain(ctx) {
+		fmt.Fprintln(os.Stdout, "ACTION\tKEY\tVALUE")
+		writeTableRow(ctx, os.Stdout, []string{"set", key.String(), c.Value})
+		return nil
 	}
 	fmt.Fprintf(os.Stdout, "Set %s = %s\n", c.Key, c.Value)
 	return nil
@@ -117,7 +122,12 @@ func (c *ConfigUnsetCmd) Run(ctx context.Context) error {
 	if outfmt.IsJSON(ctx) {
 		payload := outfmt.KeyValuePayload(key.String(), "")
 		payload["removed"] = true
-		return outfmt.WriteJSON(os.Stdout, payload)
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(payload))
+	}
+	if outfmt.IsPlain(ctx) {
+		fmt.Fprintln(os.Stdout, "ACTION\tKEY\tVALUE")
+		writeTableRow(ctx, os.Stdout, []string{"unset", key.String(), ""})
+		return nil
 	}
 	fmt.Fprintf(os.Stdout, "Unset %s\n", c.Key)
 	return nil
@@ -139,7 +149,7 @@ func (c *ConfigListCmd) Run(ctx context.Context) error {
 		for _, key := range keys {
 			payload[key.String()] = config.GetValue(cfg, key)
 		}
-		return outfmt.WriteJSON(os.Stdout, payload)
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(payload))
 	}
 
 	if outfmt.IsPlain(ctx) {
@@ -167,7 +177,7 @@ func (c *ConfigPathCmd) Run(ctx context.Context) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, outfmt.PathPayload(path))
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(outfmt.PathPayload(path)))
 	}
 	fmt.Fprintln(os.Stdout, path)
 	return nil

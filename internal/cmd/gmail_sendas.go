@@ -46,7 +46,7 @@ func (c *GmailSendAsListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"sendAs": resp.SendAs})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"sendAs": resp.SendAs}, resp.SendAs))
 	}
 
 	if len(resp.SendAs) == 0 {
@@ -102,7 +102,7 @@ func (c *GmailSendAsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"sendAs": sa})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"sendAs": sa}, sa))
 	}
 
 	u.Out().Printf("send_as_email\t%s", sa.SendAsEmail)
@@ -154,7 +154,12 @@ func (c *GmailSendAsCreateCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"sendAs": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"sendAs": created}, created))
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainRoutingReceipt(ctx, "send_as", "create", created.SendAsEmail, created.VerificationStatus)
+		return nil
 	}
 
 	u.Out().Printf("send_as_email\t%s", created.SendAsEmail)
@@ -189,10 +194,15 @@ func (c *GmailSendAsVerifyCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"email":   sendAsEmail,
 			"message": "Verification email sent",
-		})
+		}))
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainRoutingReceipt(ctx, "send_as", "verify", sendAsEmail, "success")
+		return nil
 	}
 
 	u.Out().Printf("Verification email sent to %s", sendAsEmail)
@@ -213,6 +223,9 @@ func (c *GmailSendAsDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 	if sendAsEmail == "" {
 		return errors.New("email is required")
 	}
+	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("delete gmail send-as alias %s", sendAsEmail)); confirmErr != nil {
+		return confirmErr
+	}
 
 	svc, err := newGmailService(ctx, account)
 	if err != nil {
@@ -225,10 +238,15 @@ func (c *GmailSendAsDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"email":   sendAsEmail,
 			"deleted": true,
-		})
+		}))
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainRoutingReceipt(ctx, "send_as", "delete", sendAsEmail, "success")
+		return nil
 	}
 
 	u.Out().Printf("Deleted send-as alias: %s", sendAsEmail)
@@ -289,7 +307,12 @@ func (c *GmailSendAsUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flag
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"sendAs": updated})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"sendAs": updated}, updated))
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainRoutingReceipt(ctx, "send_as", "update", updated.SendAsEmail, updated.VerificationStatus)
+		return nil
 	}
 
 	u.Out().Printf("Updated send-as alias: %s", updated.SendAsEmail)

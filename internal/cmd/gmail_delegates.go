@@ -40,7 +40,7 @@ func (c *GmailDelegatesListCmd) Run(ctx context.Context, flags *RootFlags) error
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"delegates": resp.Delegates})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"delegates": resp.Delegates}, resp.Delegates))
 	}
 
 	if len(resp.Delegates) == 0 {
@@ -85,7 +85,7 @@ func (c *GmailDelegatesGetCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"delegate": delegate})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"delegate": delegate}, delegate))
 	}
 
 	u.Out().Printf("delegate_email\t%s", delegate.DelegateEmail)
@@ -123,7 +123,12 @@ func (c *GmailDelegatesAddCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"delegate": created})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"delegate": created}, created))
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainRoutingReceipt(ctx, "delegate", "create", created.DelegateEmail, created.VerificationStatus)
+		return nil
 	}
 
 	u.Out().Println("Delegate added successfully")
@@ -144,25 +149,34 @@ func (c *GmailDelegatesRemoveCmd) Run(ctx context.Context, flags *RootFlags) err
 		return err
 	}
 
+	delegateEmail := strings.TrimSpace(c.DelegateEmail)
+	if delegateEmail == "" {
+		return usage("empty delegateEmail")
+	}
+	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("remove gmail delegate %s", delegateEmail)); confirmErr != nil {
+		return confirmErr
+	}
+
 	svc, err := newGmailService(ctx, account)
 	if err != nil {
 		return err
 	}
 
-	delegateEmail := strings.TrimSpace(c.DelegateEmail)
-	if delegateEmail == "" {
-		return usage("empty delegateEmail")
-	}
 	err = svc.Users.Settings.Delegates.Delete("me", delegateEmail).Do()
 	if err != nil {
 		return err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{
 			"success":       true,
 			"delegateEmail": delegateEmail,
-		})
+		}))
+	}
+
+	if outfmt.IsPlain(ctx) {
+		writePlainRoutingReceipt(ctx, "delegate", "delete", delegateEmail, "success")
+		return nil
 	}
 
 	u.Out().Printf("Delegate %s removed successfully", delegateEmail)

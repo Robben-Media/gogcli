@@ -133,7 +133,7 @@ func optionsForAccountScopes(ctx context.Context, serviceLabel string, email str
 		Base:   baseTransport,
 	})
 	c := &http.Client{
-		Transport: retryTransport,
+		Transport: readOnlyTransportFromContext(ctx, retryTransport),
 		Timeout:   defaultHTTPTimeout,
 	}
 

@@ -67,8 +67,14 @@ func TestExecute_GmailThreadAliases(t *testing.T) {
 				}
 			})
 		})
-		if !strings.Contains(out, "Thread contains 1 message(s)") {
-			t.Fatalf("unexpected output for %v: %q", args, out)
+		if !strings.Contains(out, "RECORD_TYPE\tTHREAD_ID\tMESSAGE_ID\tNAME\tVALUE\tPATH\tBYTES\tCACHED") {
+			t.Fatalf("missing plain header for %v: %q", args, out)
+		}
+		if !strings.Contains(out, "metadata\tt1\t\tmessage_count\t1\t\t\t") {
+			t.Fatalf("missing metadata row for %v: %q", args, out)
+		}
+		if !strings.Contains(out, "header\tt1\tm1\tSubject\tHello\t\t\t") {
+			t.Fatalf("missing subject header for %v: %q", args, out)
 		}
 	}
 }

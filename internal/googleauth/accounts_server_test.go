@@ -12,11 +12,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/99designs/keyring"
 	"golang.org/x/oauth2"
 
 	"github.com/steipete/gogcli/internal/config"
@@ -57,7 +59,17 @@ func (s *fakeStore) SetToken(client string, email string, tok secrets.Token) err
 
 	return nil
 }
-func (s *fakeStore) GetToken(string, string) (secrets.Token, error) { return secrets.Token{}, nil }
+
+func (s *fakeStore) GetToken(client string, email string) (secrets.Token, error) {
+	for _, token := range s.tokens {
+		if token.Client == client && token.Email == email {
+			return token, nil
+		}
+	}
+
+	return secrets.Token{}, keyring.ErrKeyNotFound
+}
+
 func (s *fakeStore) DeleteToken(client string, email string) error {
 	s.deleteClient = client
 	s.deleteCalled = email
@@ -426,7 +438,10 @@ func TestManageServer_HandleAuthStart(t *testing.T) {
 
 	t.Cleanup(func() { _ = ln.Close() })
 
-	ms := &ManageServer{listener: ln}
+	ms := &ManageServer{
+		listener: ln,
+		opts:     ManageServerOptions{ForceConsent: true},
+	}
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/start", nil)
 	ms.handleAuthStart(rr, req)
@@ -457,6 +472,14 @@ func TestManageServer_HandleAuthStart(t *testing.T) {
 		t.Fatalf("expected redirect uri, got %q", redirectURI)
 	}
 
+	if prompt := parsed.Query().Get("prompt"); prompt != "consent" {
+		t.Fatalf("expected prompt=consent, got %q", prompt)
+	}
+
+	if includeScopes := parsed.Query().Get("include_granted_scopes"); includeScopes != "" {
+		t.Fatalf("expected exact scopes with force consent, got include_granted_scopes=%q", includeScopes)
+	}
+
 	scope := parsed.Query().Get("scope")
 	if scope == "" {
 		t.Fatalf("expected scope query param")
@@ -476,6 +499,58 @@ func TestManageServer_HandleAuthStart(t *testing.T) {
 	for s, ok := range required {
 		if !ok {
 			t.Fatalf("expected %q scope, got %q", s, scope)
+		}
+	}
+}
+
+func TestManageServer_HandleAuthStart_ReadonlyDisablesGrantedScopes(t *testing.T) {
+	origRead := readClientCredentials
+	origState := randomStateFn
+	origEndpoint := oauthEndpoint
+
+	t.Cleanup(func() {
+		readClientCredentials = origRead
+		randomStateFn = origState
+		oauthEndpoint = origEndpoint
+	})
+
+	readClientCredentials = func(string) (config.ClientCredentials, error) {
+		return config.ClientCredentials{ClientID: "id", ClientSecret: "secret"}, nil
+	}
+	randomStateFn = func() (string, error) { return "state123", nil }
+	oauthEndpoint = oauth2.Endpoint{AuthURL: "http://example.com/auth", TokenURL: "http://example.com/token"}
+
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+
+	t.Cleanup(func() { _ = ln.Close() })
+
+	ms := &ManageServer{listener: ln, opts: ManageServerOptions{Readonly: true, Services: []Service{ServiceGmail, ServiceDrive}}}
+	rr := httptest.NewRecorder()
+	ms.handleAuthStart(rr, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/auth/start", nil))
+
+	if rr.Code != http.StatusFound {
+		t.Fatalf("status: %d", rr.Code)
+	}
+
+	parsed, err := url.Parse(rr.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse redirect: %v", err)
+	}
+
+	if got := parsed.Query().Get("include_granted_scopes"); got != "" {
+		t.Fatalf("readonly auth must request exact scopes, got include_granted_scopes=%q", got)
+	}
+
+	if got := parsed.Query().Get("prompt"); got != "" {
+		t.Fatalf("readonly auth without force consent prompt=%q, want empty", got)
+	}
+
+	for _, want := range []string{"https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/drive.readonly"} {
+		if !strings.Contains(parsed.Query().Get("scope"), want) {
+			t.Fatalf("readonly scope missing %q: %q", want, parsed.Query().Get("scope"))
 		}
 	}
 }
@@ -562,7 +637,15 @@ func TestManageServer_HandleOAuthCallback_Success(t *testing.T) {
 
 	t.Cleanup(func() { _ = ln.Close() })
 
-	store := &fakeStore{}
+	existingScopes, err := ScopesForManage([]Service{ServiceDrive})
+	if err != nil {
+		t.Fatalf("ScopesForManage: %v", err)
+	}
+	store := &fakeStore{tokens: []secrets.Token{{
+		Email:    "me@example.com",
+		Services: []string{"drive"},
+		Scopes:   existingScopes,
+	}}}
 	ms := &ManageServer{
 		oauthState: "state1",
 		listener:   ln,
@@ -587,6 +670,16 @@ func TestManageServer_HandleOAuthCallback_Success(t *testing.T) {
 
 	if store.setTokenValue.RefreshToken != "refresh" {
 		t.Fatalf("expected refresh token stored")
+	}
+
+	if !slices.Contains(store.setTokenValue.Services, "drive") ||
+		!slices.Contains(store.setTokenValue.Services, "gmail") {
+		t.Fatalf("expected existing and requested services, got %v", store.setTokenValue.Services)
+	}
+
+	if !slices.Contains(store.setTokenValue.Scopes, "https://www.googleapis.com/auth/drive") ||
+		!slices.Contains(store.setTokenValue.Scopes, "https://www.googleapis.com/auth/gmail.modify") {
+		t.Fatalf("expected existing and requested scopes, got %v", store.setTokenValue.Scopes)
 	}
 
 	if !strings.Contains(rr.Body.String(), "me@example.com") {
@@ -889,9 +982,19 @@ func TestManageServer_HandleAuthUpgrade(t *testing.T) {
 
 	t.Cleanup(func() { _ = ln.Close() })
 
+	existingScopes, err := ScopesForManage([]Service{ServiceDrive})
+	if err != nil {
+		t.Fatalf("ScopesForManage: %v", err)
+	}
+	store := &fakeStore{tokens: []secrets.Token{{
+		Email:    "test@example.com",
+		Services: []string{"drive"},
+		Scopes:   existingScopes,
+	}}}
 	ms := &ManageServer{
 		listener: ln,
 		opts:     ManageServerOptions{Services: []Service{ServiceGmail}},
+		store:    store,
 	}
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/upgrade?email=test@example.com", nil)
@@ -938,6 +1041,10 @@ func TestManageServer_HandleAuthUpgrade(t *testing.T) {
 		}
 	}
 
+	if !scopeSet["https://www.googleapis.com/auth/drive"] {
+		t.Fatalf("expected existing Drive scope in %q", scope)
+	}
+
 	if scopeSet["https://www.googleapis.com/auth/keep.readonly"] {
 		t.Fatalf("unexpected keep scope in %q", scope)
 	}
@@ -950,6 +1057,70 @@ func TestManageServer_HandleAuthUpgrade(t *testing.T) {
 	// Check for prompt=consent (forces consent screen)
 	if prompt := parsed.Query().Get("prompt"); prompt != "consent" {
 		t.Fatalf("expected prompt=consent, got %q", prompt)
+	}
+
+	if includeScopes := parsed.Query().Get("include_granted_scopes"); includeScopes != "" {
+		t.Fatalf("expected exact scopes for upgrade, got include_granted_scopes=%q", includeScopes)
+	}
+}
+
+func TestManageServer_HandleAuthUpgrade_ReadonlyDropsExistingWriteScopes(t *testing.T) {
+	origRead := readClientCredentials
+	origState := randomStateFn
+	origEndpoint := oauthEndpoint
+
+	t.Cleanup(func() {
+		readClientCredentials = origRead
+		randomStateFn = origState
+		oauthEndpoint = origEndpoint
+	})
+
+	readClientCredentials = func(string) (config.ClientCredentials, error) {
+		return config.ClientCredentials{ClientID: "id", ClientSecret: "secret"}, nil
+	}
+	randomStateFn = func() (string, error) { return "state-readonly", nil }
+	oauthEndpoint = oauth2.Endpoint{AuthURL: "http://example.com/auth", TokenURL: "http://example.com/token"}
+
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+
+	t.Cleanup(func() { _ = ln.Close() })
+
+	store := &fakeStore{tokens: []secrets.Token{{
+		Email:    "test@example.com",
+		Services: []string{"drive"},
+		Scopes:   []string{"https://www.googleapis.com/auth/drive"},
+	}}}
+	ms := &ManageServer{
+		listener: ln,
+		opts: ManageServerOptions{
+			Services: []Service{ServiceGmail},
+			Readonly: true,
+		},
+		store: store,
+	}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/auth/upgrade?email=test@example.com", nil)
+	ms.handleAuthUpgrade(rr, req)
+
+	if rr.Code != http.StatusFound {
+		t.Fatalf("status: %d", rr.Code)
+	}
+
+	parsed, err := url.Parse(rr.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse location: %v", err)
+	}
+
+	scope := parsed.Query().Get("scope")
+	if !strings.Contains(scope, "https://www.googleapis.com/auth/gmail.readonly") {
+		t.Fatalf("missing gmail.readonly in %q", scope)
+	}
+
+	if strings.Contains(scope, "https://www.googleapis.com/auth/drive") {
+		t.Fatalf("existing write-capable Drive scope retained in %q", scope)
 	}
 }
 

@@ -102,7 +102,7 @@ func (c *AAAccessBindingsListCmd) Run(ctx context.Context, flags *RootFlags) err
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"accessBindings": resp.AccessBindings, "nextPageToken": resp.NextPageToken})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"accessBindings": resp.AccessBindings, "nextPageToken": resp.NextPageToken}, resp.AccessBindings))
 	}
 	u := ui.FromContext(ctx)
 	if len(resp.AccessBindings) == 0 {
@@ -121,7 +121,7 @@ func (c *AAAccessBindingsListCmd) Run(ctx context.Context, flags *RootFlags) err
 
 type AAAccessBindingsCreateCmd struct {
 	Parent string `arg:"" name:"parent" help:"Parent resource (accounts/123 or properties/456)"`
-	Email  string `name:"email" required:"" help:"User email address"`
+	Email  string `name:"email" required:"" help:"Google account email (Workspace aliases/groups are not supported by the API)"`
 	Roles  string `name:"roles" required:"" help:"Comma-separated roles: viewer, analyst, editor, admin, no-cost-data, no-revenue-data"`
 }
 
@@ -223,7 +223,7 @@ func (c *AAAccessBindingsDeleteCmd) Run(ctx context.Context, flags *RootFlags) e
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"deleted": true, "name": name})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.DirectResult(map[string]any{"deleted": true, "name": name}))
 	}
 	if outfmt.IsPlain(ctx) {
 		w, flush := tableWriter(ctx)
@@ -238,7 +238,7 @@ func (c *AAAccessBindingsDeleteCmd) Run(ctx context.Context, flags *RootFlags) e
 
 func writeAnalyticsAccessBinding(ctx context.Context, action string, binding *analyticsadmin.GoogleAnalyticsAdminV1alphaAccessBinding) error {
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"accessBinding": binding})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"accessBinding": binding}, binding))
 	}
 	if outfmt.IsPlain(ctx) {
 		w, flush := tableWriter(ctx)

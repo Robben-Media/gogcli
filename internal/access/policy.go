@@ -21,12 +21,13 @@ func Evaluate(policies []config.Policy, action string, account string, client st
 	return evaluate(policies, action, account, "", client)
 }
 
-func evaluate(policies []config.Policy, action string, account string, accountID string, client string) Decision {
-	action = CanonicalAction(action)
-	if action == "" {
-		return Decision{}
-	}
+// ApplicablePolicies returns copies of the most specific policies that apply
+// to the account/client pair, in configuration order.
+func ApplicablePolicies(policies []config.Policy, account string, client string) []config.Policy {
+	return applicablePolicies(policies, account, "", client)
+}
 
+func applicablePolicies(policies []config.Policy, account string, accountID string, client string) []config.Policy {
 	var candidates []config.Policy
 	bestSpecificity := -1
 
@@ -48,6 +49,16 @@ func evaluate(policies []config.Policy, action string, account string, accountID
 		}
 	}
 
+	return candidates
+}
+
+func evaluate(policies []config.Policy, action string, account string, accountID string, client string) Decision {
+	action = CanonicalAction(action)
+	if action == "" {
+		return Decision{}
+	}
+
+	candidates := applicablePolicies(policies, account, accountID, client)
 	if len(candidates) == 0 {
 		return Decision{}
 	}

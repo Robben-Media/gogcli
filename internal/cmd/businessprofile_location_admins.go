@@ -52,9 +52,9 @@ func (c *BusinessProfileLocationAdminsListCmd) Run(ctx context.Context, flags *R
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{
 			"admins": resp.Admins,
-		})
+		}, resp.Admins))
 	}
 
 	if len(resp.Admins) == 0 {
@@ -114,7 +114,7 @@ func (c *BusinessProfileLocationAdminsCreateCmd) Run(ctx context.Context, flags 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"admin": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"admin": resp}, resp))
 	}
 
 	if resp.Name != "" {
@@ -160,7 +160,7 @@ func (c *BusinessProfileLocationAdminsDeleteCmd) Run(ctx context.Context, flags 
 	}
 
 	u.Err().Println("Deleted")
-	return nil
+	return writeBusinessProfileMutationReceipt(ctx, "delete", name, "")
 }
 
 // BusinessProfileLocationAdminsPatchCmd patches a location admin's role.
@@ -205,7 +205,7 @@ func (c *BusinessProfileLocationAdminsPatchCmd) Run(ctx context.Context, flags *
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"admin": resp})
+		return outfmt.WriteJSON(ctx, os.Stdout, outfmt.PrimaryResult(map[string]any{"admin": resp}, resp))
 	}
 
 	if resp.Name != "" {
@@ -269,5 +269,5 @@ func (c *BusinessProfileLocationTransferCmd) Run(ctx context.Context, flags *Roo
 	}
 
 	u.Err().Println("Location transferred")
-	return nil
+	return writeBusinessProfileMutationReceipt(ctx, "transfer", name, dest)
 }

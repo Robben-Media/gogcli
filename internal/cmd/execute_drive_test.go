@@ -75,6 +75,21 @@ func TestExecute_DriveGet_JSON(t *testing.T) {
 	if parsed.File.ID != "id1" || parsed.File.Name != "Doc" || !parsed.File.Starred {
 		t.Fatalf("unexpected file: %#v", parsed.File)
 	}
+
+	selected := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--json", "--results-only", "--select", "id,name", "--account", "a@b.com", "drive", "get", "id1"}); err != nil {
+				t.Fatalf("Execute transformed: %v", err)
+			}
+		})
+	})
+	var selectedFile map[string]any
+	if err := json.Unmarshal([]byte(selected), &selectedFile); err != nil {
+		t.Fatalf("selected JSON parse: %v\nout=%q", err, selected)
+	}
+	if len(selectedFile) != 2 || selectedFile["id"] != "id1" || selectedFile["name"] != "Doc" {
+		t.Fatalf("unexpected selected file: %#v", selectedFile)
+	}
 }
 
 func TestExecute_DriveDownload_JSON(t *testing.T) {
