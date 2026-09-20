@@ -1,6 +1,7 @@
 package accountconnect
 
 import (
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,18 +16,18 @@ func requestHost(r *http.Request) string {
 }
 
 func loopbackHostEquivalent(got, want string) bool {
-	normalize := func(host string) (string, bool) {
+	ports := func(host string) (string, bool) {
 		h := strings.ToLower(strings.TrimSpace(host))
-		h = strings.TrimSuffix(h, ".")
-		isV4 := strings.HasPrefix(h, "127.0.0.1:")
-		isV6 := strings.HasPrefix(h, "[::1]:")
-		if !isV4 && !isV6 {
+		_, port, err := net.SplitHostPort(h)
+		if err != nil {
 			return "", false
 		}
-		return h[strings.IndexByte(h, ':'):], true
+		ip := net.ParseIP(h)
+		isLoopbackIP := ip != nil && ip.IsLoopback()
+		return port, isLoopbackIP || h == "localhost"
 	}
-	gotPort, gotOK := normalize(got)
-	wantPort, wantOK := normalize(want)
+	gotPort, gotOK := ports(got)
+	wantPort, wantOK := ports(want)
 	return gotOK && wantOK && gotPort == wantPort
 }
 
