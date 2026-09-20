@@ -88,16 +88,18 @@ func NewResult[T any](id Identity, data T) Result[T] {
 type ErrorCategory string
 
 const (
-	InvalidInput      ErrorCategory = "invalid_input"
-	Forbidden         ErrorCategory = "forbidden_operation"
-	AuthRequired      ErrorCategory = "authentication_required"
-	InsufficientScope ErrorCategory = "insufficient_scope"
-	NotFound          ErrorCategory = "not_found"
-	BudgetExhausted   ErrorCategory = "budget_exhausted"
-	QuotaExhausted    ErrorCategory = "quota_exhausted"
-	DeadlineExceeded  ErrorCategory = "deadline_exceeded"
-	UpstreamFailure   ErrorCategory = "upstream_failure"
-	OutcomeUnknown    ErrorCategory = "outcome_unknown"
+	InvalidInput       ErrorCategory = "invalid_input"
+	Forbidden          ErrorCategory = "forbidden_operation"
+	AuthRequired       ErrorCategory = "authentication_required"
+	InsufficientScope  ErrorCategory = "insufficient_scope"
+	NotFound           ErrorCategory = "not_found"
+	Conflict           ErrorCategory = "conflict"
+	PreconditionFailed ErrorCategory = "precondition_failed"
+	BudgetExhausted    ErrorCategory = "budget_exhausted"
+	QuotaExhausted     ErrorCategory = "quota_exhausted"
+	DeadlineExceeded   ErrorCategory = "deadline_exceeded"
+	UpstreamFailure    ErrorCategory = "upstream_failure"
+	OutcomeUnknown     ErrorCategory = "outcome_unknown"
 )
 
 // Error contains only safe public details; upstream bodies and tokens do not belong here.

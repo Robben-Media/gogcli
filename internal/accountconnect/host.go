@@ -44,7 +44,7 @@ func checkRequestHost(r *http.Request, redirectURL string) error {
 	}
 
 	allowAlias := r.Method == http.MethodGet && (r.URL.Path == PathAccounts || r.URL.Path == PathStatus)
-	if got == "" || (!strings.EqualFold(got, wantURL.Host) && !(allowAlias && loopbackHostEquivalent(got, wantURL.Host))) {
+	if !strings.EqualFold(got, wantURL.Host) && !(allowAlias && loopbackHostEquivalent(got, wantURL.Host)) {
 		return ErrInvalidHost
 	}
 

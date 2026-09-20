@@ -52,6 +52,8 @@ func TestNativePublicErrorClassifications(t *testing.T) {
 		{name: "403 quota", err: &gapi.Error{Code: 403, Errors: []gapi.ErrorItem{{Reason: "quotaExceeded"}}}, category: mcpcontract.QuotaExhausted, retryable: true},
 		{name: "403 daily", err: &gapi.Error{Code: 403, Errors: []gapi.ErrorItem{{Reason: "dailyLimitExceeded"}}}, category: mcpcontract.QuotaExhausted, retryable: false},
 		{name: "403 other", err: &gapi.Error{Code: 403, Errors: []gapi.ErrorItem{{Reason: "forbidden"}}}, category: mcpcontract.Forbidden},
+		{name: "409", err: &gapi.Error{Code: 409, Message: "private"}, category: mcpcontract.Conflict},
+		{name: "412", err: &gapi.Error{Code: 412, Message: "private"}, category: mcpcontract.PreconditionFailed},
 		{name: "404", err: &gapi.Error{Code: 404, Message: "missing https://mail.google.com/"}, category: mcpcontract.NotFound},
 		{name: "429", err: &gapi.Error{Code: 429}, category: mcpcontract.QuotaExhausted, retryable: true},
 		{name: "500", err: &gapi.Error{Code: 500, Body: "upstream https://googleapis.com"}, category: mcpcontract.UpstreamFailure, retryable: true},

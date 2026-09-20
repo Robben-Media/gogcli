@@ -205,7 +205,10 @@ func (s *service) updateFile(ctx context.Context, id mcpcontract.Identity, in Up
 	if in.ExpectedVersion > 0 {
 		lookup := "https://www.googleapis.com/drive/v2/files/" + url.PathEscape(in.FileID) + "?fields=id,version,etag&supportsAllDrives=true"
 
-		payload, _, lookupErr := bundle.do(ctx, http.MethodGet, lookup, nil, "", maxDecodedBytes)
+		readBundle := *bundle
+		readBundle.def.Retry = mcpcontract.SafeRead
+
+		payload, _, lookupErr := readBundle.do(ctx, http.MethodGet, lookup, nil, "", maxDecodedBytes)
 		if lookupErr != nil {
 			return mcpcontract.Result[DriveWriteData]{}, lookupErr
 		}
@@ -333,6 +336,7 @@ type driveAPIFile struct {
 	Name     string `json:"name"`
 	MIMEType string `json:"mimeType"` //nolint:tagliatelle // Drive API wire name.
 	Size     string `json:"size"`
+	FileSize string `json:"fileSize"` //nolint:tagliatelle // Drive v2 wire name.
 }
 
 func parseDriveWrite(payload []byte) (DriveWriteData, error) {
@@ -346,8 +350,8 @@ func parseDriveWrite(payload []byte) (DriveWriteData, error) {
 	}
 
 	out := DriveWriteData{FileID: parsed.ID, Name: firstNonEmpty(parsed.Name, parsed.Title), MimeType: parsed.MIMEType}
-	if parsed.Size != "" {
-		if size, parseErr := strconv.ParseInt(parsed.Size, 10, 64); parseErr == nil {
+	if value := firstNonEmpty(parsed.Size, parsed.FileSize); value != "" {
+		if size, parseErr := strconv.ParseInt(value, 10, 64); parseErr == nil {
 			out.SizeBytes = size
 		}
 	}

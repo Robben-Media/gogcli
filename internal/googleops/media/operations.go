@@ -434,7 +434,7 @@ func writeError(err error) error {
 
 func requireBudget(ctx context.Context, calls int64) error {
 	if remaining := nativegoogleapi.UpstreamBudgetRemaining(ctx); remaining >= 0 && remaining < calls {
-		return &mcpcontract.Error{Category: mcpcontract.BudgetExhausted, Message: "insufficient remaining API budget for metadata and download", Retryable: false}
+		return &mcpcontract.Error{Category: mcpcontract.BudgetExhausted, Message: "insufficient remaining API budget for two upstream calls", Retryable: false}
 	}
 
 	return nil

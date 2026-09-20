@@ -3,6 +3,7 @@ package media
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -15,12 +16,17 @@ import (
 )
 
 func TestConditionalUpdatePreservesAtomicPrecondition(t *testing.T) {
-	for _, scenario := range []string{"success", "stale", "missing-etag", "race"} {
+	for _, scenario := range []string{"success", "stale", "missing-etag", "race", "preflight-error"} {
 		t.Run(scenario, func(t *testing.T) {
 			writes := 0
 
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Method == http.MethodGet {
+					if scenario == "preflight-error" {
+						w.WriteHeader(http.StatusServiceUnavailable)
+						return
+					}
+
 					if r.URL.Path != "/drive/v2/files/file1" {
 						t.Errorf("unexpected metadata path %s", r.URL.Path)
 					}
@@ -59,14 +65,14 @@ func TestConditionalUpdatePreservesAtomicPrecondition(t *testing.T) {
 				if meta["title"] != "renamed" || meta["name"] != nil {
 					t.Errorf("wrong v2 metadata %#v", meta)
 				}
-				_, _ = io.WriteString(w, `{"id":"file1","title":"renamed"}`)
+				_, _ = io.WriteString(w, `{"id":"file1","title":"renamed","fileSize":"7"}`)
 			}))
 			defer server.Close()
 			svc := &service{provider: &recordingProvider{client: &http.Client{Transport: &rewriteTransport{url: server.URL}}}}
 
 			out, err := svc.updateFile(context.Background(), testIdentity("account"), UpdateInput{Selection: mcpcontract.Selection{AccountID: "account"}, FileID: "file1", Name: "renamed", Data: "content", ExpectedVersion: 12})
 			if scenario == "success" {
-				if err != nil || out.Data.FileID != "file1" || out.Data.Name != "renamed" {
+				if err != nil || out.Data.FileID != "file1" || out.Data.Name != "renamed" || out.Data.SizeBytes != 7 {
 					t.Fatalf("result %#v error %v", out, err)
 				}
 			} else if err == nil {
@@ -74,7 +80,15 @@ func TestConditionalUpdatePreservesAtomicPrecondition(t *testing.T) {
 			}
 
 			expected := 1
-			if scenario == "stale" || scenario == "missing-etag" {
+
+			if scenario == "preflight-error" {
+				var safe *mcpcontract.Error
+				if !errors.As(err, &safe) || safe.Category == mcpcontract.OutcomeUnknown {
+					t.Fatalf("read misclassified: %v", err)
+				}
+			}
+
+			if scenario == "stale" || scenario == "missing-etag" || scenario == "preflight-error" {
 				expected = 0
 			}
 
