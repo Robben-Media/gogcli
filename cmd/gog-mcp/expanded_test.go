@@ -176,7 +176,7 @@ func schemaCycle(s *jsonschema.Schema, active, done map[*jsonschema.Schema]bool)
 	return false
 }
 
-func TestCLIRejectsExplicitZeroAndInvalidBudgetBeforeOpeningStores(t *testing.T) {
+func TestServerRejectsExplicitZeroAndInvalidBudgetBeforeOpeningStores(t *testing.T) {
 	t.Parallel()
 	for _, limit := range []int64{0, -1, 257} {
 		if err := serve(cli{MaxUpstreamCalls: limit}, slog.New(slog.NewTextHandler(io.Discard, nil))); !errors.Is(err, errAPICallBudget) {

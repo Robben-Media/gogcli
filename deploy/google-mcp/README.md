@@ -2,7 +2,7 @@
 
 Owner: RM Infra / Charlie for deployment; this repository owns the server and image. This package prepares one Google MCP container behind Linode's existing Traefik instance. Other MCP servers should have separate containers, storage, credentials and release versions. No deployment or Google sign-in is performed by these files.
 
-The authoritative acceptance and migration gates remain in [the native MCP plan](../../docs/plans/native-google-mcp.html#verification). Remote HTTP does not enable writes or retire the CLI.
+The [server specification](../../docs/spec.md) defines account selection, authorization and tool behavior. HTTP access alone does not enable write operations.
 
 ## Deployment inputs
 
@@ -26,7 +26,7 @@ docker build -f deploy/google-mcp/Dockerfile -t google-mcp:REVIEWED_COMMIT .
 
 CI builds the image and runs `python3 deploy/google-mcp/smoke.py google-mcp:ci` with disposable credentials and no Google accounts. The same smoke script accepts an image tag for Charlie to verify before rollout. Charlie must smoke-test the exact built image that will be published or deployed, record its image ID and registry digest if published, and deploy that digest. A separately rebuilt image needs its own smoke test.
 
-The image contains native `gog-mcp` and the existing `gog` administrative CLI. Tool requests never invoke the CLI. The entrypoint reads the keyring password from a mounted file, acquires a nonblocking exclusive lock on the mounted state directory, and execs the selected binary without an extra resident wrapper process. A second service/onboarding/admin process against that directory fails rather than becoming a concurrent writer. Do not delete the lock file while a process is running. The service runs as UID/GID 10001, drops capabilities, uses a read-only image filesystem, limits memory/CPU/processes, and publishes no host ports. Traefik reaches `/mcp` through its existing Docker network. Do not attach retry middleware: ambiguous writes must not be replayed by the ingress.
+The image contains only the native `gog-mcp` server. Tool handlers call Google APIs directly. The entrypoint reads the keyring password from a mounted file, acquires a nonblocking exclusive lock on the mounted state directory, and execs the selected binary without an extra resident wrapper process. A second service/onboarding process against that directory fails rather than becoming a concurrent writer. Do not delete the lock file while a process is running. The service runs as UID/GID 10001, drops capabilities, uses a read-only image filesystem, limits memory/CPU/processes, and publishes no host ports. Traefik reaches `/mcp` through its existing Docker network. Do not attach retry middleware: ambiguous writes must not be replayed by the ingress.
 
 Outside Git, prepare:
 
@@ -71,13 +71,17 @@ From the protected deployment directory, with the Compose file copied from this 
 docker compose --env-file deployment.env stop google-mcp
 ```
 
-Install the app credential once, using a protected file already on the server. The mounted source file must be readable by UID 10001 (for example, owned by 10001 with mode 0600). This command operates on local configuration, without sending Google API requests:
+Install the app-owned OAuth JSON downloaded from Google into the protected state directory. The server accepts Google's `installed` or `web` envelope as well as the compact stored format. For the default `native-mcp` bucket, the file is `state/gogcli/credentials-native-mcp.json`. Keep this storage path unchanged across upgrades. Images predating direct-envelope support require compact top-level `client_id` and `client_secret` fields. Before rolling back to such an image, restore its protected credential-file backup as well as its configuration; do not assume a newly provisioned raw envelope is backward-compatible. For a different `--client-name`, use the matching credentials filename.
+
+With the service stopped, an infrastructure operator can provision the file locally:
 
 ```sh
-docker compose --env-file deployment.env run --rm -T \
-  -v /SECURE/oauth-client.json:/run/secrets/oauth-client.json:ro \
-  onboarding gog --client native-mcp auth credentials /run/secrets/oauth-client.json
+sudo install -d -m 0700 -o 10001 -g 10001 /ABSOLUTE/DEPLOY_DIR/state/gogcli
+sudo install -m 0600 -o 10001 -g 10001 /SECURE/oauth-client.json \
+  /ABSOLUTE/DEPLOY_DIR/state/gogcli/credentials-native-mcp.json
 ```
+
+Use the same app registration for all connected accounts. Match its permitted redirect URI and client type to the onboarding URL. Do not replace credentials for an existing connected bucket without a coordinated reconnect and recovery plan. Keep the source JSON outside Git and model context.
 
 On your workstation, open an SSH tunnel:
 
@@ -91,7 +95,7 @@ In a separate server terminal, keep the onboarding process attached:
 docker compose --env-file deployment.env run --rm --interactive onboarding
 ```
 
-The onboarding profile uses host networking only to bind the existing account page to server loopback. It has no Traefik route. Open `http://127.0.0.1:8787/` through the tunnel; complete browser consent for the selected owner. Default consent is Gmail read access. Add other service scopes only when the pilot needs them. Obtain opaque account IDs from `/accounts`, then update the protected HTTP caller grants. Stop onboarding with Ctrl-C before restarting the main service. Repeat serially with the appropriate `GOG_MCP_OWNER` for another owner; personal and Workspace accounts for one person can use the same owner.
+The onboarding profile uses host networking only to bind the existing account page to server loopback. It has no Traefik route. Open `http://127.0.0.1:8787/` through the tunnel; complete browser consent for the selected owner. Choose only the capabilities needed by the profile. Additional reviewed scopes can be offered with `--connect-scopes`; preserve existing required scopes during reconnect. Do not combine incompatible YouTube and Workspace consent families. Obtain opaque account IDs from `/accounts`, then update the protected HTTP caller grants. Stop onboarding with Ctrl-C before restarting the main service. Repeat serially with the appropriate `GOG_MCP_OWNER` for another owner; personal and Workspace accounts for one person can use the same owner.
 
 ## Rollout and rollback
 
@@ -104,7 +108,7 @@ RM Infra / Charlie should execute this only after the named inputs and acceptanc
    `docker compose --env-file deployment.env up -d google-mcp`.
 4. Check the unauthenticated `/mcp` request returns 401 without account data. Through a fresh authorized client, verify discovery, resources, personal/Workspace selection and a denied account. Verify another harness's narrower grants cannot be bypassed with headers or arguments. Verify cancellation and bounded calls with read-only pilot tasks.
 5. Observe container memory/CPU, request latency and API attempts under representative concurrent harness use. The initial 768 MiB limit is a deployment bound, not a measured capacity claim. Adjust only from measurements.
-6. Change one named harness after its remote smoke test passes; preserve its previous CLI/stdio configuration. Writes, recipient rendering, native Skills activation and full workflow performance each retain their separate gates.
+6. Change one named harness after its remote smoke test passes; preserve its previous MCP connection configuration. Writes, recipient rendering, native Skills activation and full workflow performance each retain their separate gates.
 
 For a new deployment, rollback stops this Compose service and restores the harness's previous configuration. For an update, stop the service, restore its prior image/configuration, then restart; restore state only after confirming compatibility and recovery needs. Do not revoke Google grants merely to roll back routing. Keep protected state and secrets; do not use `down --volumes` as rollback.
 

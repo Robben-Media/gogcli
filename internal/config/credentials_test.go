@@ -124,3 +124,41 @@ func TestReadClientCredentials_Errors(t *testing.T) {
 		t.Fatalf("expected missing field error")
 	}
 }
+
+func TestReadDownloadedOAuthClientWithoutImport(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	for _, kind := range []string{"installed", "web"} {
+		path, err := ClientCredentialsPathFor("native-mcp")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if _, dirErr := EnsureDir(); dirErr != nil {
+			t.Fatal(dirErr)
+		}
+
+		raw := []byte(`{"` + kind + `":{"client_id":"app-owned-id","client_secret":"fixture-secret","project_id":"project"}}`)
+		if writeErr := os.WriteFile(path, raw, 0o600); writeErr != nil {
+			t.Fatal(writeErr)
+		}
+
+		got, err := ReadClientCredentialsFor("native-mcp")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got.ClientID != "app-owned-id" || got.ClientSecret != "fixture-secret" || got.ClientType != kind || got.ProjectID != "project" {
+			t.Fatalf("credentials: %+v", got)
+		}
+
+		stored, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if string(stored) != string(raw) {
+			t.Fatal("credential read rewrote source")
+		}
+	}
+}

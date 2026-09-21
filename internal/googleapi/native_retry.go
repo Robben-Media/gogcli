@@ -203,12 +203,12 @@ func nativePeekRateLimit(resp *http.Response) bool {
 }
 
 func (t *NativeRetryTransport) retryDelay(attempt int, resp *http.Response) time.Duration {
-	helper := RetryTransport{BaseDelay: t.BaseDelay}
-	if helper.BaseDelay <= 0 {
-		helper.BaseDelay = RateLimitBaseDelay
+	base := t.BaseDelay
+	if base <= 0 {
+		base = RateLimitBaseDelay
 	}
 
-	return helper.calculateBackoff(attempt, resp)
+	return calculateBackoff(base, attempt, resp)
 }
 
 func (t *NativeRetryTransport) exceedsDeadline(req *http.Request, delay time.Duration) bool {

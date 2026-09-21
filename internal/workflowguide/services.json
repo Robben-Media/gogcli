@@ -742,7 +742,7 @@
       "Use bounded independent calls or Google HTTP batch only when the client transport supports it; HTTP batch is not atomic.",
       "Each inner request consumes quota even when transported in one multipart HTTP call.",
       "Prefer tasks.patch or tasklists.patch for explicit changed fields; move uses exact parent/previous IDs and is a separate mutation.",
-      "The provider Task resource has no recurrence rule; any CLI repeat expansion creates multiple real tasks and must materialize/count each task before approval.",
+      "The provider Task resource has no recurrence rule; any client-side repeat expansion creates multiple real tasks and must materialize/count each task before approval.",
       "Preserve task ID, task-list ID, etag, updated time, parent, position, status, deleted, hidden, and assignmentInfo.",
       "Re-read exact current state before delete, move, completion reversal, task-list delete, or clearing completed tasks.",
       "List page tokens continue one query but are not durable sync tokens; use updatedMin for bounded change reads and include deleted items when reconciling removals.",

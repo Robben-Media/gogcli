@@ -17,7 +17,7 @@ type File struct {
 	AccountClients  map[string]string `json:"account_clients,omitempty"`
 	ClientDomains   map[string]string `json:"client_domains,omitempty"`
 	// ClientSetup stores transparent per-client setup facts that Google does not
-	// expose via supported CLI inspection (selected project pairing and manual
+	// expose via Google API inspection (selected project pairing and manual
 	// Auth Platform acknowledgments). Operational state is always re-inspected.
 	ClientSetup map[string]ClientSetup `json:"client_setup,omitempty"`
 	Policies    []Policy               `json:"policies,omitempty"`

@@ -4,7 +4,7 @@ import "strings"
 
 const serviceGmail = "gmail"
 
-// serviceAliases maps CLI/Kong names onto canonical policy service IDs.
+// serviceAliases maps service names onto canonical policy service IDs.
 var serviceAliases = map[string]string{
 	"bq":               "bigquery",
 	"business":         "businessprofile",
@@ -22,7 +22,7 @@ var serviceAliases = map[string]string{
 	"yt":               "youtube",
 }
 
-// CanonicalService maps Kong dashed names and CLI aliases to catalog service IDs.
+// CanonicalService maps dashed names and aliases to catalog service IDs.
 func CanonicalService(raw string) string {
 	raw = strings.ToLower(strings.TrimSpace(raw))
 	if canonical, ok := serviceAliases[raw]; ok {

@@ -15,8 +15,7 @@ const (
 // WorkflowCatalog is opt-in authoring functionality, separate from the original
 // curated read-only catalog. Each workflow has its own explicit write grant.
 // The businessprofile reads are opt-in because Google discovery omits scopes
-// for the mybusiness services; their actions mirror the CLI business-profile
-// commands (business-profile accounts list, business-profile locations).
+// for the mybusiness services; their actions use the canonical businessprofile policy namespace.
 func WorkflowCatalog() []Definition {
 	definitions := make([]Definition, 0, 13)
 	definitions = append(definitions, []Definition{

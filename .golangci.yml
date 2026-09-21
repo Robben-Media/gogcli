@@ -91,11 +91,6 @@ linters:
         rules:
           json: snake
           yaml: snake
-        overrides:
-          - pkg: github.com/steipete/gogcli/internal/cmd
-            ignore: true
-          - pkg: github.com/steipete/gogcli/internal/googleauth
-            ignore: true
     wsl_v5:
       allow-first-in-block: true
       allow-whole-block: false
@@ -122,16 +117,6 @@ linters:
           - goconst
           - tagliatelle
           - paralleltest
-      - path: internal/cmd/.*\.go
-        linters:
-          - err113
-          - wrapcheck
-          - dupl
-          - wsl_v5
-          - tagliatelle
-      - path: internal/googleauth/.*\.go
-        linters:
-          - tagliatelle
       - path: cmd/.*\.go
         linters:
           - wsl_v5
@@ -144,17 +129,6 @@ linters:
       - linters:
           - staticcheck
         text: "QF1001"
-      # The generated completion script intentionally loads and invokes the
-      # zsh bashcompinit compatibility function.
-      - path: internal/cmd/completion_scripts\.go
-        linters:
-          - dupword
-      # The yes literal is intentionally ignored globally as table vocabulary.
-      # Keep this legacy directive out of unused-directive failures until the
-      # file is otherwise touched.
-      - path: internal/cmd/confirm\.go
-        linters:
-          - nolintlint
 
 formatters:
   enable:

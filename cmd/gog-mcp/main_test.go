@@ -128,7 +128,7 @@ func TestParseStartupFlags(t *testing.T) {
 	}
 }
 
-func TestDefaultCredentialBucketIsSeparateFromCLI(t *testing.T) {
+func TestDefaultCredentialBucketIsNativeMCP(t *testing.T) {
 	t.Setenv("GOG_MCP_CLIENT_NAME", "")
 	if err := os.Unsetenv("GOG_MCP_CLIENT_NAME"); err != nil {
 		t.Fatal(err)

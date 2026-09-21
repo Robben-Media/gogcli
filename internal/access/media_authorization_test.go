@@ -37,7 +37,7 @@ func TestNativeMediaHonorsExistingCLIDenies(t *testing.T) {
 			}
 
 			if _, err := authorizer.Authorize(t.Context(), mcpcontract.Principal{ID: "local"}, id.AccountID, tc.operation, def.Actions); !isForbidden(err) {
-				t.Fatalf("existing CLI denial bypassed: %v", err)
+				t.Fatalf("configured policy denial bypassed: %v", err)
 			}
 		})
 	}

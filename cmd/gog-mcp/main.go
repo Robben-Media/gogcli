@@ -36,9 +36,11 @@ import (
 
 const (
 	defaultPrincipal    = "local"
-	defaultVersion      = "0.10.0"
 	defaultMaxBodyBytes = 8 << 20
 )
+
+// defaultVersion is injected by release builds; local builds identify as dev.
+var defaultVersion = "dev"
 
 var (
 	errAPICallBudget      = errors.New("gog-mcp: --max-upstream-calls must be between 1 and 256")

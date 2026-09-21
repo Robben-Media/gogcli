@@ -1,66 +1,22 @@
 SHELL := /bin/bash
-
-# `make` should build the binary by default.
 .DEFAULT_GOAL := build
-
-.PHONY: build gog gogcli gog-help gogcli-help help fmt fmt-check lint test ci tools
-.PHONY: worker-ci build-mcp
+.PHONY: build build-mcp help fmt fmt-check lint test ci tools
 
 BIN_DIR := $(CURDIR)/bin
-BIN := $(BIN_DIR)/gog
-CMD := ./cmd/gog
-
-VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
-COMMIT := $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo "")
-DATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
-LDFLAGS := -X github.com/steipete/gogcli/internal/cmd.version=$(VERSION) -X github.com/steipete/gogcli/internal/cmd.commit=$(COMMIT) -X github.com/steipete/gogcli/internal/cmd.date=$(DATE)
-
+BIN := $(BIN_DIR)/gog-mcp
 TOOLS_DIR := $(CURDIR)/.tools
 GOFUMPT := $(TOOLS_DIR)/gofumpt
 GOIMPORTS := $(TOOLS_DIR)/goimports
 GOLANGCI_LINT := $(TOOLS_DIR)/golangci-lint
 
-# Allow passing CLI args as extra "targets":
-#   make gogcli -- --help
-#   make gogcli -- gmail --help
-ifneq ($(filter gogcli gog,$(MAKECMDGOALS)),)
-RUN_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
-$(eval $(RUN_ARGS):;@:)
-endif
-
 build:
 	@mkdir -p $(BIN_DIR)
-	@go build -ldflags "$(LDFLAGS)" -o $(BIN) $(CMD)
+	@go build -trimpath -o $(BIN) ./cmd/gog-mcp
 
-build-mcp:
-	@mkdir -p $(BIN_DIR)
-	@go build -o $(BIN_DIR)/gog-mcp ./cmd/gog-mcp
+build-mcp: build
 
-gog: build
-	@if [ -n "$(RUN_ARGS)" ]; then \
-		$(BIN) $(RUN_ARGS); \
-	elif [ -z "$(ARGS)" ]; then \
-		$(BIN) --help; \
-	else \
-		$(BIN) $(ARGS); \
-	fi
-
-gogcli: build
-	@if [ -n "$(RUN_ARGS)" ]; then \
-		$(BIN) $(RUN_ARGS); \
-	elif [ -z "$(ARGS)" ]; then \
-		$(BIN) --help; \
-	else \
-		$(BIN) $(ARGS); \
-	fi
-
-gog-help: build
+help: build
 	@$(BIN) --help
-
-gogcli-help: build
-	@$(BIN) --help
-
-help: gog-help
 
 tools:
 	@mkdir -p $(TOOLS_DIR)
@@ -89,19 +45,7 @@ fmt-check: tools
 lint: tools
 	@$(GOLANGCI_LINT) run
 
-pnpm-gate:
-	@if [ -f package.json ] || [ -f package.json5 ] || [ -f package.yaml ]; then \
-		pnpm lint && pnpm build && pnpm test; \
-	else \
-		echo "pnpm gate skipped (no package.json)"; \
-	fi
-
 test:
 	@go test ./...
 
-ci: pnpm-gate fmt-check lint test
-
-worker-ci:
-	@pnpm -C internal/tracking/worker lint
-	@pnpm -C internal/tracking/worker build
-	@pnpm -C internal/tracking/worker test
+ci: fmt-check lint test
