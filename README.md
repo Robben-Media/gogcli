@@ -8,7 +8,7 @@
 
 - **`accounts_list`** — list Google connections granted to the caller with per-account capabilities.
 - **Curated read operations** (default discovery): Gmail search and message/thread reads, Drive search and metadata, Google Docs text extraction, Calendar lists/events/free-busy, GA4 properties/metadata/reports, Search Console sites/queries, and Sheets metadata/range reads. All are `SafeRead`: retryable and bounded.
-- **Compact discovery** (opt-in `--discovery=compact`): `accounts_list` plus `capabilities_search`, `capabilities_describe`, and `capabilities_execute`, so the client discovers operations on demand instead of loading every tool.
+- **Compact discovery** (opt-in `--discovery=compact`): `capabilities_search`, `capabilities_describe`, and `capabilities_execute`, plus `accounts_list` when allowed and the caller has at least one grant, so the client discovers operations on demand instead of loading every tool.
 - **Extended API catalog** (opt-in `--discovery=compact --api-catalog`): adds pinned Google discovery methods (1,108 methods across 29 services, executed as JSON REST with user OAuth scopes), bounded Business Profile account/location reads, bounded Gmail/Drive media operations, and authoring workflows for formatted mail, Docs, Slides, and Sheets.
 - **Workflow resources**: five read-only recipe guides (`mail`, `documents`, `calendar`, `reporting`, `sheets`) served at `gog://workflows/v1/{slug}`. These are MCP resources, not native MCP Skills; they never activate automatically.
 - **Temporary media resources**: Gmail attachments and Drive downloads/exports return account-bound artifact references served at `gog://media/{id}`. References expire after 15 minutes, are never enumerated, and never expose local files.

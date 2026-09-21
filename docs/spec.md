@@ -41,11 +41,11 @@ Enabled by `--http-addr` together with `--http-config`, a trusted caller file. T
 
 ### Expanded (default)
 
-`--discovery=expanded` registers one MCP tool per granted operation from the curated catalog, plus `accounts_list`. Clients see stable tool names.
+`--discovery=expanded` registers one MCP tool per granted operation from the curated catalog, plus `accounts_list` when it is allowed and the principal has at least one grant. Clients see stable tool names.
 
 ### Compact (opt-in)
 
-`--discovery=compact` registers three gateway tools plus `accounts_list`:
+`--discovery=compact` registers three gateway tools. It also registers `accounts_list` when that operation is allowed and the principal has at least one grant; with no grants, only the gateways appear:
 
 - `capabilities_search` — rank granted operations by task words; bounded summaries, never schemas.
 - `capabilities_describe` — full description of one granted operation: required inputs, input/output schema (optionally a dotted `schema_path` projection), service guidance, and optional prepared workflow recipes when `intent_id` is supplied.

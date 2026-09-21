@@ -71,7 +71,7 @@ From the protected deployment directory, with the Compose file copied from this 
 docker compose --env-file deployment.env stop google-mcp
 ```
 
-Install the app-owned OAuth JSON downloaded from Google into the protected state directory. The server accepts Google's `installed` or `web` envelope as well as the compact stored format. For the default `native-mcp` bucket, the file is `state/gogcli/credentials-native-mcp.json`. Keep this storage path unchanged across upgrades. For a different `--client-name`, use the matching credentials filename.
+Install the app-owned OAuth JSON downloaded from Google into the protected state directory. The server accepts Google's `installed` or `web` envelope as well as the compact stored format. For the default `native-mcp` bucket, the file is `state/gogcli/credentials-native-mcp.json`. Keep this storage path unchanged across upgrades. Images predating direct-envelope support require compact top-level `client_id` and `client_secret` fields. Before rolling back to such an image, restore its protected credential-file backup as well as its configuration; do not assume a newly provisioned raw envelope is backward-compatible. For a different `--client-name`, use the matching credentials filename.
 
 With the service stopped, an infrastructure operator can provision the file locally:
 
