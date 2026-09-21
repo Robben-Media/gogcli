@@ -151,7 +151,7 @@ func main() {
 	}
 }
 
-//nolint:err113,gosec,wrapcheck // CLI diagnostics embed inputs; module and output paths are operator-supplied by design.
+//nolint:err113,gosec,wrapcheck // Generator diagnostics embed inputs; module and output paths are operator-supplied by design.
 func run(args []string) error {
 	flags := flag.NewFlagSet("google-catalog", flag.ContinueOnError)
 	moduleRoot := flags.String("module-root", os.Getenv("GOG_GOOGLE_API_MODULE_ROOT"), "path to google.golang.org/api@v0.260.0")

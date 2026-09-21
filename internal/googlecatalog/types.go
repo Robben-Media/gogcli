@@ -1,7 +1,7 @@
 // Package googlecatalog contains normalized Google discovery metadata.
 //
 // The package is intentionally data-only: it has no authorization, transport,
-// or CLI dependencies. A gate means that a method must not execute until the
+// or command-runner dependencies. A gate means that a method must not execute until the
 // cited limitation is resolved; gates never imply that an account is selected.
 package googlecatalog
 
@@ -141,7 +141,7 @@ type MediaDownload struct {
 	UseDownloadService bool   `json:"use_download_service"`
 }
 
-// IdentitySupport records modes verified from auth/CLI support, not scopes.
+// IdentitySupport records modes verified from authentication support, not scopes.
 type IdentitySupport struct {
 	Modes     []IdentityMode `json:"modes"`
 	AuthModel string         `json:"auth_model,omitempty"`

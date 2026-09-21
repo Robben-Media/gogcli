@@ -36,7 +36,4 @@ go.work.sum
 
 # Local build output
 bin/
-/gog
-
-# Node (optional dev scripts)
-node_modules/
+/gog-mcp

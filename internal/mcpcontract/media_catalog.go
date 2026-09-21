@@ -1,6 +1,6 @@
 package mcpcontract
 
-// Media operations preserve the equivalent CLI policy actions. Resource-limited
+// Media operations use the canonical policy actions. Resource-limited
 // drive.file is an explicit method alternative, never a global read equivalent.
 func mediaDefinitions() []Definition {
 	const driveFile = "https://www.googleapis.com/auth/drive.file"

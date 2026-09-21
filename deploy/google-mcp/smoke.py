@@ -18,6 +18,9 @@ def docker(*args):
 
 
 def main():
+    # The shipped image must be independently usable and contain one server.
+    docker("run", "--rm", "--network=none", "--entrypoint=sh", sys.argv[1],
+           "-c", "test -x /usr/local/bin/gog-mcp && test ! -e /usr/local/bin/gog")
     container = None
     with tempfile.TemporaryDirectory(prefix="gog-mcp-container-") as directory:
         root = Path(directory)

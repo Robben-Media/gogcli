@@ -132,7 +132,14 @@ func ReadClientCredentialsFor(client string) (ClientCredentials, error) {
 	}
 
 	if c.ClientID == "" || c.ClientSecret == "" {
-		return ClientCredentials{}, errMissingClientID
+		// Accept the app-owned JSON downloaded from Google without a separate
+		// credential-import executable. Compact stored credentials still work.
+		parsed, parseErr := ParseGoogleOAuthClientJSON(b)
+		if parseErr != nil {
+			return ClientCredentials{}, errMissingClientID
+		}
+
+		return parsed, nil
 	}
 
 	return c, nil

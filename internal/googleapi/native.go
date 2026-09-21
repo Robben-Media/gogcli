@@ -20,6 +20,7 @@ import (
 )
 
 const (
+	defaultHTTPTimeout       = 30 * time.Second
 	defaultNativeConcurrency = 16
 	maxNativeConcurrency     = 256
 	defaultNativeMaxBytes    = 8 << 20

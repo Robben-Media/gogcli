@@ -4,15 +4,13 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
-COPY skills/ ./skills/
-RUN CGO_ENABLED=0 go build -trimpath -o /out/gog-mcp ./cmd/gog-mcp \
- && CGO_ENABLED=0 go build -trimpath -o /out/gog ./cmd/gog
+RUN CGO_ENABLED=0 go build -trimpath -o /out/gog-mcp ./cmd/gog-mcp
 
 FROM alpine:3.23@sha256:85fe1e81d6758c208f3e1eed4338a1997e19d4be002d4dd32d3100c9a8c010a0
 RUN apk add --no-cache ca-certificates tzdata util-linux \
  && addgroup -g 10001 gog \
  && adduser -D -H -u 10001 -G gog gog
-COPY --from=build /out/gog-mcp /out/gog /usr/local/bin/
+COPY --from=build /out/gog-mcp /usr/local/bin/
 COPY --chmod=0555 deploy/google-mcp/entrypoint.sh /usr/local/bin/gog-mcp-entrypoint
 USER 10001:10001
 ENV XDG_CONFIG_HOME=/state GOG_KEYRING_BACKEND=file

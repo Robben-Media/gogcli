@@ -76,7 +76,7 @@ func executionScopes(method googlecatalog.Method) []string {
 }
 
 // APIDefinitions returns the user-OAuth API catalogue. Loading is lazy so the
-// legacy CLI and curated read-only MCP do not parse expanded schemas at startup.
+// curated read-only servers do not parse expanded schemas at startup.
 // An executor may impose additional media or protocol support restrictions.
 func APIDefinitions() []Definition {
 	loadAPIDefinitions()

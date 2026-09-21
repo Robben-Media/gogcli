@@ -282,8 +282,8 @@ type keyringResult struct {
 // but not running on headless Linux).
 //
 // Note: If timeout occurs, the spawned goroutine continues blocking on keyring.Open()
-// and will leak. This is acceptable for a CLI tool since the process exits on this
-// error, but would need refactoring for long-running use.
+// until the backend returns. Server startup fails on this error; do not retry
+// opening an unresponsive backend inside a running request.
 func openKeyringWithTimeout(cfg keyring.Config, timeout time.Duration) (keyring.Keyring, error) {
 	ch := make(chan keyringResult, 1)
 	open := keyringOpenFunc

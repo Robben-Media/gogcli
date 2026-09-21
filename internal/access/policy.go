@@ -14,7 +14,7 @@ type Decision struct {
 	ImplicitAllowlist bool
 }
 
-// Evaluate preserves CLI policy semantics: most specific matching policies win,
+// Evaluate applies policy specificity: most specific matching policies win,
 // explicit deny beats allow, and an allowlist that does not mention the action
 // is an implicit deny.
 func Evaluate(policies []config.Policy, action string, account string, client string) Decision {

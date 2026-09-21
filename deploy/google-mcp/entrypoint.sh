@@ -14,6 +14,6 @@ if [ -z "${GOG_KEYRING_PASSWORD:-}" ]; then
     fi
     export GOG_KEYRING_PASSWORD
 fi
-# The HTTP service, onboarding and CLI administration share one state owner.
+# The HTTP service and onboarding share one state owner.
 # --no-fork keeps the selected binary as PID 1 while retaining the lock.
 exec flock --exclusive --nonblock --no-fork "${XDG_CONFIG_HOME:-/state}/.gog-mcp.lock" "$@"
