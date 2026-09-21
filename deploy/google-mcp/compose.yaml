@@ -33,7 +33,7 @@ services:
     command:
       - gog-mcp
       - --http-addr=0.0.0.0:8080
-      - --http-config=/run/secrets/http-config.json
+      - --http-config=/run/secrets/http-config
       - --registry-file=/state/gogcli/mcp-accounts.json
       - --client-name=native-mcp
       - --discovery=compact

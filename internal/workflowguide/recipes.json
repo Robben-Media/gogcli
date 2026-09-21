@@ -555,17 +555,51 @@
   {
     "intent_id": "businessprofile.resolve_location",
     "service": "businessprofile",
-    "applies_to": [],
-    "required_facts": [],
-    "steps": [],
-    "call_estimate_min": 0,
-    "call_estimate_max": 0,
+    "applies_to": [
+      "businessprofile_list_accounts",
+      "businessprofile_list_locations"
+    ],
+    "required_facts": [
+      {
+        "key": "parent",
+        "format": "exact accounts/{id} returned by accounts list or trusted task context",
+        "reason": "Selects one account; ambiguous matches require caller selection.",
+        "source": "lookup",
+        "produced_by": "businessprofile_list_accounts"
+      }
+    ],
+    "steps": [
+      {
+        "operation": "businessprofile_list_accounts",
+        "kind": "lookup",
+        "skip_if_facts": [
+          "parent"
+        ],
+        "produces": [
+          "parent"
+        ]
+      },
+      {
+        "operation": "businessprofile_list_locations",
+        "kind": "lookup",
+        "inputs": [
+          {
+            "name": "parent",
+            "location": "argument",
+            "format": "exact accounts/{id}; select one account, never enumerate all",
+            "source": "fact:parent"
+          }
+        ]
+      }
+    ],
+    "call_estimate_min": 1,
+    "call_estimate_max": 2,
     "stop_rules": {
-      "revision": "Not applicable.",
-      "idempotency": "Not applicable.",
-      "reconcile": "Do not fabricate account, location, or verification calls."
+      "revision": "Read-only resolution returns name, title, store_code and website_uri; exact location get and changes remain unavailable.",
+      "idempotency": "One bounded page per operation. Reuse an exact parent to skip accounts list. Continue only with the returned page_token when the task needs another page; each continuation adds one call.",
+      "reconcile": "Requires business.manage consent and approved project API access. Stop on ambiguous accounts or locations, permission failure, or exhausted task call budget; never probe all accounts."
     },
-    "gap": "Unavailable at this baseline. google_mybusiness_business_information_accounts_locations_list, google_mybusiness_business_information_locations_get, google_mybusiness_verifications_locations_fetchverificationoptions, google_mybusiness_verifications_locations_verify, and google_mybusiness_verifications_locations_verifications_list declare no OAuth scopes and carry the missing_scopes gate, so APIDefinitions does not register them. Business Information and Verifications are separate APIs, and verification also requires a current eligible option."
+    "gap": "Only explicit accounts and locations list reads are available with --api-catalog. Generated Business Profile methods remain gated for missing scope metadata; exact location get, updates, performance and verification are not provided by this recipe."
   },
   {
     "intent_id": "analytics.run_bounded_report",

@@ -75,6 +75,7 @@ type ExportInput struct {
 
 type CreateInput struct {
 	mcpcontract.Selection
+	FileID      string `json:"file_id,omitempty" jsonschema:"Optional predetermined ID from Drive generateIds; persist before creating and reconcile unknown outcomes"`
 	Name        string `json:"name" jsonschema:"File name; required"`
 	MimeType    string `json:"mime_type,omitempty" jsonschema:"Content MIME type"`
 	ParentID    string `json:"parent_id,omitempty" jsonschema:"Optional parent folder ID"`
@@ -85,12 +86,13 @@ type CreateInput struct {
 
 type UpdateInput struct {
 	mcpcontract.Selection
-	FileID      string `json:"file_id" jsonschema:"Google Drive file ID to replace; required"`
-	Name        string `json:"name,omitempty" jsonschema:"Optional new file name"`
-	MimeType    string `json:"mime_type,omitempty" jsonschema:"Optional new content MIME type"`
-	Description string `json:"description,omitempty" jsonschema:"Optional file description"`
-	Encoding    string `json:"encoding,omitempty" jsonschema:"Payload encoding: utf8 or base64; default utf8"`
-	Data        string `json:"data" jsonschema:"Replacement bytes encoded per encoding; required"`
+	ExpectedVersion int64  `json:"expected_version,omitempty" jsonschema:"Optional positive Drive version; rejects stale content and uses atomic If-Match, zero means no precondition"`
+	FileID          string `json:"file_id" jsonschema:"Google Drive file ID to replace; required"`
+	Name            string `json:"name,omitempty" jsonschema:"Optional new file name"`
+	MimeType        string `json:"mime_type,omitempty" jsonschema:"Optional new content MIME type"`
+	Description     string `json:"description,omitempty" jsonschema:"Optional file description"`
+	Encoding        string `json:"encoding,omitempty" jsonschema:"Payload encoding: utf8 or base64; default utf8"`
+	Data            string `json:"data" jsonschema:"Replacement bytes encoded per encoding; required"`
 }
 
 type DriveWriteData struct {
@@ -170,6 +172,12 @@ func (s *service) validateExport(in ExportInput) error {
 }
 
 func (s *service) validateCreate(in CreateInput) error {
+	if in.FileID != "" {
+		if err := validateID("file_id", in.FileID); err != nil {
+			return err
+		}
+	}
+
 	if err := validateName(in.Name, true); err != nil {
 		return err
 	}
@@ -192,6 +200,10 @@ func (s *service) validateCreate(in CreateInput) error {
 }
 
 func (s *service) validateUpdate(in UpdateInput) error {
+	if in.ExpectedVersion < 0 {
+		return invalid("expected_version must be positive or omitted")
+	}
+
 	if err := validateID("file_id", in.FileID); err != nil {
 		return err
 	}
@@ -422,7 +434,7 @@ func writeError(err error) error {
 
 func requireBudget(ctx context.Context, calls int64) error {
 	if remaining := nativegoogleapi.UpstreamBudgetRemaining(ctx); remaining >= 0 && remaining < calls {
-		return &mcpcontract.Error{Category: mcpcontract.BudgetExhausted, Message: "insufficient remaining API budget for metadata and download", Retryable: false}
+		return &mcpcontract.Error{Category: mcpcontract.BudgetExhausted, Message: "insufficient remaining API budget for two upstream calls", Retryable: false}
 	}
 
 	return nil

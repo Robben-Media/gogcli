@@ -368,16 +368,16 @@
   },
   {
     "service": "businessprofile",
-    "reviewed_at": "2026-09-19",
+    "reviewed_at": "2026-09-20",
     "prerequisites": [
       "Cloud project has approved Google Business Profile API access; quota zero means access is not granted.",
       "OAuth identity has access to the Business Profile account/location.",
       "Account or location role permits the exact read/write/verification action."
     ],
     "read_strategy": [
-      "List one Business Profile account page only when the exact account resource is unknown.",
-      "List one location page for the selected account with a minimal readMask; do not enumerate every account and location.",
-      "Get one exact location with task-specific readMask before patch."
+      "Use businessprofile_list_accounts only when the exact accounts/{id} is unknown; each call returns at most 20 accounts.",
+      "Use businessprofile_list_locations for one selected parent; each call returns at most 100 locations with name,title,storeCode,websiteUri.",
+      "Continue with page_token only when needed within the task budget. These reads require business.manage and approved project API access. Exact get and other generated Business Profile methods remain gated."
     ],
     "write_strategy": [
       "Paced per-location/profile writes; no assumption of atomic multi-location batch.",
@@ -391,11 +391,11 @@
     "intents": [
       {
         "intent_id": "businessprofile.resolve_location",
-        "intent": "Find and inspect one Business Profile location",
-        "minimum_calls": "Optional 1 account list plus 1 location list and 1 exact get",
+        "intent": "Resolve one Business Profile location from a bounded page",
+        "minimum_calls": "1 location list; add 1 account list only if parent is unknown. Each continuation adds 1 call.",
         "approval": "permission_only_read",
         "stop_condition": "Multiple accounts or locations",
-        "next_action": "Choose exact accounts/{id} or locations/{id}; do not query all accounts."
+        "next_action": "Choose exact accounts/{id} or locations/{id}; stop on ambiguity. Exact location get remains unavailable."
       },
       {
         "intent_id": "businessprofile.update_location",

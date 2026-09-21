@@ -104,8 +104,12 @@ func TestRenderAccountsTwoAccountsFormsAndEscaping(t *testing.T) {
 		t.Fatalf("content type = %q", got)
 	}
 
-	if got := recorder.Header().Get("Content-Security-Policy"); !strings.Contains(got, "default-src 'none'") || !strings.Contains(got, "form-action 'self'") {
+	if got := recorder.Header().Get("Content-Security-Policy"); !strings.Contains(got, "default-src 'none'") || !strings.Contains(got, "form-action 'self' https://accounts.google.com;") {
 		t.Fatalf("unsafe content security policy = %q", got)
+	}
+
+	if got := recorder.Header().Get("Referrer-Policy"); got != "same-origin" {
+		t.Fatalf("form Origin must survive without leaking cross-origin referrers: %q", got)
 	}
 
 	if !strings.Contains(body, "Personal &lt;script&gt;") || strings.Contains(body, "<script>alert") {
@@ -640,6 +644,10 @@ func TestRenderStatusSuccessEscapesAccount(t *testing.T) {
 	body := recorder.Body.String()
 	if !strings.Contains(body, "Google account connected") || !strings.Contains(body, "personal@example.test &lt;script&gt;") {
 		t.Fatalf("success state is missing or unescaped: %s", body)
+	}
+
+	if got := recorder.Header().Get("Referrer-Policy"); got != "same-origin" {
+		t.Fatalf("form Origin must survive without leaking cross-origin referrers: %q", got)
 	}
 
 	if !strings.Contains(body, "Personal &lt;script&gt;") {

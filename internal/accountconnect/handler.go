@@ -101,6 +101,10 @@ func (h *Handler) accounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.redirectLoopbackAlias(w, r) {
+		return
+	}
+
 	token, err := h.ensureCSRF(w, r)
 	if err != nil {
 		http.Error(w, "csrf", http.StatusInternalServerError)
@@ -288,6 +292,10 @@ func (h *Handler) status(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.redirectLoopbackAlias(w, r) {
+		return
+	}
+
 	token, err := h.ensureCSRF(w, r)
 	if err != nil {
 		http.Error(w, "csrf", http.StatusInternalServerError)
@@ -340,6 +348,20 @@ func (h *Handler) page(token string, accounts []AccountView, status *StatusRespo
 		Accounts:              accounts,
 		Status:                status,
 	}
+}
+
+// redirectLoopbackAlias keeps browser cookies on the registered callback host.
+func (h *Handler) redirectLoopbackAlias(w http.ResponseWriter, r *http.Request) bool {
+	callback, err := url.Parse(h.controller.RedirectURL())
+	if err != nil || strings.EqualFold(r.Host, callback.Host) || !loopbackHostEquivalent(r.Host, callback.Host) {
+		return false
+	}
+	callback.Path = r.URL.Path
+	callback.RawQuery = r.URL.RawQuery
+	callback.Fragment = ""
+	http.Redirect(w, r, callback.String(), http.StatusSeeOther)
+
+	return true
 }
 
 func (h *Handler) guard(r *http.Request) error {

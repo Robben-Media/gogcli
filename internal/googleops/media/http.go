@@ -82,7 +82,7 @@ func googleAPIHost(host string) bool {
 	return host == "googleapis.com" || host == "www.googleapis.com" || strings.HasSuffix(host, ".googleapis.com")
 }
 
-func (b *httpClientBundle) do(ctx context.Context, method, rawURL string, body []byte, contentType string, maxBytes int) ([]byte, http.Header, error) {
+func (b *httpClientBundle) do(ctx context.Context, method, rawURL string, body []byte, contentType string, maxBytes int, ifMatch ...string) ([]byte, http.Header, error) {
 	var reader io.Reader
 	if body != nil {
 		reader = bytes.NewReader(body)
@@ -95,6 +95,10 @@ func (b *httpClientBundle) do(ctx context.Context, method, rawURL string, body [
 
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
+	}
+
+	if len(ifMatch) != 0 && ifMatch[0] != "" {
+		req.Header.Set("If-Match", ifMatch[0])
 	}
 
 	resp, err := b.client.Do(req)

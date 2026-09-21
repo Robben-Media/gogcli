@@ -163,6 +163,10 @@ func nativeAPIError(apiErr *gapi.Error) *mcpcontract.Error {
 		return nativeForbiddenError(apiErr, "")
 	case 404:
 		return &mcpcontract.Error{Category: mcpcontract.NotFound, Message: nativeNotFoundMessage}
+	case 409:
+		return &mcpcontract.Error{Category: mcpcontract.Conflict, Message: "Google resource conflicts with the requested operation; reconcile before retrying"}
+	case 412:
+		return &mcpcontract.Error{Category: mcpcontract.PreconditionFailed, Message: "Google resource changed; the requested precondition failed"}
 	case 408:
 		return &mcpcontract.Error{Category: mcpcontract.DeadlineExceeded, Message: nativeDeadlineMessage, Retryable: true}
 	case 429:

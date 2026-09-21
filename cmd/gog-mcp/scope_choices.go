@@ -7,12 +7,14 @@ import (
 
 	"github.com/steipete/gogcli/internal/accountconnect"
 	"github.com/steipete/gogcli/internal/googlecatalog"
+	"github.com/steipete/gogcli/internal/mcpcontract"
 )
 
 var errUnknownScope = errors.New("unknown Google OAuth scope")
 
 // Additional consent is chosen by the operator, never inferred from available
-// methods. Only scopes declared by the pinned Google discovery sources qualify.
+// methods. Scopes must be pinned discovery declarations or the explicitly
+// documented Business Profile scope used by the curated read handlers.
 func configuredConnectScopes(raw string) ([]accountconnect.ScopeChoice, error) {
 	scopes := splitCSV(raw)
 	if len(scopes) == 0 {
@@ -21,7 +23,7 @@ func configuredConnectScopes(raw string) ([]accountconnect.ScopeChoice, error) {
 	known := googlecatalog.MustLoad().Scopes
 	out := make([]accountconnect.ScopeChoice, 0, len(scopes))
 	for _, scope := range scopes {
-		if _, ok := known[scope]; !ok {
+		if _, ok := known[scope]; !ok && scope != mcpcontract.BusinessManageScope {
 			return nil, fmt.Errorf("%w %q", errUnknownScope, scope)
 		}
 		label := strings.TrimPrefix(scope, "https://www.googleapis.com/auth/")
