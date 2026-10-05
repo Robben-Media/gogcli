@@ -1,6 +1,7 @@
 package businessprofile
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/steipete/gogcli/internal/mcpcontract"
@@ -12,19 +13,28 @@ import (
 // sub-field path match.
 var humanOnlyFieldPrefixes = []string{"title", "storefrontaddress", "phonenumbers"}
 
-// ForbiddenUpdateMask rejects an update mask that is empty, contains a
-// wildcard or empty path, or touches the business name, address or phone
-// numbers. Every Business Profile write must call it before sending a patch.
+// fieldPathPattern is the ASCII grammar every update-mask path must match
+// after surrounding whitespace is trimmed. It rejects wildcards, empty
+// segments, internal whitespace and Unicode lookalikes before the deny check.
+var fieldPathPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)*$`)
+
+// ForbiddenUpdateMask rejects an update mask that is empty, has a path outside
+// the field-path grammar, or touches the business name, address or phone
+// numbers, with or without a leading "location." prefix. Every Business
+// Profile write must call it before sending a patch.
 func ForbiddenUpdateMask(mask string) error {
 	if strings.TrimSpace(mask) == "" {
 		return forbidden("update mask must name explicit fields")
 	}
 
 	for path := range strings.SplitSeq(mask, ",") {
-		normalized := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(path)), "_", "")
-		if normalized == "" || strings.Contains(normalized, "*") {
-			return forbidden("update mask must list explicit field paths without wildcards")
+		path = strings.TrimSpace(path)
+		if !fieldPathPattern.MatchString(path) {
+			return forbidden("update mask must list explicit ASCII field paths without wildcards or spaces")
 		}
+
+		normalized := strings.TrimPrefix(strings.ToLower(path), "location.")
+		normalized = strings.ReplaceAll(normalized, "_", "")
 
 		for _, prefix := range humanOnlyFieldPrefixes {
 			if strings.HasPrefix(normalized, prefix) {

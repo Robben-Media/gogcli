@@ -547,7 +547,14 @@ func TestBusinessProfileRegistersNoWriteOperation(t *testing.T) {
 			inNamespace = inNamespace || strings.HasPrefix(action, "businessprofile:")
 		}
 
-		if inNamespace && definition.Retry != mcpcontract.SafeRead {
+		// Generated Google catalog entries for the mybusiness APIs, such as
+		// locations.patch, must stay unexposed or read-only.
+		inGenerated := strings.HasPrefix(definition.Name, "google_mybusiness")
+		for _, action := range definition.Actions {
+			inGenerated = inGenerated || strings.HasPrefix(action, "mybusiness")
+		}
+
+		if (inNamespace || inGenerated) && definition.Retry != mcpcontract.SafeRead {
 			t.Fatalf("%s has retry class %q; Business Profile writes are not allowed", definition.Name, definition.Retry)
 		}
 	}
