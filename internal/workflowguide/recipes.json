@@ -595,11 +595,11 @@
     "call_estimate_min": 1,
     "call_estimate_max": 2,
     "stop_rules": {
-      "revision": "Read-only resolution returns name, title, store_code and website_uri; exact location get and changes remain unavailable.",
+      "revision": "Read-only resolution returns name, title, store_code and website_uri; read one exact location with businessprofile_get_location; changes remain unavailable.",
       "idempotency": "One bounded page per operation. Reuse an exact parent to skip accounts list. Continue only with the returned page_token when the task needs another page; each continuation adds one call.",
       "reconcile": "Requires business.manage consent and approved project API access. Stop on ambiguous accounts or locations, permission failure, or exhausted task call budget; never probe all accounts."
     },
-    "gap": "Only explicit accounts and locations list reads are available with --api-catalog. Generated Business Profile methods remain gated for missing scope metadata; exact location get, updates, performance and verification are not provided by this recipe."
+    "gap": "Only explicit accounts and locations list reads and businessprofile_get_location are available with --api-catalog. Generated Business Profile methods remain gated for missing scope metadata; updates, performance and verification are not provided by this recipe."
   },
   {
     "intent_id": "analytics.run_bounded_report",

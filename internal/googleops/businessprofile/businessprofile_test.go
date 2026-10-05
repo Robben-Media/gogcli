@@ -336,6 +336,7 @@ func TestBusinessProfileUpstreamErrorsStayPublicSafe(t *testing.T) {
 	}{
 		{"businessprofile_list_accounts", `{"account_id":"opaque-account"}`},
 		{"businessprofile_list_locations", `{"account_id":"opaque-account","parent":"accounts/123"}`},
+		{"businessprofile_get_location", `{"account_id":"opaque-account","name":"locations/55"}`},
 	} {
 		operation, _, _ := fixture(t, tc.operation, http.StatusForbidden, errorResponse)
 		if _, runErr := decodeRun(t, operation, tc.raw, testIdentity("opaque-account")); runErr == nil {
@@ -387,6 +388,7 @@ func TestBusinessProfileInputSchemasMatchFrozenRequests(t *testing.T) {
 	for name, want := range map[string][]string{
 		"businessprofile_list_accounts":  {"account_id", "page_token"},
 		"businessprofile_list_locations": {"account_id", "parent", "page_size", "page_token"},
+		"businessprofile_get_location":   {"account_id", "name"},
 	} {
 		for _, field := range want {
 			if !properties[name][field] {
@@ -401,6 +403,10 @@ func TestBusinessProfileInputSchemasMatchFrozenRequests(t *testing.T) {
 
 	if got := required["businessprofile_list_accounts"]; !reflect.DeepEqual(got, []string{"account_id"}) {
 		t.Fatalf("businessprofile_list_accounts required fields: %#v", got)
+	}
+
+	if got := required["businessprofile_get_location"]; !reflect.DeepEqual(got, []string{"account_id", "name"}) {
+		t.Fatalf("businessprofile_get_location required fields: %#v", got)
 	}
 }
 
@@ -432,6 +438,117 @@ func TestParentPathMetacharactersRejectedBeforeProvider(t *testing.T) {
 		_, err = decodeRun(t, operation, string(raw), testIdentity("a"))
 		if !isInvalidInput(err) || len(provider.options) != 0 || recorder.calls != 0 {
 			t.Fatalf("parent %q: err=%v calls=%d", parent, err, recorder.calls)
+		}
+	}
+}
+
+func TestBusinessProfileGetLocationReadsExactNameWithFixedMask(t *testing.T) {
+	t.Parallel()
+	operation, provider, recorder := fixture(t, "businessprofile_get_location", http.StatusOK, `{
+		"name": "locations/55",
+		"title": "Downtown Office",
+		"storefrontAddress": {"regionCode": "US", "postalCode": "65201", "administrativeArea": "MO", "locality": "Columbia", "addressLines": ["1 Main St", "Suite 2"]},
+		"phoneNumbers": {"primaryPhone": "+1 573-555-0100", "additionalPhones": ["+1 573-555-0101"]},
+		"categories": {
+			"primaryCategory": {"name": "categories/gcid:roofing_contractor", "displayName": "Roofing contractor"},
+			"additionalCategories": [{"name": "categories/gcid:siding_contractor", "displayName": "Siding contractor"}, null]
+		},
+		"serviceItems": [
+			{"structuredServiceItem": {"serviceTypeId": "job_type_id:roof_repair", "description": "Leak and storm repair"}},
+			{"freeFormServiceItem": {"category": "categories/gcid:roofing_contractor", "label": {"displayName": "Gutter guards", "description": "Install and clean", "languageCode": "en"}}, "price": {"currencyCode": "USD", "units": "250"}}
+		],
+		"profile": {"description": "Family-owned roofer."},
+		"regularHours": {"periods": [{"openDay": "MONDAY", "openTime": {"hours": 8}, "closeDay": "MONDAY", "closeTime": {"hours": 17, "minutes": 30}}]},
+		"websiteUri": "https://example.test",
+		"openInfo": {"status": "OPEN", "openingDate": {"year": 2009, "month": 4, "day": 1}},
+		"metadata": {"placeId": "ChIJ123", "mapsUri": "https://maps.example/55", "hasVoiceOfMerchant": true, "canModifyServiceList": true}
+	}`)
+
+	result, err := decodeRun(t, operation, `{"account_id":"opaque-account","name":"locations/55"}`, testIdentity("opaque-account"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if recorder.calls != 1 || recorder.path != "/v1/locations/55" {
+		t.Fatalf("calls=%d path=%q", recorder.calls, recorder.path)
+	}
+
+	if got := recorder.query.Get("readMask"); got != "name,title,storefrontAddress,phoneNumbers,categories,serviceItems,profile,regularHours,websiteUri,openInfo,metadata" {
+		t.Fatalf("readMask = %q, want the fixed documented mask", got)
+	}
+
+	want := LocationDetail{
+		Name:  "locations/55",
+		Title: "Downtown Office",
+		StorefrontAddress: &Address{
+			RegionCode: "US", PostalCode: "65201", AdministrativeArea: "MO", Locality: "Columbia", AddressLines: []string{"1 Main St", "Suite 2"},
+		},
+		PhoneNumbers: &PhoneNumbers{PrimaryPhone: "+1 573-555-0100", AdditionalPhones: []string{"+1 573-555-0101"}},
+		Categories: &Categories{
+			Primary:    &Category{Name: "categories/gcid:roofing_contractor", DisplayName: "Roofing contractor"},
+			Additional: []Category{{Name: "categories/gcid:siding_contractor", DisplayName: "Siding contractor"}},
+		},
+		ServiceItems: []ServiceItem{
+			{ServiceTypeID: "job_type_id:roof_repair", Description: "Leak and storm repair"},
+			{Category: "categories/gcid:roofing_contractor", DisplayName: "Gutter guards", Description: "Install and clean", LanguageCode: "en", Price: &Price{CurrencyCode: "USD", Units: 250}},
+		},
+		ProfileDescription: "Family-owned roofer.",
+		RegularHours:       []HoursPeriod{{OpenDay: "MONDAY", OpenTime: "08:00", CloseDay: "MONDAY", CloseTime: "17:30"}},
+		WebsiteURI:         "https://example.test",
+		OpenInfo:           &OpenInfo{Status: "OPEN", OpeningDate: "2009-04-01"},
+		Metadata:           &LocationMetadata{PlaceID: "ChIJ123", MapsURI: "https://maps.example/55", HasVoiceOfMerchant: true, CanModifyServiceList: true},
+	}
+
+	out := result.(mcpcontract.Result[LocationData])
+	if !reflect.DeepEqual(out.Data.Location, want) {
+		t.Fatalf("unexpected location projection:\n got %#v\nwant %#v", out.Data.Location, want)
+	}
+
+	if out.AccountID != "opaque-account" || out.Truncated || out.NextPageToken != "" {
+		t.Fatalf("unexpected envelope: %#v", out)
+	}
+
+	wantOptions := mcpcontract.CallOptions{Operation: "businessprofile_get_location", Retry: mcpcontract.SafeRead}
+	if len(provider.options) != 1 || provider.options[0] != wantOptions {
+		t.Fatalf("unexpected call options: %#v", provider.options)
+	}
+}
+
+func TestBusinessProfileGetLocationRejectsInexactNamesBeforeProvider(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{"", "locations/", " locations/55", "locations/55 ", "accounts/1/locations/55", "55", "locations/.", "locations/..", "locations/5?x=y", "locations/5#f", "locations/%2F", "locations/a\\b", "locations/a\n"} {
+		operation, provider, recorder := fixture(t, "businessprofile_get_location", http.StatusOK, `{}`)
+
+		raw, err := json.Marshal(map[string]string{"account_id": "a", "name": name})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = decodeRun(t, operation, string(raw), testIdentity("a"))
+		if !isInvalidInput(err) || len(provider.options) != 0 || recorder.calls != 0 {
+			t.Fatalf("name %q: err=%v calls=%d", name, err, recorder.calls)
+		}
+	}
+}
+
+func TestBusinessProfileRegistersNoWriteOperation(t *testing.T) {
+	t.Parallel()
+
+	for _, operation := range Operations(&recordingProvider{}) {
+		if operation.Definition.Retry != mcpcontract.SafeRead {
+			t.Fatalf("%s has retry class %q; Business Profile writes are not allowed", operation.Definition.Name, operation.Definition.Retry)
+		}
+	}
+
+	for _, definition := range mcpcontract.AllDefinitions() {
+		inNamespace := strings.HasPrefix(definition.Name, "businessprofile_")
+		for _, action := range definition.Actions {
+			inNamespace = inNamespace || strings.HasPrefix(action, "businessprofile:")
+		}
+
+		if inNamespace && definition.Retry != mcpcontract.SafeRead {
+			t.Fatalf("%s has retry class %q; Business Profile writes are not allowed", definition.Name, definition.Retry)
 		}
 	}
 }
