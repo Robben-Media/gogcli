@@ -377,7 +377,7 @@
     "read_strategy": [
       "Use businessprofile_list_accounts only when the exact accounts/{id} is unknown; each call returns at most 20 accounts.",
       "Use businessprofile_list_locations for one selected parent; each call returns at most 100 locations with name,title,storeCode,websiteUri.",
-      "Continue with page_token only when needed within the task budget. These reads require business.manage and approved project API access. Exact get and other generated Business Profile methods remain gated."
+      "Continue with page_token only when needed within the task budget. These reads require business.manage and approved project API access. Use businessprofile_get_location for one exact locations/{id} with a fixed read mask. Other generated Business Profile methods remain gated."
     ],
     "write_strategy": [
       "Paced per-location/profile writes; no assumption of atomic multi-location batch.",
@@ -395,7 +395,7 @@
         "minimum_calls": "1 location list; add 1 account list only if parent is unknown. Each continuation adds 1 call.",
         "approval": "permission_only_read",
         "stop_condition": "Multiple accounts or locations",
-        "next_action": "Choose exact accounts/{id} or locations/{id}; stop on ambiguity. Exact location get remains unavailable."
+        "next_action": "Choose exact accounts/{id} or locations/{id}; stop on ambiguity. Read one exact locations/{id} with businessprofile_get_location."
       },
       {
         "intent_id": "businessprofile.update_location",

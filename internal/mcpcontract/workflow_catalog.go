@@ -17,7 +17,7 @@ const (
 // The businessprofile reads are opt-in because Google discovery omits scopes
 // for the mybusiness services; their actions use the canonical businessprofile policy namespace.
 func WorkflowCatalog() []Definition {
-	definitions := make([]Definition, 0, 13)
+	definitions := make([]Definition, 0, 14)
 	definitions = append(definitions, []Definition{
 		{Name: "mail_compose_prepare", Description: "Prepare a formatted email preview using a verified Gmail sending identity and optional signature and reply context. Does not save or send. Uses at most two API reads before retries.", Actions: []string{"gmail:workflow.prepare"}, Scopes: []string{GmailModifyScope, GmailFullScope}, AnyScope: true, Retry: SafeRead},
 		{Name: "mail_compose_draft", Description: "Create a formatted Gmail draft after verifying the sending identity, signature and optional reply context. Requires explicit write grant. At most three API calls; never repeat blindly after unknown outcome.", Actions: []string{"gmail:workflow.draft"}, Scopes: []string{GmailModifyScope, GmailFullScope}, AnyScope: true, Retry: NonReplayableWrite},
@@ -27,6 +27,7 @@ func WorkflowCatalog() []Definition {
 		{Name: "sheets_create_spreadsheet", Description: "Create a spreadsheet with explicitly typed cells and optional header formatting in one API call. Strings are not interpreted as formulas; formulas require an explicit formula field. Does not share it.", Actions: []string{"sheets:workflow.create"}, Scopes: []string{SheetsWriteScope}, Retry: NonReplayableWrite},
 		{Name: "businessprofile_list_accounts", Description: "List the Google Business Profile accounts visible to the selected identity in one bounded page of at most 20 accounts. Returns the upstream next page token and never claims the list is complete.", Actions: []string{"businessprofile:accounts.list"}, Scopes: []string{BusinessManageScope}, Retry: SafeRead},
 		{Name: "businessprofile_list_locations", Description: "List locations under one exact Business Profile accounts/{id} parent in one bounded page of at most 100 locations using the narrow read mask name,title,storeCode,websiteUri. Returns the upstream next page token and never claims the list is complete.", Actions: []string{"businessprofile:locations"}, Scopes: []string{BusinessManageScope}, Retry: SafeRead},
+		{Name: "businessprofile_get_location", Description: "Read one exact Business Profile locations/{id} with the fixed read mask name,title,storefrontAddress,phoneNumbers,categories,serviceItems,profile,regularHours,websiteUri,openInfo,metadata. One API call; read-only.", Actions: []string{"businessprofile:locations.get"}, Scopes: []string{BusinessManageScope}, Retry: SafeRead},
 	}...)
 
 	return append(definitions, mediaDefinitions()...)
