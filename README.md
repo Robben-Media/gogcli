@@ -13,7 +13,7 @@
 - **Workflow resources**: five read-only recipe guides (`mail`, `documents`, `calendar`, `reporting`, `sheets`) served at `gog://workflows/v1/{slug}`. These are MCP resources, not native MCP Skills; they never activate automatically.
 - **Temporary media resources**: Gmail attachments and Drive downloads/exports return account-bound artifact references served at `gog://media/{id}`. References expire after 15 minutes, are never enumerated, and never expose local files.
 
-The extended catalog is breadth, not a parity promise: coverage follows the pinned discovery snapshot, media upload and download transports are excluded from catalog methods, and Business Profile access is the bounded account/location reads listed above.
+The extended catalog is breadth, not a parity promise: coverage follows the pinned discovery snapshot, media upload and download transports are excluded from catalog methods, and Business Profile access is the bounded account/location reads listed above plus a read-only, one-page reviews list (`businessprofile_list_reviews`).
 
 ## Safety model
 

@@ -14,6 +14,7 @@
 //   - locations.get (mybusinessbusinessinformation v1) requires
 //     https://www.googleapis.com/auth/business.manage:
 //     https://developers.google.com/my-business/reference/businessinformation/rest/v1/locations/get
+//   - accounts.locations.reviews.list (mybusiness v4, read-only) is in reviews.go.
 //
 // The package provides no write operation. Any future Business Profile write
 // must pass its update mask through ForbiddenUpdateMask first.
@@ -261,6 +262,7 @@ func Operations(provider mcpcontract.ClientProvider) []mcpcontract.Operation {
 
 			return mcpcontract.NewResult(id, LocationData{Location: projectLocation(location)}), nil
 		}),
+		reviewsOperation(provider),
 	}
 }
 
