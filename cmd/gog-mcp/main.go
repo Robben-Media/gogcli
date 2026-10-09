@@ -26,6 +26,7 @@ import (
 	"github.com/steipete/gogcli/internal/googleops/apiexec"
 	"github.com/steipete/gogcli/internal/googleops/authoring"
 	"github.com/steipete/gogcli/internal/googleops/businessprofile"
+	"github.com/steipete/gogcli/internal/googleops/drive"
 	"github.com/steipete/gogcli/internal/googleops/mailworkflow"
 	"github.com/steipete/gogcli/internal/googleops/media"
 	"github.com/steipete/gogcli/internal/mcpcontract"
@@ -474,6 +475,7 @@ func configuredOperationsWithMedia(flags cli, provider mcpcontract.ClientProvide
 	operations := googleops.Operations(provider)
 	if flags.APICatalog {
 		operations = append(operations, businessprofile.Operations(provider)...)
+		operations = append(operations, drive.ShareOperations(provider)...)
 		operations = append(operations, media.OperationsWithArtifacts(provider, artifacts)...)
 		operations = append(operations, authoring.Operations(provider)...)
 		operations = append(operations, mailworkflow.Operations(provider)...)

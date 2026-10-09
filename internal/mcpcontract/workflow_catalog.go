@@ -10,6 +10,8 @@ const (
 	// Business Profile account-management and business-information APIs.
 	// It does not authorize write tool actions on its own.
 	BusinessManageScope = "https://www.googleapis.com/auth/business.manage"
+	// DriveFullScope is required to add permissions to files the app did not create.
+	DriveFullScope = "https://www.googleapis.com/auth/drive"
 )
 
 // WorkflowCatalog is opt-in authoring functionality, separate from the original
@@ -29,6 +31,7 @@ func WorkflowCatalog() []Definition {
 		{Name: "businessprofile_list_locations", Description: "List locations under one exact Business Profile accounts/{id} parent in one bounded page of at most 100 locations using the narrow read mask name,title,storeCode,websiteUri. Returns the upstream next page token and never claims the list is complete.", Actions: []string{"businessprofile:locations"}, Scopes: []string{BusinessManageScope}, Retry: SafeRead},
 		{Name: "businessprofile_get_location", Description: "Read one exact Business Profile locations/{id} with the fixed read mask name,title,storefrontAddress,phoneNumbers,categories,serviceItems,profile,regularHours,websiteUri,openInfo,metadata. One API call; read-only.", Actions: []string{"businessprofile:locations.get"}, Scopes: []string{BusinessManageScope}, Retry: SafeRead},
 		{Name: "businessprofile_list_reviews", Description: "List reviews for one exact Business Profile accounts/{id} parent and locations/{id} in one bounded page of at most 50, newest update first: reviewer display name, star rating, comment, create/update time, reply presence and reply text. One API call; read-only, no reply or delete.", Actions: []string{"businessprofile:reviews.list"}, Scopes: []string{BusinessManageScope}, Retry: SafeRead},
+		{Name: "drive_share_user_silent", Description: "Share one exact Drive file with one individual user as reader, commenter or writer, with notification email always off. Never shares to groups, domains or anyone, never transfers ownership, never sends a message. One API call; requires an explicit write grant; on unknown outcome list permissions before repeating.", Actions: []string{"drive:share.user.silent"}, Scopes: []string{DriveFullScope}, Retry: NonReplayableWrite},
 	}...)
 
 	return append(definitions, mediaDefinitions()...)
