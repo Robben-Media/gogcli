@@ -1,6 +1,7 @@
 package businessprofile
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -66,6 +67,11 @@ func TestBusinessProfileListReviewsRejectsInexactNamesBeforeUpstream(t *testing.
 		`{"account_id":"a","parent":"accounts/1","location":"locations/55","page_size":-1}`,
 		`{"account_id":"a","location":"locations/55"}`,
 		`{"account_id":"a","parent":"accounts/1","location":"locations/55","reply":"hi"}`,
+		`{"account_id":"a","parent":"accounts/1","location":"locations/2:updateReply"}`,
+		`{"account_id":"a","parent":"accounts/1:batchGetReviews","location":"locations/2"}`,
+		`{"account_id":"a","parent":"accounts/1","location":"locations/2;x"}`,
+		`{"account_id":"a","parent":"accounts/1","location":"locations/.."}`,
+		`{"account_id":"a","parent":" accounts/1","location":"locations/2"}`,
 	} {
 		operation, _, recorder := fixture(t, "businessprofile_list_reviews", http.StatusOK, `{}`)
 		if _, err := decodeRun(t, operation, raw, testIdentity("a")); err == nil {
@@ -95,5 +101,70 @@ func TestBusinessProfileListReviewsIsReadOnlyDefinition(t *testing.T) {
 	def, ok := mcpcontract.Lookup("businessprofile_list_reviews")
 	if !ok || def.Retry != mcpcontract.SafeRead || len(def.Actions) != 1 || def.Actions[0] != "businessprofile:reviews.list" || len(def.Scopes) != 1 || def.Scopes[0] != mcpcontract.BusinessManageScope {
 		t.Fatalf("unexpected definition: %#v", def)
+	}
+}
+
+// TestBusinessProfileListReviewsKeepsDeployedOutputContract pins the data
+// fields the deployed google-mcp:16a4495 image returns for Midwest (average
+// rating, total count, nested review_reply) so a redeploy from main keeps them.
+func TestBusinessProfileListReviewsKeepsDeployedOutputContract(t *testing.T) {
+	t.Parallel()
+	operation, _, recorder := fixture(t, "businessprofile_list_reviews", http.StatusOK, `{
+		"reviews": [
+			{"name": "accounts/114569381988673522973/locations/3912355503421668705/reviews/r1", "reviewId": "r1",
+			 "reviewer": {"displayName": "Pat Doe", "profilePhotoUrl": "https://photo.example/p"}, "starRating": "FIVE", "comment": "Great work",
+			 "createTime": "2026-09-01T10:00:00Z", "updateTime": "2026-09-02T10:00:00Z",
+			 "reviewReply": {"comment": "Thanks Pat", "updateTime": "2026-09-03T10:00:00Z"}},
+			{"name": "accounts/114569381988673522973/locations/3912355503421668705/reviews/r2", "reviewId": "r2",
+			 "reviewer": {"displayName": "Sam"}, "starRating": "FOUR", "createTime": "2026-08-01T10:00:00Z", "updateTime": "2026-08-01T10:00:00Z"}
+		],
+		"averageRating": 4.5, "totalReviewCount": 44, "nextPageToken": "midwest-tok-2"
+	}`)
+
+	result, err := decodeRun(t, operation, `{"account_id":"a","parent":"accounts/114569381988673522973","location":"locations/3912355503421668705"}`, testIdentity("a"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if recorder.calls != 1 || recorder.path != "/v4/accounts/114569381988673522973/locations/3912355503421668705/reviews" || recorder.query.Get("pageSize") != "50" || recorder.query.Get("orderBy") != "updateTime desc" {
+		t.Fatalf("calls=%d path=%q query=%v", recorder.calls, recorder.path, recorder.query)
+	}
+
+	out := result.(mcpcontract.Result[ReviewsData])
+	if out.NextPageToken != "midwest-tok-2" {
+		t.Fatalf("next_page_token = %q", out.NextPageToken)
+	}
+
+	got, err := json.Marshal(out.Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The data object google-mcp:16a4495 emits for this upstream page, plus
+	// the reply_present/reply_comment/reply_update_time fields #275 added.
+	const want = `{"parent":"accounts/114569381988673522973","location":"locations/3912355503421668705","average_rating":4.5,"total_review_count":44,"reviews":[` +
+		`{"name":"accounts/114569381988673522973/locations/3912355503421668705/reviews/r1","review_id":"r1","reviewer_display_name":"Pat Doe","star_rating":"FIVE","comment":"Great work","create_time":"2026-09-01T10:00:00Z","update_time":"2026-09-02T10:00:00Z","reply_present":true,"reply_comment":"Thanks Pat","reply_update_time":"2026-09-03T10:00:00Z","review_reply":{"comment":"Thanks Pat","update_time":"2026-09-03T10:00:00Z"}},` +
+		`{"name":"accounts/114569381988673522973/locations/3912355503421668705/reviews/r2","review_id":"r2","reviewer_display_name":"Sam","star_rating":"FOUR","create_time":"2026-08-01T10:00:00Z","update_time":"2026-08-01T10:00:00Z","reply_present":false}]}`
+	if string(got) != want {
+		t.Fatalf("data contract drifted:\n got %s\nwant %s", got, want)
+	}
+}
+
+func TestBusinessProfileListReviewsEmitsZeroAggregates(t *testing.T) {
+	t.Parallel()
+	operation, _, _ := fixture(t, "businessprofile_list_reviews", http.StatusOK, `{}`)
+
+	result, err := decodeRun(t, operation, `{"account_id":"a","parent":"accounts/1","location":"locations/2"}`, testIdentity("a"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := json.Marshal(result.(mcpcontract.Result[ReviewsData]).Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want := `{"parent":"accounts/1","location":"locations/2","average_rating":0,"total_review_count":0,"reviews":[]}`; string(got) != want {
+		t.Fatalf("got %s want %s", got, want)
 	}
 }

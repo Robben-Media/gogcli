@@ -19,6 +19,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	gapi "google.golang.org/api/googleapi"
 
@@ -47,27 +48,35 @@ type listReviewsInput struct {
 	PageToken string `json:"page_token,omitempty" jsonschema:"Opaque next_page_token from a previous businessprofile_list_reviews result"`
 }
 
+// ReviewReply is the owner's public reply to a review, when one exists.
+type ReviewReply struct {
+	Comment    string `json:"comment,omitempty"`
+	UpdateTime string `json:"update_time,omitempty"`
+}
+
 // Review is the read-only projection of one v4 review. Reviewer photo URLs
-// are deliberately omitted.
+// are deliberately omitted. ReviewReply carries the same reply as the flat
+// reply_* fields in the nested shape deployed callers already read.
 type Review struct {
-	Name                string `json:"name"`
-	ReviewID            string `json:"review_id,omitempty"`
-	ReviewerDisplayName string `json:"reviewer_display_name,omitempty"`
-	ReviewerIsAnonymous bool   `json:"reviewer_is_anonymous,omitempty"`
-	StarRating          string `json:"star_rating,omitempty"`
-	Comment             string `json:"comment,omitempty"`
-	CreateTime          string `json:"create_time,omitempty"`
-	UpdateTime          string `json:"update_time,omitempty"`
-	ReplyPresent        bool   `json:"reply_present"`
-	ReplyComment        string `json:"reply_comment,omitempty"`
-	ReplyUpdateTime     string `json:"reply_update_time,omitempty"`
+	Name                string       `json:"name"`
+	ReviewID            string       `json:"review_id,omitempty"`
+	ReviewerDisplayName string       `json:"reviewer_display_name,omitempty"`
+	ReviewerIsAnonymous bool         `json:"reviewer_is_anonymous,omitempty"`
+	StarRating          string       `json:"star_rating,omitempty"`
+	Comment             string       `json:"comment,omitempty"`
+	CreateTime          string       `json:"create_time,omitempty"`
+	UpdateTime          string       `json:"update_time,omitempty"`
+	ReplyPresent        bool         `json:"reply_present"`
+	ReplyComment        string       `json:"reply_comment,omitempty"`
+	ReplyUpdateTime     string       `json:"reply_update_time,omitempty"`
+	ReviewReply         *ReviewReply `json:"review_reply,omitempty"`
 }
 
 type ReviewsData struct {
 	Parent           string   `json:"parent"`
 	Location         string   `json:"location"`
-	AverageRating    float64  `json:"average_rating,omitempty"`
-	TotalReviewCount int64    `json:"total_review_count,omitempty"`
+	AverageRating    float64  `json:"average_rating"`
+	TotalReviewCount int64    `json:"total_review_count"`
 	Reviews          []Review `json:"reviews"`
 }
 
@@ -123,6 +132,8 @@ func reviewsOperation(provider mcpcontract.ClientProvider) mcpcontract.Operation
 			return mcpcontract.Result[ReviewsData]{}, nativegoogleapi.NativePublicError(err)
 		}
 
+		req.Header.Set("Accept", "application/json")
+
 		resp, err := httpClient.Do(req)
 		if err != nil {
 			return mcpcontract.Result[ReviewsData]{}, nativegoogleapi.NativePublicError(err)
@@ -166,6 +177,7 @@ func reviewsOperation(provider mcpcontract.ClientProvider) mcpcontract.Operation
 				projected.ReplyPresent = true
 				projected.ReplyComment = review.ReviewReply.Comment
 				projected.ReplyUpdateTime = review.ReviewReply.UpdateTime
+				projected.ReviewReply = &ReviewReply{Comment: review.ReviewReply.Comment, UpdateTime: review.ReviewReply.UpdateTime}
 			}
 
 			out.Data.Reviews = append(out.Data.Reviews, projected)
@@ -178,11 +190,11 @@ func reviewsOperation(provider mcpcontract.ClientProvider) mcpcontract.Operation
 
 // validateListReviews checks structure only; account and location IDs stay opaque.
 func validateListReviews(in listReviewsInput) error {
-	if !exactResourceName(in.Parent, "accounts/") {
+	if !plainResourceName(in.Parent, "accounts/") {
 		return invalid("parent must be the exact accounts/{id} resource name returned by businessprofile_list_accounts")
 	}
 
-	if !exactResourceName(in.Location, "locations/") {
+	if !plainResourceName(in.Location, "locations/") {
 		return invalid("location must be the exact locations/{id} resource name returned by businessprofile_list_locations")
 	}
 
@@ -191,4 +203,23 @@ func validateListReviews(in listReviewsInput) error {
 	}
 
 	return nil
+}
+
+// plainResourceName is stricter than exactResourceName: the ID segment may only
+// hold ASCII letters, digits, '-' and '_'. That excludes ':' custom-method
+// suffixes (for example :updateReply), so the composed v4 URL can only ever
+// name the reviews collection.
+func plainResourceName(value, prefix string) bool {
+	rest, ok := strings.CutPrefix(value, prefix)
+	if !ok || rest == "" {
+		return false
+	}
+
+	for _, r := range rest {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '-' && r != '_' {
+			return false
+		}
+	}
+
+	return true
 }
