@@ -127,3 +127,54 @@ func TestBusinessProfileGetLocationNeedsItsOwnGrant(t *testing.T) {
 		})
 	}
 }
+
+func TestBusinessProfileListReviewsNeedsItsOwnGrant(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name  string
+		grant string
+		want  bool
+	}{
+		{"locations_get_grant_only", "businessprofile:locations.get", false}, {"reviews_list_grant", "businessprofile:reviews.list", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+			defer cancel()
+			registry := accountconnect.NewMemoryRegistry()
+			if err := registry.Upsert(ctx, accountconnect.Record{AccountID: "allowed", Subject: "subject-allowed", Email: "allowed@example.test", Label: "allowed", PrincipalID: "fixture", ClientName: "native-mcp", AuthMode: accountconnect.AuthModeOAuth, Scopes: []string{mcpcontract.BusinessManageScope}, Generation: 1, State: accountconnect.RecordStateActive, UpdatedAt: time.Now().UTC()}); err != nil {
+				t.Fatal(err)
+			}
+			transport := &expandedTransport{}
+			runtime, err := mcpserver.New(mcpserver.Config{Principal: mcpcontract.Principal{ID: "fixture"}, Grants: []mcpcontract.Grant{{PrincipalID: "fixture", AccountIDs: []string{"allowed"}, ClientNames: []string{"native-mcp"}, Operations: []string{tc.grant}}}, AllowOperations: []string{"accounts_list", "businessprofile_get_location", "businessprofile_list_reviews"}, Operations: configuredOperations(cli{APICatalog: true}, expandedProvider{transport}), Accounts: registryAccounts{registry: registry}, DiscoveryMode: mcpserver.DiscoveryCompact, MaxUpstreamCalls: 1, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+			if err != nil {
+				t.Fatal(err)
+			}
+			serverTransport, clientTransport := mcp.NewInMemoryTransports()
+			serverSession, err := runtime.Server().Connect(ctx, serverTransport, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer serverSession.Close()
+			session, err := mcp.NewClient(&mcp.Implementation{Name: "gbp-fixture", Version: "test"}, nil).Connect(ctx, clientTransport, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer session.Close()
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "capabilities_execute", Arguments: map[string]any{"name": "businessprofile_list_reviews", "arguments": map[string]any{"account_id": "allowed", "parent": "accounts/1", "location": "locations/55"}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.IsError == tc.want {
+				t.Fatalf("result=%+v", result)
+			}
+			wantCalls := int64(0)
+			if tc.want {
+				wantCalls = 1
+			}
+			if transport.calls.Load() != wantCalls {
+				t.Fatalf("calls=%d want=%d", transport.calls.Load(), wantCalls)
+			}
+		})
+	}
+}

@@ -14,6 +14,10 @@
 //   - locations.get (mybusinessbusinessinformation v1) requires
 //     https://www.googleapis.com/auth/business.manage:
 //     https://developers.google.com/my-business/reference/businessinformation/rest/v1/locations/get
+//   - accounts.locations.reviews.list (mybusiness v4; GET only, pageSize max 50)
+//     requires https://www.googleapis.com/auth/business.manage:
+//     https://developers.google.com/my-business/reference/rest/v4/accounts.locations.reviews/list
+//     Reply (updateReply/deleteReply) endpoints are deliberately not implemented.
 //
 // The package provides no write operation. Any future Business Profile write
 // must pass its update mask through ForbiddenUpdateMask first.
@@ -21,10 +25,16 @@ package businessprofile
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"unicode"
 
+	gapi "google.golang.org/api/googleapi"
 	mybusinessaccountmanagement "google.golang.org/api/mybusinessaccountmanagement/v1"
 	mybusinessbusinessinformation "google.golang.org/api/mybusinessbusinessinformation/v1"
 	"google.golang.org/api/option"
@@ -46,6 +56,15 @@ const (
 	// locationReadMask is the fixed field mask for locations.get. It covers the
 	// current state an operator must see before any profile change.
 	locationReadMask = "name,title,storefrontAddress,phoneNumbers,categories,serviceItems,profile,regularHours,websiteUri,openInfo,metadata"
+	// reviewsMaxPageSize is the documented maximum page size for the v4
+	// accounts.locations.reviews.list method.
+	reviewsMaxPageSize = 50
+	// reviewsOrderBy is fixed so continuation pages stay in one stable order.
+	reviewsOrderBy = "updateTime desc"
+	// reviewsHost serves the Google My Business v4 API.
+	reviewsHost = "mybusiness.googleapis.com"
+	// reviewsMaxResponseBytes bounds one reviews page; 50 reviews fit well within it.
+	reviewsMaxResponseBytes = 2 << 20
 )
 
 type listAccountsInput struct {
@@ -175,6 +194,65 @@ type LocationData struct {
 	Location LocationDetail `json:"location"`
 }
 
+type listReviewsInput struct {
+	mcpcontract.Selection
+	Parent    string `json:"parent" jsonschema:"Exact opaque account resource name returned by businessprofile_list_accounts, in accounts/{id} form; never guessed"`
+	Location  string `json:"location" jsonschema:"Exact opaque location resource name returned by businessprofile_list_locations, in locations/{id} form; never guessed"`
+	PageSize  int64  `json:"page_size,omitempty" jsonschema:"Maximum reviews in the single returned page; default and maximum 50"`
+	PageToken string `json:"page_token,omitempty" jsonschema:"Opaque next_page_token from a previous businessprofile_list_reviews result"`
+}
+
+// ReviewReply is the owner's public reply to a review, when one exists.
+type ReviewReply struct {
+	Comment    string `json:"comment,omitempty"`
+	UpdateTime string `json:"update_time,omitempty"`
+}
+
+// Review is the projection of one v4 Review. The reviewer profile photo URL is
+// intentionally omitted.
+type Review struct {
+	Name                string       `json:"name,omitempty"`
+	ReviewID            string       `json:"review_id,omitempty"`
+	ReviewerDisplayName string       `json:"reviewer_display_name,omitempty"`
+	ReviewerIsAnonymous bool         `json:"reviewer_is_anonymous,omitempty"`
+	StarRating          string       `json:"star_rating,omitempty"`
+	Comment             string       `json:"comment,omitempty"`
+	CreateTime          string       `json:"create_time,omitempty"`
+	UpdateTime          string       `json:"update_time,omitempty"`
+	ReviewReply         *ReviewReply `json:"review_reply,omitempty"`
+}
+
+type ReviewsData struct {
+	Parent           string   `json:"parent"`
+	Location         string   `json:"location"`
+	AverageRating    float64  `json:"average_rating"`
+	TotalReviewCount int64    `json:"total_review_count"`
+	Reviews          []Review `json:"reviews"`
+}
+
+// reviewsResponse mirrors the documented v4 ListReviewsResponse fields read here.
+type reviewsResponse struct {
+	Reviews []*struct {
+		Name     string `json:"name"`
+		ReviewID string `json:"reviewId"`
+		Reviewer *struct {
+			DisplayName string `json:"displayName"`
+			IsAnonymous bool   `json:"isAnonymous"`
+		} `json:"reviewer"`
+		StarRating  string `json:"starRating"`
+		Comment     string `json:"comment"`
+		CreateTime  string `json:"createTime"`
+		UpdateTime  string `json:"updateTime"`
+		ReviewReply *struct {
+			Comment    string `json:"comment"`
+			UpdateTime string `json:"updateTime"`
+		} `json:"reviewReply"`
+	} `json:"reviews"`
+	AverageRating    float64 `json:"averageRating"`
+	TotalReviewCount int64   `json:"totalReviewCount"`
+	NextPageToken    string  `json:"nextPageToken"`
+}
+
 // Operations returns the explicit Business Profile read tool implementations.
 func Operations(provider mcpcontract.ClientProvider) []mcpcontract.Operation {
 	return []mcpcontract.Operation{
@@ -261,6 +339,22 @@ func Operations(provider mcpcontract.ClientProvider) []mcpcontract.Operation {
 
 			return mcpcontract.NewResult(id, LocationData{Location: projectLocation(location)}), nil
 		}),
+		mcpcontract.NewOperation("businessprofile_list_reviews", validateListReviews, func(ctx context.Context, id mcpcontract.Identity, in listReviewsInput) (mcpcontract.Result[ReviewsData], error) {
+			httpClient, err := provider.HTTPClient(ctx, id, mcpcontract.CallOptions{Operation: "businessprofile_list_reviews", Retry: mcpcontract.SafeRead})
+			if err != nil {
+				return mcpcontract.Result[ReviewsData]{}, nativegoogleapi.NativePublicError(err)
+			}
+
+			resp, err := listReviews(ctx, httpClient, in)
+			if err != nil {
+				return mcpcontract.Result[ReviewsData]{}, err
+			}
+
+			out := mcpcontract.NewResult(id, projectReviews(in, resp))
+			out.NextPageToken = resp.NextPageToken
+
+			return out, nil
+		}),
 	}
 }
 
@@ -324,6 +418,125 @@ func projectLocation(location *mybusinessbusinessinformation.Location) LocationD
 	}
 
 	return out
+}
+
+// listReviews performs one v4 reviews.list GET. Google ships no Go client for
+// the v4 API, so the request is built here from validated exact resource names
+// and a fixed query: pageSize, optional pageToken, and orderBy updateTime desc.
+func listReviews(ctx context.Context, httpClient *http.Client, in listReviewsInput) (reviewsResponse, error) {
+	pageSize := in.PageSize
+	if pageSize == 0 {
+		pageSize = reviewsMaxPageSize
+	}
+
+	query := url.Values{}
+	query.Set("pageSize", strconv.FormatInt(pageSize, 10))
+	query.Set("orderBy", reviewsOrderBy)
+
+	if in.PageToken != "" {
+		query.Set("pageToken", in.PageToken)
+	}
+
+	endpoint := url.URL{Scheme: "https", Host: reviewsHost, Path: "/v4/" + in.Parent + "/" + in.Location + "/reviews", RawQuery: query.Encode()}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
+	if err != nil {
+		return reviewsResponse{}, nativegoogleapi.NativePublicError(err)
+	}
+
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return reviewsResponse{}, nativegoogleapi.NativePublicError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, reviewsMaxResponseBytes+1))
+	if err != nil {
+		return reviewsResponse{}, nativegoogleapi.NativePublicError(err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		if checkErr := gapi.CheckResponseWithBody(resp, body); checkErr != nil {
+			return reviewsResponse{}, nativegoogleapi.NativePublicError(checkErr)
+		}
+
+		return reviewsResponse{}, nativegoogleapi.NativePublicError(&gapi.Error{Code: resp.StatusCode})
+	}
+
+	if int64(len(body)) > reviewsMaxResponseBytes {
+		return reviewsResponse{}, &mcpcontract.Error{Category: mcpcontract.UpstreamFailure, Message: "Business Profile reviews page exceeded the response bound; request a smaller page_size"}
+	}
+
+	var decoded reviewsResponse
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		return reviewsResponse{}, &mcpcontract.Error{Category: mcpcontract.UpstreamFailure, Message: "Business Profile reviews response was not valid JSON"}
+	}
+
+	return decoded, nil
+}
+
+func projectReviews(in listReviewsInput, resp reviewsResponse) ReviewsData {
+	out := ReviewsData{Parent: in.Parent, Location: in.Location, AverageRating: resp.AverageRating, TotalReviewCount: resp.TotalReviewCount, Reviews: []Review{}}
+	for _, review := range resp.Reviews {
+		if review == nil {
+			continue
+		}
+
+		projected := Review{
+			Name: review.Name, ReviewID: review.ReviewID, StarRating: review.StarRating, Comment: review.Comment,
+			CreateTime: review.CreateTime, UpdateTime: review.UpdateTime,
+		}
+		if reviewer := review.Reviewer; reviewer != nil {
+			projected.ReviewerDisplayName = reviewer.DisplayName
+			projected.ReviewerIsAnonymous = reviewer.IsAnonymous
+		}
+
+		if reply := review.ReviewReply; reply != nil {
+			projected.ReviewReply = &ReviewReply{Comment: reply.Comment, UpdateTime: reply.UpdateTime}
+		}
+
+		out.Reviews = append(out.Reviews, projected)
+	}
+
+	return out
+}
+
+// plainResourceName is stricter than exactResourceName: the ID segment may only
+// hold ASCII letters, digits, '-' and '_'. That excludes ':' custom-method
+// suffixes (for example :updateReply), so the composed v4 URL can only ever
+// name the reviews collection.
+func plainResourceName(value, prefix string) bool {
+	rest, ok := strings.CutPrefix(value, prefix)
+	if !ok || rest == "" {
+		return false
+	}
+
+	for _, r := range rest {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '-' && r != '_' {
+			return false
+		}
+	}
+
+	return true
+}
+
+// validateListReviews checks structure only; account and location IDs stay opaque.
+func validateListReviews(in listReviewsInput) error {
+	if !plainResourceName(in.Parent, "accounts/") {
+		return invalid("parent must be the exact accounts/{id} resource name returned by businessprofile_list_accounts")
+	}
+
+	if !plainResourceName(in.Location, "locations/") {
+		return invalid("location must be the exact locations/{id} resource name returned by businessprofile_list_locations")
+	}
+
+	if in.PageSize < 0 || in.PageSize > reviewsMaxPageSize {
+		return invalid("page_size must be between 1 and 50 when supplied")
+	}
+
+	return nil
 }
 
 func projectServiceItem(item *mybusinessbusinessinformation.ServiceItem) ServiceItem {

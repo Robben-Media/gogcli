@@ -337,6 +337,7 @@ func TestBusinessProfileUpstreamErrorsStayPublicSafe(t *testing.T) {
 		{"businessprofile_list_accounts", `{"account_id":"opaque-account"}`},
 		{"businessprofile_list_locations", `{"account_id":"opaque-account","parent":"accounts/123"}`},
 		{"businessprofile_get_location", `{"account_id":"opaque-account","name":"locations/55"}`},
+		{"businessprofile_list_reviews", `{"account_id":"opaque-account","parent":"accounts/123","location":"locations/55"}`},
 	} {
 		operation, _, _ := fixture(t, tc.operation, http.StatusForbidden, errorResponse)
 		if _, runErr := decodeRun(t, operation, tc.raw, testIdentity("opaque-account")); runErr == nil {
@@ -389,6 +390,7 @@ func TestBusinessProfileInputSchemasMatchFrozenRequests(t *testing.T) {
 		"businessprofile_list_accounts":  {"account_id", "page_token"},
 		"businessprofile_list_locations": {"account_id", "parent", "page_size", "page_token"},
 		"businessprofile_get_location":   {"account_id", "name"},
+		"businessprofile_list_reviews":   {"account_id", "parent", "location", "page_size", "page_token"},
 	} {
 		for _, field := range want {
 			if !properties[name][field] {
@@ -407,6 +409,164 @@ func TestBusinessProfileInputSchemasMatchFrozenRequests(t *testing.T) {
 
 	if got := required["businessprofile_get_location"]; !reflect.DeepEqual(got, []string{"account_id", "name"}) {
 		t.Fatalf("businessprofile_get_location required fields: %#v", got)
+	}
+
+	if got := required["businessprofile_list_reviews"]; !reflect.DeepEqual(got, []string{"account_id", "parent", "location"}) {
+		t.Fatalf("businessprofile_list_reviews required fields: %#v", got)
+	}
+}
+
+func TestBusinessProfileListReviewsReadsOneBoundedPage(t *testing.T) {
+	t.Parallel()
+	operation, provider, recorder := fixture(t, "businessprofile_list_reviews", http.StatusOK, `{
+		"reviews": [
+			{"name": "accounts/123/locations/55/reviews/r1", "reviewId": "r1", "reviewer": {"displayName": "Pat Doe", "profilePhotoUrl": "https://photo.example/p"},
+			 "starRating": "FIVE", "comment": "Great work", "createTime": "2026-09-01T10:00:00Z", "updateTime": "2026-09-02T10:00:00Z",
+			 "reviewReply": {"comment": "Thanks Pat", "updateTime": "2026-09-03T10:00:00Z"}},
+			{"name": "accounts/123/locations/55/reviews/r2", "reviewId": "r2", "reviewer": {"isAnonymous": true}, "starRating": "THREE", "createTime": "2026-08-01T10:00:00Z", "updateTime": "2026-08-01T10:00:00Z"},
+			null
+		],
+		"averageRating": 4.5,
+		"totalReviewCount": 44,
+		"nextPageToken": "rev-tok-2"
+	}`)
+
+	result, err := decodeRun(t, operation, `{"account_id":"opaque-account","parent":"accounts/123","location":"locations/55","page_size":2,"page_token":"rev-tok-1"}`, testIdentity("opaque-account"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if recorder.calls != 1 || recorder.path != "/v4/accounts/123/locations/55/reviews" {
+		t.Fatalf("calls=%d path=%q", recorder.calls, recorder.path)
+	}
+
+	if got := recorder.query.Get("pageSize"); got != "2" {
+		t.Fatalf("pageSize = %q", got)
+	}
+
+	if got := recorder.query.Get("pageToken"); got != "rev-tok-1" {
+		t.Fatalf("pageToken = %q", got)
+	}
+
+	if got := recorder.query.Get("orderBy"); got != "updateTime desc" {
+		t.Fatalf("orderBy = %q", got)
+	}
+
+	out := result.(mcpcontract.Result[ReviewsData])
+	want := ReviewsData{
+		Parent: "accounts/123", Location: "locations/55", AverageRating: 4.5, TotalReviewCount: 44,
+		Reviews: []Review{
+			{Name: "accounts/123/locations/55/reviews/r1", ReviewID: "r1", ReviewerDisplayName: "Pat Doe", StarRating: "FIVE", Comment: "Great work", CreateTime: "2026-09-01T10:00:00Z", UpdateTime: "2026-09-02T10:00:00Z", ReviewReply: &ReviewReply{Comment: "Thanks Pat", UpdateTime: "2026-09-03T10:00:00Z"}},
+			{Name: "accounts/123/locations/55/reviews/r2", ReviewID: "r2", ReviewerIsAnonymous: true, StarRating: "THREE", CreateTime: "2026-08-01T10:00:00Z", UpdateTime: "2026-08-01T10:00:00Z"},
+		},
+	}
+
+	if !reflect.DeepEqual(out.Data, want) {
+		t.Fatalf("unexpected reviews projection:\n got %#v\nwant %#v", out.Data, want)
+	}
+
+	if out.NextPageToken != "rev-tok-2" || out.Truncated {
+		t.Fatalf("unexpected envelope: %#v", out)
+	}
+
+	encoded, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if strings.Contains(string(encoded), "photo.example") {
+		t.Fatal("reviewer profile photo URL must not be projected")
+	}
+
+	wantOptions := mcpcontract.CallOptions{Operation: "businessprofile_list_reviews", Retry: mcpcontract.SafeRead}
+	if len(provider.options) != 1 || provider.options[0] != wantOptions {
+		t.Fatalf("unexpected call options: %#v", provider.options)
+	}
+}
+
+func TestBusinessProfileListReviewsDefaultsToDocumentedMaximum(t *testing.T) {
+	t.Parallel()
+	operation, _, recorder := fixture(t, "businessprofile_list_reviews", http.StatusOK, `{"averageRating": 5, "totalReviewCount": 0}`)
+
+	result, err := decodeRun(t, operation, `{"account_id":"a","parent":"accounts/1","location":"locations/2"}`, testIdentity("a"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := recorder.query.Get("pageSize"); got != "50" {
+		t.Fatalf("pageSize = %q, want default 50", got)
+	}
+
+	if _, exists := recorder.query["pageToken"]; exists {
+		t.Fatalf("pageToken must be absent for the first page: %v", recorder.query)
+	}
+
+	out := result.(mcpcontract.Result[ReviewsData])
+	if out.Data.Reviews == nil || len(out.Data.Reviews) != 0 || out.NextPageToken != "" {
+		t.Fatalf("unexpected empty page: %#v", out)
+	}
+}
+
+func TestBusinessProfileListReviewsRejectsInexactInputBeforeProvider(t *testing.T) {
+	t.Parallel()
+
+	for _, args := range []map[string]any{
+		{"parent": "", "location": "locations/2"},
+		{"parent": "accounts/1", "location": ""},
+		{"parent": "accounts/1/locations/2", "location": "locations/2"},
+		{"parent": "accounts/1", "location": "locations/2/reviews/r1"},
+		{"parent": "accounts/1", "location": "locations/2:updateReply"},
+		{"parent": " accounts/1", "location": "locations/2"},
+		{"parent": "accounts/1", "location": "locations/.."},
+		{"parent": "accounts/1", "location": "locations/2?x=y"},
+		{"parent": "accounts/1", "location": "locations/%2F"},
+		{"parent": "accounts/1", "location": "locations/2", "page_size": 51},
+		{"parent": "accounts/1", "location": "locations/2", "page_size": -1},
+	} {
+		operation, provider, recorder := fixture(t, "businessprofile_list_reviews", http.StatusOK, `{}`)
+		args["account_id"] = "a"
+
+		raw, err := json.Marshal(args)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = decodeRun(t, operation, string(raw), testIdentity("a"))
+		if !isInvalidInput(err) || len(provider.options) != 0 || recorder.calls != 0 {
+			t.Fatalf("args %s: err=%v calls=%d", raw, err, recorder.calls)
+		}
+	}
+}
+
+func TestBusinessProfileListReviewsUsesGETOnly(t *testing.T) {
+	t.Parallel()
+
+	var method string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method = r.Method
+		_, _ = io.WriteString(w, `{}`)
+	}))
+	t.Cleanup(server.Close)
+
+	target, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	provider := &recordingProvider{transport: &fixtureTransport{target: target}}
+	for _, operation := range Operations(provider) {
+		if operation.Definition.Name != "businessprofile_list_reviews" {
+			continue
+		}
+
+		if _, err := decodeRun(t, operation, `{"account_id":"a","parent":"accounts/1","location":"locations/2"}`, testIdentity("a")); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if method != http.MethodGet {
+		t.Fatalf("method = %q, want GET", method)
 	}
 }
 
