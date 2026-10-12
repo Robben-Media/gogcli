@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/steipete/gogcli/internal/config"
 )
 
 // Registry stores connection records without refresh tokens.
@@ -372,13 +374,8 @@ func (r *FileRegistry) saveLocked(records map[string]Record) error {
 		return fmt.Errorf("ensure account registry dir: %w", err)
 	}
 
-	tmp := r.path + ".tmp"
-	if err := os.WriteFile(tmp, append(data, '\n'), 0o600); err != nil { //nolint:gosec // G703: registry path is process configuration
+	if err := config.WriteFileAtomic(r.path, append(data, '\n')); err != nil {
 		return fmt.Errorf("write account registry: %w", err)
-	}
-
-	if err := os.Rename(tmp, r.path); err != nil { //nolint:gosec // G703: registry path is process configuration
-		return fmt.Errorf("commit account registry: %w", err)
 	}
 
 	return nil

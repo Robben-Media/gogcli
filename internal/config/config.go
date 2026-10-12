@@ -194,14 +194,8 @@ func WriteConfig(cfg File) error {
 
 	b = append(b, '\n')
 
-	tmp := path + ".tmp"
-
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+	if err := WriteFileAtomic(path, b); err != nil {
 		return fmt.Errorf("write config: %w", err)
-	}
-
-	if err := os.Rename(tmp, path); err != nil {
-		return fmt.Errorf("commit config: %w", err)
 	}
 
 	return nil
