@@ -51,6 +51,7 @@ func shareFixture(t *testing.T, status int, resp string) (mcpcontract.Operation,
 		raw, _ := io.ReadAll(r.Body)
 		rec.body = map[string]any{}
 		_ = json.Unmarshal(raw, &rec.body)
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(rec.status)
 		_, _ = io.WriteString(w, rec.resp)
@@ -68,18 +69,21 @@ func shareIdentity() mcpcontract.Identity {
 
 func runShare(t *testing.T, op mcpcontract.Operation, raw string) (any, error) {
 	t.Helper()
+
 	call, err := op.Decode(json.RawMessage(raw))
 	if err != nil {
-		return nil, err
+		return nil, err //nolint:wrapcheck // Test helper returns the decoder error unchanged.
 	}
 
-	return call.Run(context.Background(), shareIdentity())
+	return call.Run(context.Background(), shareIdentity()) //nolint:wrapcheck // Test helper returns the operation error unchanged.
 }
 
 func TestShareUserSilentFixesTypeAndSuppressesNotification(t *testing.T) {
 	t.Parallel()
+
 	for _, role := range []string{"reader", "commenter", "writer"} {
 		op, provider, rec := shareFixture(t, http.StatusOK, `{"id":"perm-1","type":"user","role":"`+role+`","emailAddress":"a@example.test"}`)
+
 		result, err := runShare(t, op, `{"account_id":"acct","file_id":"1AbC_def-123456","email_address":"a@example.test","role":"`+role+`"}`)
 		if err != nil {
 			t.Fatal(err)
@@ -116,6 +120,7 @@ func TestShareUserSilentFixesTypeAndSuppressesNotification(t *testing.T) {
 
 func TestShareUserSilentRejectsWideningInputsBeforeUpstream(t *testing.T) {
 	t.Parallel()
+
 	for _, raw := range []string{
 		`{"account_id":"acct","file_id":"1AbC_def-123456","email_address":"a@example.test","role":"owner"}`,
 		`{"account_id":"acct","file_id":"1AbC_def-123456","email_address":"a@example.test","role":"organizer"}`,
@@ -157,6 +162,7 @@ func TestShareUserSilentAmbiguousFailureIsOutcomeUnknown(t *testing.T) {
 	}
 
 	op, _, _ = shareFixture(t, http.StatusForbidden, `{"error":{"code":403,"message":"secret-detail"}}`)
+
 	_, err = runShare(t, op, `{"account_id":"acct","file_id":"1AbC_def-123456","email_address":"a@example.test","role":"reader"}`)
 	if err == nil || !asContract(err, &safe) || safe.Category != mcpcontract.Forbidden || strings.Contains(safe.Message, "secret-detail") {
 		t.Fatalf("unexpected 403 mapping: %#v", err)
@@ -174,6 +180,7 @@ func asContract(err error, target **mcpcontract.Error) bool {
 
 func TestShareUserSilentDefinitionIsGatedWrite(t *testing.T) {
 	t.Parallel()
+
 	def, ok := mcpcontract.Lookup(ShareUserSilentOperation)
 	if !ok || def.Retry != mcpcontract.NonReplayableWrite || len(def.Actions) != 1 || def.Actions[0] != "drive:share.user.silent" || len(def.Scopes) != 1 || def.Scopes[0] != mcpcontract.DriveFullScope {
 		t.Fatalf("unexpected definition: %#v", def)
