@@ -90,17 +90,17 @@ func ShareOperations(provider mcpcontract.ClientProvider) []mcpcontract.Operatio
 
 func validateShareUserSilent(in ShareUserSilentRequest) error {
 	if !shareFileIDPattern.MatchString(in.FileID) {
-		return mcpcontract.Invalid("file_id must be one exact Drive file ID")
+		return mcpcontract.Invalid("file_id must be one exact Drive file ID") //nolint:wrapcheck // Typed public contract error.
 	}
 
 	if !shareRoles[in.Role] {
-		return mcpcontract.Invalid("role must be reader, commenter or writer")
+		return mcpcontract.Invalid("role must be reader, commenter or writer") //nolint:wrapcheck // Typed public contract error.
 	}
 
 	addr, err := mail.ParseAddress(in.EmailAddress)
 	if err != nil || addr.Address != in.EmailAddress || addr.Name != "" || strings.ToLower(in.EmailAddress) != in.EmailAddress ||
 		strings.ContainsAny(in.EmailAddress, "*, <>\"") || !strings.Contains(in.EmailAddress, "@") {
-		return mcpcontract.Invalid("email_address must be one exact lowercase user email address")
+		return mcpcontract.Invalid("email_address must be one exact lowercase user email address") //nolint:wrapcheck // Typed public contract error.
 	}
 
 	return nil

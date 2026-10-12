@@ -58,6 +58,7 @@ func TestBusinessProfileListReviewsProjectsOneBoundedReadOnlyPage(t *testing.T) 
 
 func TestBusinessProfileListReviewsRejectsInexactNamesBeforeUpstream(t *testing.T) {
 	t.Parallel()
+
 	for _, raw := range []string{
 		`{"account_id":"a","parent":"accounts/1","location":"locations/55/reviews/x"}`,
 		`{"account_id":"a","parent":"accounts/1/locations/2","location":"locations/55"}`,
@@ -90,6 +91,7 @@ func TestBusinessProfileListReviewsMapsAccessDeniedWithoutLeaking(t *testing.T) 
 	operation, _, _ := fixture(t, "businessprofile_list_reviews", http.StatusForbidden, `{"error":{"code":403,"message":"`+secret+`","status":"PERMISSION_DENIED"}}`)
 
 	_, err := decodeRun(t, operation, `{"account_id":"a","parent":"accounts/1","location":"locations/55"}`, testIdentity("a"))
+
 	safe := contractError(err)
 	if safe == nil || safe.Category != mcpcontract.Forbidden || strings.Contains(safe.Message, secret) {
 		t.Fatalf("unexpected error: %#v (%v)", safe, err)
@@ -98,6 +100,7 @@ func TestBusinessProfileListReviewsMapsAccessDeniedWithoutLeaking(t *testing.T) 
 
 func TestBusinessProfileListReviewsIsReadOnlyDefinition(t *testing.T) {
 	t.Parallel()
+
 	def, ok := mcpcontract.Lookup("businessprofile_list_reviews")
 	if !ok || def.Retry != mcpcontract.SafeRead || len(def.Actions) != 1 || def.Actions[0] != "businessprofile:reviews.list" || len(def.Scopes) != 1 || def.Scopes[0] != mcpcontract.BusinessManageScope {
 		t.Fatalf("unexpected definition: %#v", def)
