@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -64,6 +65,20 @@ func TestWriteFileAtomicConcurrentWritersLeaveOneCompleteDocument(t *testing.T) 
 	}
 
 	assertOnlyEntries(t, dir, "config.json")
+}
+
+func TestWriteFileAtomicAcceptsLongDestinationNames(t *testing.T) {
+	t.Parallel()
+
+	// 251 bytes fits NAME_MAX (255) with the old fixed ".tmp" suffix.
+	name := strings.Repeat("c", 246) + ".json"
+	dir := t.TempDir()
+
+	if err := WriteFileAtomic(filepath.Join(dir, name), []byte("{}\n")); err != nil {
+		t.Fatalf("long destination name rejected: %v", err)
+	}
+
+	assertOnlyEntries(t, dir, name)
 }
 
 func TestWriteFileAtomicIsOwnerOnly(t *testing.T) {

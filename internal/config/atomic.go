@@ -10,9 +10,10 @@ import (
 // owner-only temporary file in the destination directory, so concurrent
 // writers never share a staging pathname, and the rename is the commit
 // point. On failure the previous destination is left intact and the
-// attempt's staging file is removed.
+// attempt's staging file is removed. The staging name uses a short fixed
+// prefix so destinations near the filename length limit stay writable.
 func WriteFileAtomic(path string, data []byte) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".gog-staging-*.tmp")
 	if err != nil {
 		return fmt.Errorf("create staging file: %w", err)
 	}
