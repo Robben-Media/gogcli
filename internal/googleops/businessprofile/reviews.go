@@ -71,6 +71,7 @@ type ReviewsData struct {
 	Reviews          []Review `json:"reviews"`
 }
 
+//nolint:tagliatelle // Business Profile v4 wire names.
 type v4ReviewsResponse struct {
 	Reviews []*struct {
 		Name     string `json:"name"`
