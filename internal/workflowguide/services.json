@@ -377,7 +377,7 @@
     "read_strategy": [
       "Use businessprofile_list_accounts only when the exact accounts/{id} is unknown; each call returns at most 20 accounts.",
       "Use businessprofile_list_locations for one selected parent; each call returns at most 100 locations with name,title,storeCode,websiteUri.",
-      "Continue with page_token only when needed within the task budget. These reads require business.manage and approved project API access. Use businessprofile_get_location for one exact locations/{id} with a fixed read mask. Other generated Business Profile methods remain gated."
+      "Continue with page_token only when needed within the task budget. These reads require business.manage and approved project API access. Use businessprofile_get_location for one exact locations/{id} with a fixed read mask. Use businessprofile_fetch_daily_metrics for one exact locations/{id} and a date range shorter than 18 months. Other generated Business Profile methods remain gated."
     ],
     "write_strategy": [
       "Paced per-location/profile writes; no assumption of atomic multi-location batch.",
@@ -408,7 +408,7 @@
       {
         "intent_id": "businessprofile.review_performance",
         "intent": "Retrieve bounded metrics for exact locations",
-        "minimum_calls": "Fewest grouped requests supported for exact location/metric/date set",
+        "minimum_calls": "1 businessprofile_fetch_daily_metrics call per exact location and date range",
         "approval": "permission_only_read",
         "stop_condition": "Location count or task budget",
         "next_action": "Split a named location subset or shorten the date range."
