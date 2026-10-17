@@ -128,14 +128,21 @@ func TestBusinessProfileGetLocationNeedsItsOwnGrant(t *testing.T) {
 	}
 }
 
-func TestBusinessProfileListReviewsNeedsItsOwnGrant(t *testing.T) {
+func TestBusinessProfileReviewsAndMetricsNeedTheirOwnGrants(t *testing.T) {
 	t.Parallel()
+	reviewsArgs := map[string]any{"account_id": "allowed", "parent": "accounts/1", "location": "locations/55"}
+	metricsArgs := map[string]any{"account_id": "allowed", "location": "locations/55", "start_date": "2026-09-01", "end_date": "2026-09-30"}
 	for _, tc := range []struct {
-		name  string
-		grant string
-		want  bool
+		name      string
+		grant     string
+		operation string
+		arguments map[string]any
+		want      bool
 	}{
-		{"get_location_grant_only", "businessprofile_get_location", false}, {"reviews_grant", "businessprofile_list_reviews", true},
+		{"get_location_grant_only", "businessprofile_get_location", "businessprofile_list_reviews", reviewsArgs, false},
+		{"reviews_grant", "businessprofile_list_reviews", "businessprofile_list_reviews", reviewsArgs, true},
+		{"reviews_grant_only_for_metrics", "businessprofile_list_reviews", "businessprofile_fetch_daily_metrics", metricsArgs, false},
+		{"metrics_grant", "businessprofile_fetch_daily_metrics", "businessprofile_fetch_daily_metrics", metricsArgs, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -146,7 +153,7 @@ func TestBusinessProfileListReviewsNeedsItsOwnGrant(t *testing.T) {
 				t.Fatal(err)
 			}
 			transport := &expandedTransport{}
-			runtime, err := mcpserver.New(mcpserver.Config{Principal: mcpcontract.Principal{ID: "fixture"}, Grants: []mcpcontract.Grant{{PrincipalID: "fixture", AccountIDs: []string{"allowed"}, ClientNames: []string{"native-mcp"}, Operations: []string{tc.grant}}}, AllowOperations: []string{"accounts_list", "businessprofile_get_location", "businessprofile_list_reviews"}, Operations: configuredOperations(cli{APICatalog: true}, expandedProvider{transport}), Accounts: registryAccounts{registry: registry}, DiscoveryMode: mcpserver.DiscoveryCompact, MaxUpstreamCalls: 1, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+			runtime, err := mcpserver.New(mcpserver.Config{Principal: mcpcontract.Principal{ID: "fixture"}, Grants: []mcpcontract.Grant{{PrincipalID: "fixture", AccountIDs: []string{"allowed"}, ClientNames: []string{"native-mcp"}, Operations: []string{tc.grant}}}, AllowOperations: []string{"accounts_list", "businessprofile_get_location", "businessprofile_list_reviews", "businessprofile_fetch_daily_metrics"}, Operations: configuredOperations(cli{APICatalog: true}, expandedProvider{transport}), Accounts: registryAccounts{registry: registry}, DiscoveryMode: mcpserver.DiscoveryCompact, MaxUpstreamCalls: 1, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -161,7 +168,7 @@ func TestBusinessProfileListReviewsNeedsItsOwnGrant(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer session.Close()
-			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "capabilities_execute", Arguments: map[string]any{"name": "businessprofile_list_reviews", "arguments": map[string]any{"account_id": "allowed", "parent": "accounts/1", "location": "locations/55"}}})
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "capabilities_execute", Arguments: map[string]any{"name": tc.operation, "arguments": tc.arguments}})
 			if err != nil {
 				t.Fatal(err)
 			}
