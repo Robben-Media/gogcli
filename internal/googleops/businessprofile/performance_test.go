@@ -138,6 +138,8 @@ func TestBusinessProfileFetchDailyMetricsRejectsInvalidInputBeforeUpstream(t *te
 		`{"account_id":"a","location":"locations/55","start_date":"2026-02-30","end_date":"2026-03-30"}`,
 		`{"account_id":"a","location":"locations/55","start_date":"2026-09-30","end_date":"2026-09-01"}`,
 		`{"account_id":"a","location":"locations/55","start_date":"2025-04-01","end_date":"2026-10-01"}`,
+		`{"account_id":"a","location":"locations/55","start_date":"2025-08-31","end_date":"2027-02-28"}`,
+		`{"account_id":"a","location":"locations/55","start_date":"2025-08-31","end_date":"2027-03-02"}`,
 		`{"account_id":"a","location":"locations/55","start_date":"2026-09-01","end_date":"2026-09-30","metrics":["BUSINESS_CONVERSATIONS"]}`,
 		`{"account_id":"a","location":"locations/55","start_date":"2026-09-01","end_date":"2026-09-30","metrics":["call_clicks"]}`,
 		`{"account_id":"a","location":"locations/55","start_date":"2026-09-01","end_date":"2026-09-30","metrics":["CALL_CLICKS","CALL_CLICKS"]}`,
@@ -150,6 +152,21 @@ func TestBusinessProfileFetchDailyMetricsRejectsInvalidInputBeforeUpstream(t *te
 
 		if recorder.calls != 0 {
 			t.Fatalf("%s reached upstream", raw)
+		}
+	}
+}
+
+func TestBusinessProfileFetchDailyMetricsAcceptsRangesShorterThanEighteenMonths(t *testing.T) {
+	t.Parallel()
+
+	for _, raw := range []string{
+		`{"account_id":"a","location":"locations/55","start_date":"2026-09-01","end_date":"2026-09-01"}`,
+		`{"account_id":"a","location":"locations/55","start_date":"2025-04-01","end_date":"2026-09-30"}`,
+		`{"account_id":"a","location":"locations/55","start_date":"2025-08-31","end_date":"2027-02-27"}`,
+	} {
+		operation, _, recorder := fixture(t, "businessprofile_fetch_daily_metrics", http.StatusOK, `{}`)
+		if _, err := decodeRun(t, operation, raw, testIdentity("a")); err != nil || recorder.calls != 1 {
+			t.Fatalf("%s: calls=%d err=%v", raw, recorder.calls, err)
 		}
 	}
 }

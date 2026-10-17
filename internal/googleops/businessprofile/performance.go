@@ -157,6 +157,16 @@ func projectMetricSeries(series *businessprofileperformance.DailyMetricTimeSerie
 	return out
 }
 
+// addMonthsClamped adds months to day, clamping to the last day of the target
+// month instead of overflowing into the next one as time.AddDate does
+// (2025-08-31 plus 18 months is 2027-02-28, not 2027-03-03).
+func addMonthsClamped(day time.Time, months int) time.Time {
+	first := time.Date(day.Year(), day.Month()+time.Month(months), 1, 0, 0, 0, 0, time.UTC)
+	last := first.AddDate(0, 1, -1).Day()
+
+	return first.AddDate(0, 0, min(day.Day(), last)-1)
+}
+
 // validateFetchDailyMetrics checks structure only; location IDs stay opaque.
 func validateFetchDailyMetrics(in fetchDailyMetricsInput) error {
 	if !plainResourceName(in.Location, "locations/") {
@@ -177,7 +187,7 @@ func validateFetchDailyMetrics(in fetchDailyMetricsInput) error {
 		return invalid("end_date must not be before start_date")
 	}
 
-	if !end.Before(start.AddDate(0, metricsMaxRangeMonths, 0)) {
+	if !end.Before(addMonthsClamped(start, metricsMaxRangeMonths)) {
 		return invalid("the date range must be shorter than 18 months")
 	}
 
