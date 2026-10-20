@@ -620,3 +620,69 @@ func TestPrepareAcceptsBorderlessGmailSignature(t *testing.T) {
 		})
 	}
 }
+
+func TestPlainWithHTMLSignatureKeepsHTMLFromPrepareToSend(t *testing.T) {
+	f := newFixture(`<table style="border:none"><tr><td><img src="https://lh3.example.com/logo.png" alt="Logo" width="96"></td>` +
+		`<td><a href="https://www.example.com">example.com</a></td></tr></table>`)
+	in := validRequest()
+	in.Content = Content{Format: mailcompose.FormatPlainWithHTML, Plain: "Hello"}
+
+	preview, err := prepare(testContext(t, 1), f, identity(), in)
+	if err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+
+	if _, err = send(testContext(t, 2), f, identity(), SendInput{EmailRequest: in, ExpectedContentDigest: preview.Data.ContentDigest}); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+
+	message, err := mail.ReadMessage(bytes.NewReader(f.transport.writeBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	typ, params, err := mime.ParseMediaType(message.Header.Get("Content-Type"))
+	if err != nil || typ != "multipart/alternative" {
+		t.Fatalf("alternative MIME: %s %#v %v", typ, params, err)
+	}
+
+	parts := multipart.NewReader(message.Body, params["boundary"])
+
+	plainPart, err := parts.NextPart()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	plain, err := io.ReadAll(plainPart)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	htmlPart, err := parts.NextPart()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	html, err := io.ReadAll(htmlPart)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, body := range []string{preview.Data.Preview.HTML, string(html)} {
+		if !strings.Contains(body, `<img src="https://lh3.example.com/logo.png" alt="Logo"`) ||
+			!strings.Contains(body, `<a href="https://www.example.com"`) ||
+			strings.Contains(body, "[Image:") {
+			t.Fatalf("HTML = %q, want sanitized HTML signature", body)
+		}
+	}
+
+	for _, body := range []string{preview.Data.Preview.Plain, string(plain)} {
+		if !strings.Contains(body, "Hello") || !strings.Contains(body, "[Image: Logo]") {
+			t.Fatalf("plain = %q, want body and plain signature", body)
+		}
+	}
+
+	if !containsWarning(preview.Data.Warnings, mailcompose.RemoteImageWarningName()) {
+		t.Fatalf("warnings = %#v", preview.Data.Warnings)
+	}
+}

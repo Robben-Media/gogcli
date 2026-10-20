@@ -394,6 +394,59 @@ func TestComposePlainWithHTMLKeepsBodyAndSignature(t *testing.T) {
 	}
 }
 
+func TestComposePlainWithHTMLKeepsHTMLSignature(t *testing.T) {
+	signatureHTML := `<table style="border:none"><tr><td><img src="https://lh3.example.com/logo.png" alt="Logo" width="96"></td>` +
+		`<td><a href="https://www.example.com">example.com</a></td></tr></table>`
+	signature := Signature{Plain: PlainFromHTML(signatureHTML), HTML: signatureHTML}
+
+	in := validInput()
+	in.Content = Content{Format: FormatPlainWithHTML, Plain: "Original body"}
+	in.Signature = signature
+	in.IncludeSignature = true
+	result := compose(t, in)
+
+	plain, rendered, _, _, err := Render(in.Content, signature, true, nil)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+
+	parts := parseMessageParts(t, result.Raw)
+
+	htmlParts := findParts(parts, "text/html")
+	if len(htmlParts) != 1 {
+		t.Fatalf("HTML parts = %#v", htmlParts)
+	}
+
+	html := decodedBody(t, htmlParts[0])
+	for _, body := range []string{html, rendered, result.Summary.Preview.HTML} {
+		if !strings.HasPrefix(body, "<p>Original body</p>") ||
+			!strings.Contains(body, `<img src="https://lh3.example.com/logo.png" alt="Logo"`) ||
+			!strings.Contains(body, `<a href="https://www.example.com"`) ||
+			strings.Contains(body, "[Image:") {
+			t.Fatalf("HTML body = %q, want plain body followed by sanitized HTML signature", body)
+		}
+	}
+
+	if html != rendered {
+		t.Fatalf("MIME HTML = %q, Render HTML = %q", html, rendered)
+	}
+
+	plainParts := findParts(parts, "text/plain")
+	if len(plainParts) != 1 {
+		t.Fatalf("plain parts = %#v", plainParts)
+	}
+
+	for _, body := range []string{decodedBody(t, plainParts[0]), plain} {
+		if !strings.Contains(body, "Original body") || !strings.Contains(body, "[Image: Logo]") {
+			t.Fatalf("plain body = %q, want body and plain signature", body)
+		}
+	}
+
+	if !containsStringWarning(result.Summary.Warnings, remoteImageWarning) {
+		t.Fatalf("warnings = %#v, want remote image warning", result.Summary.Warnings)
+	}
+}
+
 func TestComposeRejectsInvalidRecipientsAndThreading(t *testing.T) {
 	valid := validInput()
 	if _, err := Compose(valid); err != nil {
