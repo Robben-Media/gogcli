@@ -33,3 +33,7 @@ Current capabilities of the native Google MCP server (`gog-mcp`). This section d
 ### Deployment
 
 - Container package in `deploy/google-mcp/` (Dockerfile, Compose, smoke test) for a single Google MCP service behind an existing ingress; see `deploy/google-mcp/README.md`.
+
+### Fixes
+
+- Mail compose `plain_with_html_alternative` with an included signature now puts the sanitized HTML signature (images, links, styles) in the HTML part instead of HTML generated from the plain-text signature, which showed `[Image: …]` placeholders. The plain part is unchanged. Refs Fleet #410.
