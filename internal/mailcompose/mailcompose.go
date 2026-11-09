@@ -48,6 +48,7 @@ const (
 	maxStyleDeclarations   = 64
 	maxSummaryStyles       = 128
 	maxHeaderLineBytes     = 998
+	encodedWordLineBytes   = 76 // RFC 2047 section 2: lines holding encoded-words
 	base64LineWidth        = 76
 	maxBoundaryBytes       = 30
 	maxMIMEOverheadBytes   = 4096

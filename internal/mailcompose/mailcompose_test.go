@@ -1075,7 +1075,7 @@ func TestStructuredHeaderReservesSeparatorBeforeFolding(t *testing.T) {
 	values := []string{strings.Repeat("a", 494), strings.Repeat("b", 498), "x"}
 	var headers strings.Builder
 
-	if err := writeStructuredHeader(&headers, "To", values, ","); err != nil {
+	if err := writeStructuredHeader(&headers, "To", values, ",", maxHeaderLineBytes); err != nil {
 		t.Fatalf("write folded header: %v", err)
 	}
 

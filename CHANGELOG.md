@@ -37,3 +37,4 @@ Current capabilities of the native Google MCP server (`gog-mcp`). This section d
 ### Fixes
 
 - Mail compose `plain_with_html_alternative` with an included signature now puts the sanitized HTML signature (images, links, styles) in the HTML part instead of HTML generated from the plain-text signature, which showed `[Image: …]` placeholders. The plain part is unchanged. Refs Fleet #410.
+- Mail compose now encodes every chunk of a non-ASCII Subject as an RFC 2047 encoded-word and folds Subject lines at 76 bytes. An ASCII chunk used to stay plain text, so decoders kept the folding space and showed `charge d` for `charged`. ASCII-only subjects are unchanged. Refs Fleet #805.
