@@ -70,7 +70,7 @@ func renderMIME(
 	}
 
 	if len(reply.References) > 0 {
-		if err := writeStructuredHeader(&headers, "References", reply.References, ""); err != nil {
+		if err := writeStructuredHeader(&headers, "References", reply.References, "", maxHeaderLineBytes); err != nil {
 			return nil, err
 		}
 	}
@@ -238,12 +238,12 @@ func writeAddressHeader(buffer *strings.Builder, name string, addresses []Addres
 		values = append(values, formatAddress(address))
 	}
 
-	return writeStructuredHeader(buffer, name, values, ",")
+	return writeStructuredHeader(buffer, name, values, ",", maxHeaderLineBytes)
 }
 
 // writeStructuredHeader folds only between complete values. A value that cannot
 // occupy a physical line is rejected instead of being split illegally.
-func writeStructuredHeader(buffer *strings.Builder, name string, values []string, separator string) error {
+func writeStructuredHeader(buffer *strings.Builder, name string, values []string, separator string, lineLimit int) error {
 	if len(values) == 0 {
 		return validationError("%s is required", name)
 	}
@@ -253,7 +253,7 @@ func writeStructuredHeader(buffer *strings.Builder, name string, values []string
 	current := ""
 
 	for index, value := range values {
-		capacity := maxHeaderLineBytes
+		capacity := lineLimit
 		if index < len(values)-1 {
 			capacity -= separatorLength
 		}
@@ -269,7 +269,7 @@ func writeStructuredHeader(buffer *strings.Builder, name string, values []string
 			current = candidate
 		} else {
 			folded := current + separator
-			if len(folded) > maxHeaderLineBytes {
+			if len(folded) > lineLimit {
 				return validationError("%s contains a value that cannot fit in an RFC 5322 header line", name)
 			}
 
@@ -292,22 +292,24 @@ func writeSubjectHeader(buffer *strings.Builder, subject string) error {
 		return writeHeader(buffer, "Subject", subject)
 	}
 
-	words, err := encodedHeaderWords(subject)
+	words, err := encodedHeaderWords(subject, encodedWordLineBytes-len("Subject: "))
 	if err != nil {
 		return err
 	}
 
-	return writeStructuredHeader(buffer, "Subject", words, "")
+	return writeStructuredHeader(buffer, "Subject", words, "", encodedWordLineBytes)
 }
 
 // encodedHeaderWords splits UTF-8 input at rune boundaries into bounded RFC 2047
-// words so their separators remain legal folding points.
-func encodedHeaderWords(value string) ([]string, error) {
+// words so their separators remain legal folding points. Every chunk, including
+// pure ASCII, becomes an encoded-word: RFC 2047 section 6.2 drops whitespace
+// only between adjacent encoded-words, so a plain chunk would gain a space.
+func encodedHeaderWords(value string, maxWordBytes int) ([]string, error) {
 	words := make([]string, 0, len(value)/18+1)
 
 	for len(value) > 0 {
 		end := len(value)
-		for end > 0 && (!utf8.ValidString(value[:end]) || len(mime.QEncoding.Encode("utf-8", value[:end])) > 75) {
+		for end > 0 && (!utf8.ValidString(value[:end]) || len(qEncodedWord(value[:end])) > maxWordBytes) {
 			end--
 		}
 
@@ -315,11 +317,34 @@ func encodedHeaderWords(value string) ([]string, error) {
 			return nil, validationError("subject cannot be encoded as RFC 2047 words")
 		}
 
-		words = append(words, mime.QEncoding.Encode("utf-8", value[:end]))
+		words = append(words, qEncodedWord(value[:end]))
 		value = value[end:]
 	}
 
 	return words, nil
+}
+
+// qEncodedWord matches mime.QEncoding.Encode byte for byte, except that it
+// always returns an encoded-word instead of leaving ASCII input unchanged.
+func qEncodedWord(value string) string {
+	var word strings.Builder
+
+	word.WriteString("=?utf-8?q?")
+
+	for index := 0; index < len(value); index++ {
+		switch b := value[index]; {
+		case b == ' ':
+			word.WriteByte('_')
+		case b >= '!' && b <= '~' && b != '=' && b != '?' && b != '_':
+			word.WriteByte(b)
+		default:
+			_, _ = fmt.Fprintf(&word, "=%02X", b)
+		}
+	}
+
+	word.WriteString("?=")
+
+	return word.String()
 }
 
 func formatAddress(address Address) string {
