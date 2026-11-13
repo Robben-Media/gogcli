@@ -383,8 +383,8 @@ func rejectNativeRedirect(_ *http.Request, _ []*http.Request) error {
 	return errNativeRedirect
 }
 
-// nativeAttemptTimeout is the safe-read header wait per attempt: two fifths of
-// the request timeout (12s of the default 30s), so a stalled first attempt
+// nativeAttemptTimeout caps the safe-read header wait per attempt at two fifths
+// of the request timeout (12s of the default 30s), so a stalled first attempt
 // leaves the replay more time than the first attempt had.
 func nativeAttemptTimeout(requestTimeout time.Duration) time.Duration {
 	return requestTimeout * 2 / 5

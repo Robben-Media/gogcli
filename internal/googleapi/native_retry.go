@@ -20,11 +20,12 @@ const maxStalledAttemptRetries = 1
 // NativeRetryTransport applies catalog retry classes. Safe reads may retry
 // 429, 5xx, and 403 rateLimitExceeded. Write and unknown classes never replay.
 //
-// AttemptTimeout bounds how long one safe-read attempt waits for response
-// headers. It applies only while a stalled-attempt retry remains and the
-// request deadline leaves the retry at least as long again, so the final
-// attempt always runs to the request deadline. A stalled attempt is abandoned
-// and replayed once on a new connection. Once headers arrive, the body is read
+// AttemptTimeout caps how long one safe-read attempt waits for response
+// headers. The bound is two fifths of the time left on the request deadline,
+// capped at AttemptTimeout, and applies only while a stalled-attempt retry
+// remains and that share is at least half of AttemptTimeout; the final attempt
+// always runs to the request deadline. A stalled attempt is abandoned and
+// replayed once on a new connection. Once headers arrive, the body is read
 // under the request context alone. Zero disables the bound.
 type NativeRetryTransport struct {
 	Base           http.RoundTripper
@@ -117,7 +118,10 @@ func (t *NativeRetryTransport) RoundTrip(req *http.Request) (*http.Response, err
 }
 
 // attemptBound returns the header wait bound for the next safe-read attempt,
-// or zero when the attempt must run to the request deadline.
+// or zero when the attempt must run to the request deadline. The bound is two
+// fifths of the time left, so the replay always gets the larger share. Below
+// half of AttemptTimeout no bound applies, so a slow but healthy response is
+// not abandoned for a replay with too little time to finish.
 func (t *NativeRetryTransport) attemptBound(req *http.Request, stalls int) time.Duration {
 	if t.AttemptTimeout <= 0 || stalls >= maxStalledAttemptRetries {
 		return 0
@@ -128,11 +132,17 @@ func (t *NativeRetryTransport) attemptBound(req *http.Request, stalls int) time.
 		return 0
 	}
 
-	if deadline, ok := req.Context().Deadline(); ok && deadline.Sub(t.clock()) < 2*t.AttemptTimeout {
+	deadline, ok := req.Context().Deadline()
+	if !ok {
+		return t.AttemptTimeout
+	}
+
+	bound := min(t.AttemptTimeout, deadline.Sub(t.clock())*2/5)
+	if bound < t.AttemptTimeout/2 {
 		return 0
 	}
 
-	return t.AttemptTimeout
+	return bound
 }
 
 // roundTripAttempt sends one attempt. With a positive bound it reports stalled

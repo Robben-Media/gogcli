@@ -281,3 +281,60 @@ func TestCloneNativeTransportHealthChecksHTTP2Connections(t *testing.T) {
 		t.Fatalf("HTTP2 config = %+v, want PING after 10s idle with a 5s timeout", got)
 	}
 }
+
+func TestNativeRetryTransportAttemptBoundTracksTimeLeft(t *testing.T) {
+	t.Parallel()
+
+	start := time.Now()
+
+	tests := []struct {
+		name           string
+		attemptTimeout time.Duration
+		timeLeft       time.Duration // zero means no request deadline
+		budget         int64         // zero means no budget; otherwise one call is already charged
+		stalls         int
+		want           time.Duration
+	}{
+		{name: "full deadline", attemptTimeout: 12 * time.Second, timeLeft: 30 * time.Second, want: 12 * time.Second},
+		{name: "late start leaves room for a replay", attemptTimeout: 12 * time.Second, timeLeft: 20 * time.Second, want: 8 * time.Second},
+		{name: "late start at the floor", attemptTimeout: 12 * time.Second, timeLeft: 15 * time.Second, want: 6 * time.Second},
+		{name: "too little time for a replay", attemptTimeout: 12 * time.Second, timeLeft: 14 * time.Second, want: 0},
+		{name: "no request deadline", attemptTimeout: 12 * time.Second, want: 12 * time.Second},
+		{name: "budget of one", attemptTimeout: 12 * time.Second, timeLeft: 30 * time.Second, budget: 1, want: 0},
+		{name: "budget left for a replay", attemptTimeout: 12 * time.Second, timeLeft: 30 * time.Second, budget: 2, want: 12 * time.Second},
+		{name: "attempt timeout zero", timeLeft: 30 * time.Second, want: 0},
+		{name: "already one stall", attemptTimeout: 12 * time.Second, timeLeft: 30 * time.Second, stalls: 1, want: 0},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+
+			if tc.timeLeft > 0 {
+				var cancel context.CancelFunc
+
+				ctx, cancel = context.WithDeadline(ctx, start.Add(tc.timeLeft))
+				defer cancel()
+			}
+
+			if tc.budget > 0 {
+				ctx = WithUpstreamBudget(ctx, tc.budget)
+				if err := consumeUpstreamBudget(ctx); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://analyticsdata.googleapis.com"+h2ReportPath, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			transport := &NativeRetryTransport{Class: mcpcontract.SafeRead, AttemptTimeout: tc.attemptTimeout, now: func() time.Time { return start }}
+			if got := transport.attemptBound(req, tc.stalls); got != tc.want {
+				t.Fatalf("attemptBound = %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
