@@ -24,8 +24,8 @@ const maxStalledAttemptRetries = 1
 // headers. It applies only while a stalled-attempt retry remains and the
 // request deadline leaves the retry at least as long again, so the final
 // attempt always runs to the request deadline. A stalled attempt is abandoned
-// and replayed once. Once headers arrive, the body is read under the request
-// context alone. Zero disables the bound.
+// and replayed once on a new connection. Once headers arrive, the body is read
+// under the request context alone. Zero disables the bound.
 type NativeRetryTransport struct {
 	Base           http.RoundTripper
 	Class          mcpcontract.RetryClass
@@ -87,12 +87,11 @@ func (t *NativeRetryTransport) RoundTrip(req *http.Request) (*http.Response, err
 		if stalled {
 			stalls++
 
-			// Drop idle pooled connections, including the stalled one once
-			// nothing else uses it, so the replay prefers a fresh connection.
-			closeIdleConnections(base)
-
-			if UpstreamBudgetRemaining(req.Context()) == 0 {
-				return nil, nativeAttemptStalled()
+			// On HTTP/2 the abandoned stream is only reset and its connection
+			// stays pooled, busy with other streams, so the pool would send the
+			// replay on the stalled connection again.
+			if fresh, ok := base.(nativeFreshConnTransport); ok {
+				base = fresh.freshConnTransport()
 			}
 
 			continue
@@ -151,6 +150,9 @@ func roundTripAttempt(base http.RoundTripper, req *http.Request, bound time.Dura
 
 	resp, err := base.RoundTrip(req.WithContext(ctx))
 
+	// Headers that arrive just as the timer fires still count as a stall: the
+	// response is discarded and the request replayed, which costs one more
+	// upstream call but returns the same result.
 	if !timer.Stop() {
 		cancel()
 
@@ -195,14 +197,10 @@ func (body *nativeAttemptBody) Close() error {
 	return err //nolint:wrapcheck // body close errors pass through unchanged
 }
 
-func closeIdleConnections(base http.RoundTripper) {
-	if closer, ok := base.(interface{ CloseIdleConnections() }); ok {
-		closer.CloseIdleConnections()
-	}
-}
-
-func nativeAttemptStalled() error {
-	return &mcpcontract.Error{Category: mcpcontract.DeadlineExceeded, Message: nativeDeadlineMessage, Retryable: true}
+// nativeFreshConnTransport is implemented by pooled transports that can send
+// a replay on a connection the pool does not share.
+type nativeFreshConnTransport interface {
+	freshConnTransport() http.RoundTripper
 }
 
 func (t *NativeRetryTransport) clock() time.Time {
@@ -415,9 +413,20 @@ type nativeBodyLimitTransport struct {
 	max  int64
 }
 
-// CloseIdleConnections closes idle pooled connections so the next request dials.
-func (t *nativeBodyLimitTransport) CloseIdleConnections() {
-	closeIdleConnections(t.base)
+// freshConnTransport returns a one-shot clone of the pooled transport with the
+// same TLS, HTTP/2, proxy, and body limit settings. Keep-alives are off, so
+// each request dials its own connection and the transport closes it when the
+// response body is closed or the request fails.
+func (t *nativeBodyLimitTransport) freshConnTransport() http.RoundTripper {
+	pooled, ok := t.base.(*http.Transport)
+	if !ok {
+		return t
+	}
+
+	oneShot := pooled.Clone()
+	oneShot.DisableKeepAlives = true
+
+	return &nativeBodyLimitTransport{base: oneShot, max: t.max}
 }
 
 func (t *nativeBodyLimitTransport) RoundTrip(req *http.Request) (*http.Response, error) {
