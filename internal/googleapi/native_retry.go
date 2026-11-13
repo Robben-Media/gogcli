@@ -13,15 +13,27 @@ import (
 	"github.com/steipete/gogcli/internal/mcpcontract"
 )
 
+// maxStalledAttemptRetries is how many times a safe read is replayed after an
+// attempt receives no response headers within AttemptTimeout.
+const maxStalledAttemptRetries = 1
+
 // NativeRetryTransport applies catalog retry classes. Safe reads may retry
 // 429, 5xx, and 403 rateLimitExceeded. Write and unknown classes never replay.
+//
+// AttemptTimeout bounds how long one safe-read attempt waits for response
+// headers. It applies only while a stalled-attempt retry remains and the
+// request deadline leaves the retry at least as long again, so the final
+// attempt always runs to the request deadline. A stalled attempt is abandoned
+// and replayed once. Once headers arrive, the body is read under the request
+// context alone. Zero disables the bound.
 type NativeRetryTransport struct {
-	Base          http.RoundTripper
-	Class         mcpcontract.RetryClass
-	MaxRetries429 int
-	MaxRetries5xx int
-	BaseDelay     time.Duration
-	now           func() time.Time
+	Base           http.RoundTripper
+	Class          mcpcontract.RetryClass
+	MaxRetries429  int
+	MaxRetries5xx  int
+	BaseDelay      time.Duration
+	AttemptTimeout time.Duration
+	now            func() time.Time
 }
 
 func (t *NativeRetryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -44,6 +56,7 @@ func (t *NativeRetryTransport) RoundTrip(req *http.Request) (*http.Response, err
 
 	retries429 := 0
 	retries5xx := 0
+	stalls := 0
 
 	max429 := t.MaxRetries429
 	if max429 <= 0 {
@@ -66,9 +79,23 @@ func (t *NativeRetryTransport) RoundTrip(req *http.Request) (*http.Response, err
 
 		AddUpstreamCall(req.Context())
 
-		resp, err := base.RoundTrip(req)
+		resp, stalled, err := roundTripAttempt(base, req, t.attemptBound(req, stalls))
 		if err != nil {
 			return nil, fmt.Errorf("googleapi: google request: %w", err)
+		}
+
+		if stalled {
+			stalls++
+
+			// Drop idle pooled connections, including the stalled one once
+			// nothing else uses it, so the replay prefers a fresh connection.
+			closeIdleConnections(base)
+
+			if UpstreamBudgetRemaining(req.Context()) == 0 {
+				return nil, nativeAttemptStalled()
+			}
+
+			continue
 		}
 
 		retry, delay := t.safeReadRetry(req, resp, retries429, retries5xx, max429, max5xx)
@@ -88,6 +115,102 @@ func (t *NativeRetryTransport) RoundTrip(req *http.Request) (*http.Response, err
 			return nil, NativePublicError(err)
 		}
 	}
+}
+
+// attemptBound returns the header wait bound for the next safe-read attempt,
+// or zero when the attempt must run to the request deadline.
+func (t *NativeRetryTransport) attemptBound(req *http.Request, stalls int) time.Duration {
+	if t.AttemptTimeout <= 0 || stalls >= maxStalledAttemptRetries {
+		return 0
+	}
+
+	// The budget was already charged for this attempt; a replay needs one more call.
+	if UpstreamBudgetRemaining(req.Context()) == 0 {
+		return 0
+	}
+
+	if deadline, ok := req.Context().Deadline(); ok && deadline.Sub(t.clock()) < 2*t.AttemptTimeout {
+		return 0
+	}
+
+	return t.AttemptTimeout
+}
+
+// roundTripAttempt sends one attempt. With a positive bound it reports stalled
+// when no response headers arrived within bound while the request context was
+// still live. A returned body keeps the attempt context until it is closed.
+func roundTripAttempt(base http.RoundTripper, req *http.Request, bound time.Duration) (*http.Response, bool, error) {
+	if bound <= 0 {
+		resp, err := base.RoundTrip(req)
+
+		return resp, false, err //nolint:wrapcheck // the caller wraps attempt errors
+	}
+
+	ctx, cancel := context.WithCancel(req.Context())
+	timer := time.AfterFunc(bound, cancel)
+
+	resp, err := base.RoundTrip(req.WithContext(ctx))
+
+	if !timer.Stop() {
+		cancel()
+
+		if resp != nil && resp.Body != nil {
+			_ = resp.Body.Close()
+		}
+
+		if parentErr := req.Context().Err(); parentErr != nil {
+			return nil, false, fmt.Errorf("googleapi: attempt: %w", parentErr)
+		}
+
+		return nil, true, nil
+	}
+
+	if err != nil {
+		cancel()
+
+		return nil, false, err //nolint:wrapcheck // the caller wraps attempt errors
+	}
+
+	if resp.Body == nil {
+		cancel()
+
+		return resp, false, nil
+	}
+
+	resp.Body = &nativeAttemptBody{ReadCloser: resp.Body, cancel: cancel}
+
+	return resp, false, nil
+}
+
+// nativeAttemptBody releases the attempt context when the caller closes the body.
+type nativeAttemptBody struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (body *nativeAttemptBody) Close() error {
+	err := body.ReadCloser.Close()
+	body.cancel()
+
+	return err //nolint:wrapcheck // body close errors pass through unchanged
+}
+
+func closeIdleConnections(base http.RoundTripper) {
+	if closer, ok := base.(interface{ CloseIdleConnections() }); ok {
+		closer.CloseIdleConnections()
+	}
+}
+
+func nativeAttemptStalled() error {
+	return &mcpcontract.Error{Category: mcpcontract.DeadlineExceeded, Message: nativeDeadlineMessage, Retryable: true}
+}
+
+func (t *NativeRetryTransport) clock() time.Time {
+	if t != nil && t.now != nil {
+		return t.now()
+	}
+
+	return time.Now()
 }
 
 func (t *NativeRetryTransport) roundTripOnce(base http.RoundTripper, req *http.Request) (*http.Response, error) {
@@ -221,12 +344,7 @@ func (t *NativeRetryTransport) exceedsDeadline(req *http.Request, delay time.Dur
 		return false
 	}
 
-	now := time.Now()
-	if t != nil && t.now != nil {
-		now = t.now()
-	}
-
-	return !now.Add(delay).Before(deadline)
+	return !t.clock().Add(delay).Before(deadline)
 }
 
 func (t *NativeRetryTransport) sleep(ctx context.Context, delay time.Duration) error {
@@ -295,6 +413,11 @@ func (t *nativeSlotTransport) RoundTrip(req *http.Request) (*http.Response, erro
 type nativeBodyLimitTransport struct {
 	base http.RoundTripper
 	max  int64
+}
+
+// CloseIdleConnections closes idle pooled connections so the next request dials.
+func (t *nativeBodyLimitTransport) CloseIdleConnections() {
+	closeIdleConnections(t.base)
 }
 
 func (t *nativeBodyLimitTransport) RoundTrip(req *http.Request) (*http.Response, error) {

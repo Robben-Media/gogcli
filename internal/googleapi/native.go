@@ -25,6 +25,12 @@ const (
 	maxNativeConcurrency     = 256
 	defaultNativeMaxBytes    = 8 << 20
 
+	// nativeHTTP2PingAfter and nativeHTTP2PingTimeout health-check pooled
+	// HTTP/2 connections: after this long without a frame the transport sends
+	// a PING and closes the connection if no ACK arrives in time.
+	nativeHTTP2PingAfter   = 10 * time.Second
+	nativeHTTP2PingTimeout = 5 * time.Second
+
 	nativeAuthMessage          = "Google authentication is required"
 	nativeOAuthMessage         = "Google OAuth is required"
 	nativeFailMessage          = "Google request failed"
@@ -78,6 +84,7 @@ type NativeProvider struct {
 	slots       chan struct{}
 	maxBody     int64
 	timeout     time.Duration
+	attempt     time.Duration
 	now         func() time.Time
 	pool        http.RoundTripper
 	lifecycle   *accountconnect.Lifecycle
@@ -156,6 +163,7 @@ func NewNativeProvider(opts NativeOptions) (*NativeProvider, error) {
 		slots:       make(chan struct{}, concurrency),
 		maxBody:     maxBody,
 		timeout:     timeout,
+		attempt:     nativeAttemptTimeout(timeout),
 		now:         now,
 		pool:        &nativeBodyLimitTransport{base: cloneNativeTransport(), max: maxBody},
 		lifecycle:   opts.Lifecycle,
@@ -214,12 +222,13 @@ func (p *NativeProvider) HTTPClient(ctx context.Context, id mcpcontract.Identity
 			base: &nativeSlotTransport{
 				slots: p.slots,
 				base: &NativeRetryTransport{
-					Base:          p.pool,
-					Class:         def.Retry,
-					MaxRetries429: MaxRateLimitRetries,
-					MaxRetries5xx: Max5xxRetries,
-					BaseDelay:     RateLimitBaseDelay,
-					now:           p.now,
+					Base:           p.pool,
+					Class:          def.Retry,
+					MaxRetries429:  MaxRateLimitRetries,
+					MaxRetries5xx:  Max5xxRetries,
+					BaseDelay:      RateLimitBaseDelay,
+					AttemptTimeout: p.attempt,
+					now:            p.now,
 				},
 			},
 		},
@@ -374,20 +383,31 @@ func rejectNativeRedirect(_ *http.Request, _ []*http.Request) error {
 	return errNativeRedirect
 }
 
+// nativeAttemptTimeout is the safe-read header wait per attempt: two fifths of
+// the request timeout (12s of the default 30s), so a stalled first attempt
+// leaves the replay more time than the first attempt had.
+func nativeAttemptTimeout(requestTimeout time.Duration) time.Duration {
+	return requestTimeout * 2 / 5
+}
+
 func cloneNativeTransport() *http.Transport {
+	var cloned *http.Transport
+
 	if defaultTransport, ok := http.DefaultTransport.(*http.Transport); ok {
-		cloned := defaultTransport.Clone()
+		cloned = defaultTransport.Clone()
 		if cloned.TLSClientConfig == nil {
 			cloned.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 		} else if cloned.TLSClientConfig.MinVersion < tls.VersionTLS12 {
 			cloned.TLSClientConfig = cloned.TLSClientConfig.Clone()
 			cloned.TLSClientConfig.MinVersion = tls.VersionTLS12
 		}
-
-		return cloned
+	} else {
+		cloned = &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
 	}
 
-	return &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
+	cloned.HTTP2 = &http.HTTP2Config{SendPingTimeout: nativeHTTP2PingAfter, PingTimeout: nativeHTTP2PingTimeout}
+
+	return cloned
 }
 
 func newNativeRefreshClient(timeout time.Duration, maxBody int64) *http.Client {
