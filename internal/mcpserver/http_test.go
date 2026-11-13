@@ -6,12 +6,15 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -275,6 +278,79 @@ func TestHTTPGatewayShutdownAndCancel(t *testing.T) {
 	}
 }
 
+func TestHTTPServerWritesDeadlineExceededToolResult(t *testing.T) {
+	t.Parallel()
+
+	const requestTimeout = 500 * time.Millisecond
+
+	block := &blockSearch{started: make(chan struct{}), release: make(chan struct{})}
+	fixture := newHTTPFixture(t, httpFixtureOptions{blockSearch: block, requestTimeout: requestTimeout})
+
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	addr := listener.Addr().String()
+	_ = listener.Close()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	errCh := make(chan error, 1)
+
+	go func() {
+		errCh <- mcpserver.ListenAndServeHTTP(ctx, addr, fixture.handler, requestTimeout)
+	}()
+
+	t.Cleanup(func() {
+		cancel()
+		<-errCh
+	})
+
+	call := []byte(`{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"gmail_search","arguments":{"account_id":"work","query":"stall"}}}`)
+
+	var resp *http.Response
+
+	for attempt := 0; ; attempt++ {
+		req := fixture.raw(t, http.MethodPost, "/mcp", fixture.workToken, httpTestHost, "", nil, call)
+		req.RequestURI = ""
+		req.URL.Host = addr
+
+		resp, err = http.DefaultClient.Do(req)
+		if err == nil || !errors.Is(err, syscall.ECONNREFUSED) || attempt == 100 {
+			break
+		}
+
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	if err != nil {
+		t.Fatalf("tool call at the request deadline lost its response: %v", err)
+	}
+
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+
+	var envelope struct {
+		ID     int `json:"id"`
+		Result struct {
+			IsError           bool              `json:"isError"`
+			StructuredContent mcpcontract.Error `json:"structuredContent"`
+		} `json:"result"`
+	}
+	if resp.StatusCode != http.StatusOK || json.Unmarshal(body, &envelope) != nil {
+		t.Fatalf("status %d body %q", resp.StatusCode, body)
+	}
+
+	got := envelope.Result.StructuredContent
+	if envelope.ID != 7 || !envelope.Result.IsError || got.Category != mcpcontract.DeadlineExceeded || !got.Retryable {
+		t.Fatalf("tool result %s", body)
+	}
+}
+
 func TestNewHTTPGatewayRejectsIncompleteConfig(t *testing.T) {
 	t.Parallel()
 
@@ -287,10 +363,11 @@ func TestNewHTTPGatewayRejectsIncompleteConfig(t *testing.T) {
 }
 
 type httpFixtureOptions struct {
-	globalSlots int
-	callerSlots int
-	maxBody     int64
-	blockSearch *blockSearch
+	globalSlots    int
+	callerSlots    int
+	maxBody        int64
+	blockSearch    *blockSearch
+	requestTimeout time.Duration
 }
 
 type blockSearch struct {
@@ -353,12 +430,17 @@ func newHTTPFixture(t *testing.T, opts httpFixtureOptions) *httpFixture {
 		globalSlots = opts.globalSlots
 	}
 
+	requestTimeout := 5 * time.Second
+	if opts.requestTimeout > 0 {
+		requestTimeout = opts.requestTimeout
+	}
+
 	gateway, err := mcpserver.NewHTTPGateway(mcpserver.HTTPHandlerConfig{
 		HTTP:              cfg,
 		Operations:        operations,
 		Accounts:          httpFixtureAccounts(),
 		Logger:            slog.New(slog.NewTextHandler(io.Discard, nil)),
-		RequestTimeout:    5 * time.Second,
+		RequestTimeout:    requestTimeout,
 		MaxConcurrency:    callerSlots,
 		GlobalConcurrency: globalSlots,
 		MaxBodyBytes:      opts.maxBody,

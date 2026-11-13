@@ -31,7 +31,11 @@ const (
 	httpShutdownTimeout     = 5 * time.Second
 	httpReadHeaderTimeout   = 10 * time.Second
 	httpIdleTimeout         = 60 * time.Second
-	httpBearerPrefix        = "Bearer "
+	// httpResponseMargin keeps the HTTP request context and connection
+	// deadlines past the per-tool deadline so a deadline_exceeded tool result
+	// is still written.
+	httpResponseMargin = 10 * time.Second
+	httpBearerPrefix   = "Bearer "
 )
 
 type httpCallerContextKey struct{}
@@ -242,7 +246,9 @@ func (g *HTTPGateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	defer releaseSlot(caller.slots)
 
-	ctx, cancel := context.WithTimeout(req.Context(), g.requestTimeout)
+	// Each tool call stops at requestTimeout inside the runtime. The HTTP
+	// request lives a margin longer so that call's result is still written.
+	ctx, cancel := context.WithTimeout(req.Context(), g.requestTimeout+httpResponseMargin)
 	defer cancel()
 
 	g.mcp.ServeHTTP(w, req.WithContext(withHTTPCaller(ctx, caller)))
@@ -352,8 +358,8 @@ func ListenAndServeHTTP(ctx context.Context, addr string, handler http.Handler, 
 	server := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: httpReadHeaderTimeout,
-		ReadTimeout:       requestTimeout,
-		WriteTimeout:      requestTimeout,
+		ReadTimeout:       requestTimeout + httpResponseMargin,
+		WriteTimeout:      requestTimeout + httpResponseMargin,
 		IdleTimeout:       httpIdleTimeout,
 		BaseContext: func(net.Listener) context.Context {
 			return ctx
